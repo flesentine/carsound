@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     @State private var spectrumDisplayRange: SpectrumDisplayRange = .lowFrequency
+    @State private var spectrumRenderMode: SpectrumRenderMode = .smoothed
+    @State private var smoothingPreset: SpectrumSmoothingPreset = .balanced
 
     @Environment(MicrophonePermissionModel.self) private var microphonePermission
     @Environment(AudioSessionModel.self) private var audioSession
@@ -23,7 +25,7 @@ struct ContentView: View {
                         spectrumCard
                     }
 
-                    Text("Lab build 0.6 • PCM buffers are analyzed in memory and never written to disk")
+                    Text("Lab build 0.7 • PCM buffers are analyzed in memory and never written to disk")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -332,6 +334,17 @@ struct ContentView: View {
 
     private var spectrumCard: some View {
         let snapshot = microphoneCapture.snapshot
+        let displayedBins: [SpectrumBin]
+        let seriesLabel: String
+
+        switch spectrumRenderMode {
+        case .raw:
+            displayedBins = snapshot.spectrumBins
+            seriesLabel = "Raw FFT"
+        case .smoothed:
+            displayedBins = snapshot.smoothedSpectrum.bins(for: smoothingPreset)
+            seriesLabel = "\(smoothingPreset.rawValue) smoothing"
+        }
 
         return VStack(alignment: .leading, spacing: 14) {
             HStack {
@@ -347,7 +360,7 @@ struct ContentView: View {
                     )
             }
 
-            Text("Raw FFT spectrum. Smoothing is intentionally deferred to #7.")
+            Text("Compare the untouched FFT with temporal smoothing calculated in linear power.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
@@ -358,9 +371,30 @@ struct ContentView: View {
             }
             .pickerStyle(.segmented)
 
+            Picker("Spectrum processing", selection: $spectrumRenderMode) {
+                ForEach(SpectrumRenderMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if spectrumRenderMode == .smoothed {
+                Picker("Smoothing", selection: $smoothingPreset) {
+                    ForEach(SpectrumSmoothingPreset.allCases) { preset in
+                        Text(preset.rawValue).tag(preset)
+                    }
+                }
+                .pickerStyle(.segmented)
+
+                Text(smoothingPreset.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             SpectrumGraphView(
-                bins: snapshot.spectrumBins,
-                displayRange: spectrumDisplayRange
+                bins: displayedBins,
+                displayRange: spectrumDisplayRange,
+                seriesLabel: seriesLabel
             )
 
             LabeledContent(
@@ -368,8 +402,14 @@ struct ContentView: View {
                 value: spectrumDisplayRange.rawValue
             )
             LabeledContent(
-                "Raw bins in range",
-                value: "\(SpectrumGraphScale.bins(from: snapshot.spectrumBins, in: spectrumDisplayRange).count)"
+                "Processing",
+                value: spectrumRenderMode == .raw
+                    ? "Raw"
+                    : smoothingPreset.rawValue
+            )
+            LabeledContent(
+                "Bins in range",
+                value: "\(SpectrumGraphScale.bins(from: displayedBins, in: spectrumDisplayRange).count)"
             )
         }
         .cardStyle()
