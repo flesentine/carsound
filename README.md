@@ -4,17 +4,17 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#9 — dominant-frequency detection** is implemented.
+Development effort **#10 — persistent-tone detection** is implemented.
 
-The Lab now detects and ranks low-frequency spectral peaks from **20–200 Hz**. Detection uses both local spectral prominence and the adaptive temporal noise floor, so a steady road-drone peak can still be recognized even if it was already present when floor tracking began.
+QuietDrive now tracks dominant 20–200 Hz candidates across the captured-audio timeline instead of treating each FFT frame independently. A candidate is matched across frames by frequency, allowed brief dropouts, and evaluated for duration, presence rate, frequency stability, local spectral prominence, and temporal floor excess.
 
-Candidates are de-duplicated when they are too close together, ranked by prominence plus floor excess, and refined with parabolic interpolation so their estimated frequency is not limited strictly to the FFT-bin center.
+By default, a tone must survive for at least **2 seconds**, appear often enough, and remain frequency-stable before the Lab marks it **Persistent**. The UI also reports a Low / Medium / High confidence score and the underlying measurements used to derive it.
 
-The current detector is intentionally instantaneous. The next milestone adds persistence and confidence over time so QuietDrive can distinguish a repeatable cabin tone from a short transient.
+This completes items #1–#10 of the original development roadmap. Item #11 is the dedicated low-frequency-only analysis mode before the tone-generation/cancellation work begins.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, and candidate dominant frequencies.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, and persistence metrics.
 
 ## Generate the Xcode project
 
