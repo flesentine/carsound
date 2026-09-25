@@ -36,10 +36,10 @@ final class AudioSessionModel {
     private let session = AVAudioSession.sharedInstance()
 
     @ObservationIgnored
-    private var routeChangeObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var routeChangeObserver: NSObjectProtocol?
 
     @ObservationIgnored
-    private var mediaResetObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var mediaResetObserver: NSObjectProtocol?
 
     init() {
         installObservers()
