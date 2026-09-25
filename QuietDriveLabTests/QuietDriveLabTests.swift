@@ -110,6 +110,82 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testNoiseFloorSeedsFromFirstSpectrum() {
+        let estimator = NoiseFloorEstimator(
+            downwardAlpha: 0.30,
+            upwardAlpha: 0.01
+        )
+        let bins = [
+            SpectrumBin(frequencyHz: 50, magnitudeDBFS: -60),
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -50),
+            SpectrumBin(frequencyHz: 500, magnitudeDBFS: -40)
+        ]
+
+        let snapshot = estimator.process(bins)
+
+        XCTAssertEqual(snapshot.updateCount, 1)
+        XCTAssertEqual(snapshot.bins, bins)
+        XCTAssertEqual(snapshot.lowFrequencyFloorDBFS, -54.62, accuracy: 0.1)
+        XCTAssertEqual(snapshot.widebandFloorDBFS, -50.0, accuracy: 0.1)
+        XCTAssertEqual(snapshot.lowFrequencyExcessDB, 0, accuracy: 0.001)
+        XCTAssertEqual(snapshot.widebandExcessDB, 0, accuracy: 0.001)
+    }
+
+    func testNoiseFloorRisesSlowlyForSuddenLoudSignal() throws {
+        let estimator = NoiseFloorEstimator(
+            downwardAlpha: 0.30,
+            upwardAlpha: 0.01
+        )
+
+        _ = estimator.process([
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -60)
+        ])
+
+        let snapshot = estimator.process([
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -20)
+        ])
+
+        let floor = try XCTUnwrap(snapshot.bins.first)
+
+        XCTAssertLessThan(floor.magnitudeDBFS, -35)
+        XCTAssertGreaterThan(snapshot.lowFrequencyExcessDB, 15)
+    }
+
+    func testNoiseFloorFallsFasterForQuieterSignal() throws {
+        let estimator = NoiseFloorEstimator(
+            downwardAlpha: 0.30,
+            upwardAlpha: 0.01
+        )
+
+        _ = estimator.process([
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -20)
+        ])
+
+        let snapshot = estimator.process([
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -60)
+        ])
+
+        let floor = try XCTUnwrap(snapshot.bins.first)
+
+        XCTAssertLessThan(floor.magnitudeDBFS, -21)
+        XCTAssertGreaterThan(floor.magnitudeDBFS, -60)
+    }
+
+    func testNoiseFloorIgnoresBinsOutsideAnalysisBand() {
+        let estimator = NoiseFloorEstimator()
+        let snapshot = estimator.process([
+            SpectrumBin(frequencyHz: 10, magnitudeDBFS: -20),
+            SpectrumBin(frequencyHz: 20, magnitudeDBFS: -30),
+            SpectrumBin(frequencyHz: 2_000, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 2_100, magnitudeDBFS: -10)
+        ])
+
+        XCTAssertEqual(
+            snapshot.bins.map(\.frequencyHz),
+            [20, 2_000]
+        )
+    }
+
     func testLowFrequencyGraphRangeFiltersBins() {
         let bins = [
             SpectrumBin(frequencyHz: 10, magnitudeDBFS: -40),
