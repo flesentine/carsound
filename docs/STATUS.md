@@ -28,14 +28,25 @@
   - buffer and frame counters
   - actual capture sample rate, channel count, and PCM format
   - thread-safe capture metadata handoff from the audio callback
-  - UI updates throttled away from the real-time audio callback
   - audio buffers observed in memory and never written to disk
   - capture automatically stops before audio-session reconfiguration/deactivation
+- [x] #4 Build raw audio diagnostics screen
+  - live RMS signal level
+  - live peak signal level
+  - dBFS conversion with finite silence floor
+  - RMS and peak level meters
+  - peak-hold measurement
+  - peak-headroom readout
+  - per-buffer clipping detection at 0.99 full scale
+  - last-buffer and cumulative clipped-sample counts
+  - actual buffer size and buffer duration
+  - capture sample rate, channel count, and PCM format shown with diagnostics
+  - diagnostics UI refreshes at 10 Hz while raw audio stays on the audio callback
+  - unit coverage added for dBFS and meter math
   - full iOS simulator build green in GitHub Actions
 
 ## Next
 
-- [ ] #4 Build raw audio diagnostics screen
 - [ ] #5 Implement FFT processing
 - [ ] #6 Build live spectrum graph
 - [ ] #7 Add spectrum smoothing
@@ -45,4 +56,4 @@
 
 ## Verification note
 
-The app compiles successfully in GitHub Actions against the iOS simulator SDK. Physical microphone and vehicle-route behavior still require a real iPhone/car test.
+The app compiles successfully in GitHub Actions against the iOS simulator SDK. Physical microphone and vehicle-route behavior still require a real iPhone/car test. dBFS values are digital signal levels and are not calibrated sound-pressure-level (SPL) measurements.
