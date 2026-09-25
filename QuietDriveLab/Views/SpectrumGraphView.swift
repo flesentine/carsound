@@ -1,5 +1,12 @@
 import SwiftUI
 
+enum SpectrumRenderMode: String, CaseIterable, Identifiable {
+    case raw = "Raw"
+    case smoothed = "Smoothed"
+
+    var id: String { rawValue }
+}
+
 enum SpectrumDisplayRange: String, CaseIterable, Identifiable {
     case lowFrequency = "20–200 Hz"
     case wide = "20–2,000 Hz"
@@ -66,6 +73,17 @@ enum SpectrumGraphScale {
 struct SpectrumGraphView: View {
     let bins: [SpectrumBin]
     let displayRange: SpectrumDisplayRange
+    let seriesLabel: String
+
+    init(
+        bins: [SpectrumBin],
+        displayRange: SpectrumDisplayRange,
+        seriesLabel: String
+    ) {
+        self.bins = bins
+        self.displayRange = displayRange
+        self.seriesLabel = seriesLabel
+    }
 
     private let dbTicks: [Double] = [0, -20, -40, -60, -80, -100, -120]
 
@@ -109,7 +127,7 @@ struct SpectrumGraphView: View {
             .frame(height: 240)
 
             HStack {
-                Text("Raw FFT")
+                Text(seriesLabel)
                 Spacer()
                 Text("0 dBFS top • -120 dBFS bottom")
             }
@@ -276,7 +294,7 @@ struct SpectrumGraphView: View {
             return "No spectrum data yet."
         }
 
-        return "\(visibleBins.count) raw spectrum bins from " +
+        return "\(visibleBins.count) spectrum bins from " +
             "\(frequencyLabel(displayRange.frequencyRange.lowerBound)) to " +
             "\(frequencyLabel(displayRange.frequencyRange.upperBound)) hertz."
     }
