@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
+    @State private var spectrumDisplayRange: SpectrumDisplayRange = .lowFrequency
+
     @Environment(MicrophonePermissionModel.self) private var microphonePermission
     @Environment(AudioSessionModel.self) private var audioSession
     @Environment(MicrophoneCaptureModel.self) private var microphoneCapture
@@ -18,9 +20,10 @@ struct ContentView: View {
                         captureCard
                         diagnosticsCard
                         fftCard
+                        spectrumCard
                     }
 
-                    Text("Lab build 0.5 • PCM buffers are analyzed in memory and never written to disk")
+                    Text("Lab build 0.6 • PCM buffers are analyzed in memory and never written to disk")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -323,6 +326,51 @@ struct ContentView: View {
             LabeledContent("Spectrum bins", value: snapshot.spectrumBins.isEmpty ? "—" : "\(snapshot.spectrumBins.count)")
             LabeledContent("Nyquist", value: nyquist > 0 ? String(format: "%.0f Hz", nyquist) : "—")
             LabeledContent("Transforms completed", value: "\(snapshot.fftTransformCount)")
+        }
+        .cardStyle()
+    }
+
+    private var spectrumCard: some View {
+        let snapshot = microphoneCapture.snapshot
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Live Spectrum", systemImage: "chart.xyaxis.line")
+                    .font(.headline)
+                Spacer()
+                Text(microphoneCapture.state == .capturing ? "Live" : "Idle")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(
+                        microphoneCapture.state == .capturing
+                            ? Color.green
+                            : Color.secondary
+                    )
+            }
+
+            Text("Raw FFT spectrum. Smoothing is intentionally deferred to #7.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Picker("Spectrum range", selection: $spectrumDisplayRange) {
+                ForEach(SpectrumDisplayRange.allCases) { range in
+                    Text(range.rawValue).tag(range)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            SpectrumGraphView(
+                bins: snapshot.spectrumBins,
+                displayRange: spectrumDisplayRange
+            )
+
+            LabeledContent(
+                "Displayed range",
+                value: spectrumDisplayRange.rawValue
+            )
+            LabeledContent(
+                "Raw bins in range",
+                value: "\(SpectrumGraphScale.bins(from: snapshot.spectrumBins, in: spectrumDisplayRange).count)"
+            )
         }
         .cardStyle()
     }
