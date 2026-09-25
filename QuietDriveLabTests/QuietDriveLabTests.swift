@@ -319,6 +319,179 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testPersistentToneBecomesPersistentAfterTwoSeconds() throws {
+        let tracker = PersistentToneTracker()
+        var snapshot = PersistentToneSnapshot.empty
+
+        for step in 0...24 {
+            let time = Double(step) * 0.1
+            let frequency = 74.0 + (step.isMultiple(of: 2) ? 0.4 : -0.4)
+
+            snapshot = tracker.process(
+                [
+                    DominantFrequency(
+                        frequencyHz: frequency,
+                        magnitudeDBFS: -25,
+                        temporalExcessDB: 10,
+                        localProminenceDB: 12,
+                        scoreDB: 17
+                    )
+                ],
+                timestampSeconds: time
+            )
+        }
+
+        let tone = try XCTUnwrap(snapshot.tones.first)
+
+        XCTAssertTrue(tone.isPersistent)
+        XCTAssertEqual(snapshot.persistentCount, 1)
+        XCTAssertEqual(tone.frequencyHz, 74, accuracy: 0.2)
+        XCTAssertGreaterThanOrEqual(tone.durationSeconds, 2.0)
+        XCTAssertEqual(tone.presenceRatio, 1.0, accuracy: 0.001)
+        XCTAssertLessThan(tone.frequencyStdDevHz, 1.0)
+    }
+
+    func testPersistentToneAllowsBriefDropout() throws {
+        let tracker = PersistentToneTracker(
+            frequencyToleranceHz: 12,
+            allowedGapSeconds: 0.45,
+            persistenceThresholdSeconds: 0.5,
+            minimumPresenceRatio: 0.60,
+            maximumPersistentStdDevHz: 8
+        )
+
+        _ = tracker.process(
+            [
+                DominantFrequency(
+                    frequencyHz: 80,
+                    magnitudeDBFS: -25,
+                    temporalExcessDB: 8,
+                    localProminenceDB: 10,
+                    scoreDB: 14
+                )
+            ],
+            timestampSeconds: 0
+        )
+
+        _ = tracker.process([], timestampSeconds: 0.1)
+        _ = tracker.process([], timestampSeconds: 0.2)
+
+        var snapshot = PersistentToneSnapshot.empty
+
+        for step in 3...8 {
+            snapshot = tracker.process(
+                [
+                    DominantFrequency(
+                        frequencyHz: 80.5,
+                        magnitudeDBFS: -24,
+                        temporalExcessDB: 9,
+                        localProminenceDB: 11,
+                        scoreDB: 15.5
+                    )
+                ],
+                timestampSeconds: Double(step) * 0.1
+            )
+        }
+
+        let tone = try XCTUnwrap(snapshot.tones.first)
+
+        XCTAssertTrue(tone.isPersistent)
+        XCTAssertGreaterThan(tone.presenceRatio, 0.60)
+        XCTAssertLessThan(tone.presenceRatio, 1.0)
+    }
+
+    func testPersistentToneExpiresAfterLongGap() {
+        let tracker = PersistentToneTracker(
+            frequencyToleranceHz: 12,
+            allowedGapSeconds: 0.45,
+            persistenceThresholdSeconds: 2,
+            minimumPresenceRatio: 0.60,
+            maximumPersistentStdDevHz: 8
+        )
+
+        _ = tracker.process(
+            [
+                DominantFrequency(
+                    frequencyHz: 90,
+                    magnitudeDBFS: -25,
+                    temporalExcessDB: 8,
+                    localProminenceDB: 10,
+                    scoreDB: 14
+                )
+            ],
+            timestampSeconds: 0
+        )
+
+        _ = tracker.process([], timestampSeconds: 0.2)
+        let snapshot = tracker.process([], timestampSeconds: 0.5)
+
+        XCTAssertTrue(snapshot.tones.isEmpty)
+    }
+
+    func testPersistentToneRejectsUnstableFrequency() throws {
+        let tracker = PersistentToneTracker(
+            frequencyToleranceHz: 12,
+            allowedGapSeconds: 0.45,
+            persistenceThresholdSeconds: 0.5,
+            minimumPresenceRatio: 0.60,
+            maximumPersistentStdDevHz: 2.0
+        )
+
+        var snapshot = PersistentToneSnapshot.empty
+
+        for step in 0...8 {
+            let frequency = step.isMultiple(of: 2) ? 70.0 : 76.0
+
+            snapshot = tracker.process(
+                [
+                    DominantFrequency(
+                        frequencyHz: frequency,
+                        magnitudeDBFS: -25,
+                        temporalExcessDB: 8,
+                        localProminenceDB: 10,
+                        scoreDB: 14
+                    )
+                ],
+                timestampSeconds: Double(step) * 0.1
+            )
+        }
+
+        let tone = try XCTUnwrap(snapshot.tones.first)
+
+        XCTAssertGreaterThan(tone.frequencyStdDevHz, 2.0)
+        XCTAssertFalse(tone.isPersistent)
+    }
+
+    func testPersistentToneRejectsLowPresenceRatio() throws {
+        let tracker = PersistentToneTracker(
+            frequencyToleranceHz: 12,
+            allowedGapSeconds: 0.45,
+            persistenceThresholdSeconds: 0.5,
+            minimumPresenceRatio: 0.80,
+            maximumPersistentStdDevHz: 8
+        )
+
+        let candidate = DominantFrequency(
+            frequencyHz: 72,
+            magnitudeDBFS: -25,
+            temporalExcessDB: 8,
+            localProminenceDB: 10,
+            scoreDB: 14
+        )
+
+        _ = tracker.process([candidate], timestampSeconds: 0.0)
+        _ = tracker.process([], timestampSeconds: 0.1)
+        _ = tracker.process([candidate], timestampSeconds: 0.2)
+        _ = tracker.process([], timestampSeconds: 0.3)
+        _ = tracker.process([candidate], timestampSeconds: 0.4)
+        let snapshot = tracker.process([candidate], timestampSeconds: 0.5)
+
+        let tone = try XCTUnwrap(snapshot.tones.first)
+
+        XCTAssertLessThan(tone.presenceRatio, 0.80)
+        XCTAssertFalse(tone.isPersistent)
+    }
+
     func testLowFrequencyGraphRangeFiltersBins() {
         let bins = [
             SpectrumBin(frequencyHz: 10, magnitudeDBFS: -40),
