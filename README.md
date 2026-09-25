@@ -4,13 +4,13 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#2 — audio-session routing** is implemented.
+Development effort **#3 — microphone capture** is implemented.
 
-The app now configures an `AVAudioSession` for simultaneous playback and recording using measurement mode, supports Bluetooth A2DP output, displays the actual current input/output routes, and reacts to route changes.
+The app now configures an `AVAudioSession` for simultaneous playback and recording, exposes the active audio route, and uses `AVAudioEngine` to stream live PCM microphone buffers in memory. Capture metadata is counted and displayed without writing raw audio to disk.
 
 ## Privacy principle
 
-Raw microphone audio is not intended to be stored. Later analysis stages will reduce microphone buffers to measurements such as level, spectrum, frequency peaks, and confidence values.
+Raw microphone audio is not intended to be stored. Analysis stages reduce live microphone buffers to measurements such as level, spectrum, frequency peaks, and confidence values.
 
 ## Generate the Xcode project
 
