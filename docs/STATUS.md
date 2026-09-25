@@ -21,10 +21,20 @@
   - media-services reset handling
   - activate/deactivate/reconfigure controls
   - actual sample-rate and I/O-buffer diagnostics
+- [x] #3 Build microphone capture
+  - real-time `AVAudioEngine` microphone input
+  - 1,024-frame PCM input tap
+  - start/stop/reset capture controls
+  - buffer and frame counters
+  - actual capture sample rate, channel count, and PCM format
+  - thread-safe capture metadata handoff from the audio callback
+  - UI updates throttled away from the real-time audio callback
+  - audio buffers observed in memory and never written to disk
+  - capture automatically stops before audio-session reconfiguration/deactivation
+  - full iOS simulator build green in GitHub Actions
 
 ## Next
 
-- [ ] #3 Build microphone capture
 - [ ] #4 Build raw audio diagnostics screen
 - [ ] #5 Implement FFT processing
 - [ ] #6 Build live spectrum graph
@@ -35,4 +45,4 @@
 
 ## Verification note
 
-Source-level checks can run anywhere, but an actual iOS build and route test require Xcode/iOS hardware. GitHub Actions is configured to perform the Xcode build once the repository contains the project.
+The app compiles successfully in GitHub Actions against the iOS simulator SDK. Physical microphone and vehicle-route behavior still require a real iPhone/car test.
