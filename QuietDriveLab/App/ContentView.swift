@@ -25,9 +25,10 @@ struct ContentView: View {
                         spectrumCard
                         noiseFloorCard
                         dominantFrequencyCard
+                        persistentToneCard
                     }
 
-                    Text("Lab build 0.9 • PCM buffers are analyzed in memory and never written to disk")
+                    Text("Lab build 1.0 • PCM buffers are analyzed in memory and never written to disk")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -560,6 +561,131 @@ struct ContentView: View {
             LabeledContent(
                 "Analyzed bins",
                 value: "\(result.analyzedBinCount)"
+            )
+        }
+        .cardStyle()
+    }
+
+    private var persistentToneCard: some View {
+        let snapshot = microphoneCapture.snapshot.persistentTones
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Persistent Tones", systemImage: "waveform.badge.checkmark")
+                    .font(.headline)
+
+                Spacer()
+
+                Text(
+                    snapshot.persistentCount > 0
+                        ? "\(snapshot.persistentCount) persistent"
+                        : "Tracking"
+                )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(
+                    snapshot.persistentCount > 0
+                        ? Color.green
+                        : Color.secondary
+                )
+            }
+
+            Text("Tracks dominant low-frequency peaks over the audio timeline. A tone must remain frequent and stable for at least 2 seconds before it is marked persistent.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Divider()
+
+            if snapshot.tones.isEmpty {
+                Text("No low-frequency tone is currently being tracked.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(snapshot.tones.enumerated()), id: \.element.id) { index, tone in
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack {
+                            Image(
+                                systemName: tone.isPersistent
+                                    ? "checkmark.circle.fill"
+                                    : "clock"
+                            )
+                            .foregroundStyle(
+                                tone.isPersistent
+                                    ? Color.green
+                                    : Color.secondary
+                            )
+
+                            Text(String(format: "%.1f Hz", tone.frequencyHz))
+                                .font(.title3.monospacedDigit().weight(.semibold))
+
+                            Spacer()
+
+                            Text(tone.isPersistent ? "Persistent" : "Building")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(
+                                    tone.isPersistent
+                                        ? Color.green
+                                        : Color.secondary
+                                )
+                        }
+
+                        LabeledContent(
+                            "Duration",
+                            value: String(format: "%.1f sec", tone.durationSeconds)
+                        )
+
+                        LabeledContent(
+                            "Presence",
+                            value: String(format: "%.0f%%", tone.presenceRatio * 100)
+                        )
+
+                        LabeledContent(
+                            "Frequency stability",
+                            value: String(
+                                format: "±%.1f Hz σ",
+                                tone.frequencyStdDevHz
+                            )
+                        )
+
+                        LabeledContent(
+                            "Avg local prominence",
+                            value: String(
+                                format: "+%.1f dB",
+                                tone.averageLocalProminenceDB
+                            )
+                        )
+
+                        LabeledContent(
+                            "Avg above floor",
+                            value: String(
+                                format: "+%.1f dB",
+                                tone.averageTemporalExcessDB
+                            )
+                        )
+
+                        LabeledContent(
+                            "Confidence",
+                            value: String(
+                                format: "%@ • %.0f%%",
+                                tone.confidenceLevel.rawValue,
+                                tone.confidence * 100
+                            )
+                        )
+
+                        LabeledContent(
+                            "Observations",
+                            value: "\(tone.observationCount)"
+                        )
+
+                        if index < snapshot.tones.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+            }
+
+            LabeledContent(
+                "Tracker updates",
+                value: "\(snapshot.updateCount)"
             )
         }
         .cardStyle()
