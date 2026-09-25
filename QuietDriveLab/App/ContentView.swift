@@ -3,6 +3,7 @@ import SwiftUI
 struct ContentView: View {
     @Environment(MicrophonePermissionModel.self) private var microphonePermission
     @Environment(AudioSessionModel.self) private var audioSession
+    @Environment(MicrophoneCaptureModel.self) private var microphoneCapture
 
     var body: some View {
         NavigationStack {
@@ -14,9 +15,10 @@ struct ContentView: View {
                     if microphonePermission.status == .granted {
                         audioSessionCard
                         routeCard
+                        captureCard
                     }
 
-                    Text("Lab build 0.2 • No raw microphone audio is stored")
+                    Text("Lab build 0.3 • PCM buffers are analyzed in memory and never written to disk")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -97,12 +99,14 @@ struct ContentView: View {
 
             HStack {
                 Button(audioSession.state == .active ? "Reconfigure" : "Activate Audio Session") {
+                    microphoneCapture.stopCapture()
                     audioSession.configureAndActivate()
                 }
                 .buttonStyle(.borderedProminent)
 
                 if audioSession.state == .active {
                     Button("Deactivate") {
+                        microphoneCapture.stopCapture()
                         audioSession.deactivate()
                     }
                     .buttonStyle(.bordered)
@@ -131,6 +135,68 @@ struct ContentView: View {
                 audioSession.refreshRoute()
             }
             .buttonStyle(.bordered)
+        }
+        .cardStyle()
+    }
+
+    private var captureCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Microphone Capture", systemImage: "mic.and.signal.meter")
+                    .font(.headline)
+
+                Spacer()
+
+                Text(microphoneCapture.state.label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(microphoneCapture.state == .capturing ? .green : .secondary)
+            }
+
+            Text("Streams live PCM buffers into memory. Audio samples are discarded immediately after each buffer is observed.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+            if case let .failed(message) = microphoneCapture.state {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            HStack {
+                if microphoneCapture.state == .capturing {
+                    Button("Stop Capture") {
+                        microphoneCapture.stopCapture()
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Start Capture") {
+                        microphoneCapture.startCapture()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(audioSession.state != .active)
+                }
+
+                Button("Reset Counters") {
+                    microphoneCapture.resetCounters()
+                }
+                .buttonStyle(.bordered)
+                .disabled(microphoneCapture.state == .capturing)
+            }
+
+            if audioSession.state != .active {
+                Text("Activate the audio session before starting microphone capture.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            LabeledContent("Buffers received", value: "\(microphoneCapture.snapshot.bufferCount)")
+            LabeledContent("Frames received", value: "\(microphoneCapture.snapshot.frameCount)")
+            LabeledContent("Last buffer", value: "\(microphoneCapture.snapshot.lastBufferFrames) frames")
+            LabeledContent("Capture rate", value: captureRateText)
+            LabeledContent("Channels", value: captureChannelsText)
+            LabeledContent("PCM format", value: microphoneCapture.snapshot.formatDescription)
         }
         .cardStyle()
     }
@@ -174,6 +240,16 @@ struct ContentView: View {
         guard audioSession.ioBufferDuration > 0 else { return "—" }
         return String(format: "%.2f ms", audioSession.ioBufferDuration * 1_000)
     }
+
+    private var captureRateText: String {
+        guard microphoneCapture.snapshot.sampleRate > 0 else { return "—" }
+        return String(format: "%.0f Hz", microphoneCapture.snapshot.sampleRate)
+    }
+
+    private var captureChannelsText: String {
+        guard microphoneCapture.snapshot.channelCount > 0 else { return "—" }
+        return "\(microphoneCapture.snapshot.channelCount)"
+    }
 }
 
 private extension View {
@@ -188,4 +264,5 @@ private extension View {
     ContentView()
         .environment(MicrophonePermissionModel())
         .environment(AudioSessionModel())
+        .environment(MicrophoneCaptureModel())
 }
