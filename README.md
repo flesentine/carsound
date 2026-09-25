@@ -4,9 +4,11 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#6 — live spectrum graph** is implemented.
+Development effort **#7 — spectrum smoothing** is implemented.
 
-The Lab now renders the rolling FFT as a live raw spectrum using a SwiftUI Canvas. The default view focuses on **20–200 Hz**, the range most relevant to persistent road and powertrain drone experiments, with an optional **20–2,000 Hz** context view. The spectrum is deliberately unsmoothed so the next milestone can add and evaluate smoothing separately.
+The live spectrum can now switch between the untouched raw FFT and temporal smoothing. Smoothing is performed in linear power rather than by directly averaging dB values, with **Responsive**, **Balanced**, and **Stable** presets. The default Balanced view is intended to make persistent cabin-noise structure easier to see without hiding the raw measurements.
+
+To keep the audio callback efficient, smoothing is restricted to the 0–2,000 Hz analysis band used by the Lab graphs.
 
 ## Privacy principle
 
