@@ -186,6 +186,139 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testDominantFrequencyFindsClearLowFrequencyPeak() throws {
+        let detector = DominantFrequencyDetector()
+        let spectrum = [
+            SpectrumBin(frequencyHz: 20, magnitudeDBFS: -62),
+            SpectrumBin(frequencyHz: 40, magnitudeDBFS: -58),
+            SpectrumBin(frequencyHz: 60, magnitudeDBFS: -48),
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -22),
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -46),
+            SpectrumBin(frequencyHz: 120, magnitudeDBFS: -57),
+            SpectrumBin(frequencyHz: 140, magnitudeDBFS: -61)
+        ]
+        let floor = spectrum.map {
+            SpectrumBin(
+                frequencyHz: $0.frequencyHz,
+                magnitudeDBFS: -60
+            )
+        }
+
+        let result = detector.detect(
+            spectrum: spectrum,
+            noiseFloor: floor
+        )
+        let strongest = try XCTUnwrap(result.frequencies.first)
+
+        XCTAssertEqual(strongest.frequencyHz, 80, accuracy: 2)
+        XCTAssertEqual(strongest.magnitudeDBFS, -22, accuracy: 0.001)
+        XCTAssertGreaterThan(strongest.temporalExcessDB, 30)
+        XCTAssertGreaterThan(strongest.localProminenceDB, 25)
+    }
+
+    func testDominantFrequencyStillFindsPeakWhenTemporalFloorContainsIt() throws {
+        let detector = DominantFrequencyDetector()
+        let spectrum = [
+            SpectrumBin(frequencyHz: 40, magnitudeDBFS: -60),
+            SpectrumBin(frequencyHz: 60, magnitudeDBFS: -52),
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -24),
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -51),
+            SpectrumBin(frequencyHz: 120, magnitudeDBFS: -59),
+            SpectrumBin(frequencyHz: 140, magnitudeDBFS: -61),
+            SpectrumBin(frequencyHz: 160, magnitudeDBFS: -62)
+        ]
+
+        let result = detector.detect(
+            spectrum: spectrum,
+            noiseFloor: spectrum
+        )
+        let strongest = try XCTUnwrap(result.frequencies.first)
+
+        XCTAssertEqual(strongest.frequencyHz, 80, accuracy: 2)
+        XCTAssertEqual(strongest.temporalExcessDB, 0, accuracy: 0.001)
+        XCTAssertGreaterThan(strongest.localProminenceDB, 20)
+    }
+
+    func testDominantFrequencyRejectsFlatSpectrum() {
+        let detector = DominantFrequencyDetector()
+        let spectrum = stride(from: 20.0, through: 200.0, by: 20.0).map {
+            SpectrumBin(frequencyHz: $0, magnitudeDBFS: -45)
+        }
+
+        let result = detector.detect(
+            spectrum: spectrum,
+            noiseFloor: spectrum
+        )
+
+        XCTAssertTrue(result.frequencies.isEmpty)
+    }
+
+    func testDominantFrequencyRespectsMinimumSeparation() {
+        let detector = DominantFrequencyDetector(
+            maximumResults: 5,
+            minimumSeparationHz: 18,
+            minimumLocalProminenceDB: 2.5,
+            minimumScoreDB: 3
+        )
+        let spectrum = [
+            SpectrumBin(frequencyHz: 50, magnitudeDBFS: -60),
+            SpectrumBin(frequencyHz: 60, magnitudeDBFS: -58),
+            SpectrumBin(frequencyHz: 70, magnitudeDBFS: -50),
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -20),
+            SpectrumBin(frequencyHz: 90, magnitudeDBFS: -50),
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -24),
+            SpectrumBin(frequencyHz: 110, magnitudeDBFS: -52),
+            SpectrumBin(frequencyHz: 120, magnitudeDBFS: -60),
+            SpectrumBin(frequencyHz: 130, magnitudeDBFS: -62)
+        ]
+        let floor = spectrum.map {
+            SpectrumBin(frequencyHz: $0.frequencyHz, magnitudeDBFS: -65)
+        }
+
+        let result = detector.detect(
+            spectrum: spectrum,
+            noiseFloor: floor
+        )
+
+        XCTAssertEqual(result.frequencies.count, 2)
+        XCTAssertGreaterThanOrEqual(
+            abs(
+                result.frequencies[0].frequencyHz -
+                result.frequencies[1].frequencyHz
+            ),
+            18
+        )
+    }
+
+    func testDominantFrequencyOnlyAnalyzesTwentyToTwoHundredHertz() {
+        let detector = DominantFrequencyDetector()
+        let spectrum = [
+            SpectrumBin(frequencyHz: 10, magnitudeDBFS: -10),
+            SpectrumBin(frequencyHz: 20, magnitudeDBFS: -60),
+            SpectrumBin(frequencyHz: 40, magnitudeDBFS: -55),
+            SpectrumBin(frequencyHz: 60, magnitudeDBFS: -20),
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -55),
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -60),
+            SpectrumBin(frequencyHz: 220, magnitudeDBFS: -5)
+        ]
+        let floor = spectrum.map {
+            SpectrumBin(frequencyHz: $0.frequencyHz, magnitudeDBFS: -65)
+        }
+
+        let result = detector.detect(
+            spectrum: spectrum,
+            noiseFloor: floor
+        )
+
+        XCTAssertEqual(result.analyzedBinCount, 5)
+        XCTAssertTrue(
+            result.frequencies.allSatisfy {
+                $0.frequencyHz >= 20 &&
+                $0.frequencyHz <= 200
+            }
+        )
+    }
+
     func testLowFrequencyGraphRangeFiltersBins() {
         let bins = [
             SpectrumBin(frequencyHz: 10, magnitudeDBFS: -40),
