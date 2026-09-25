@@ -153,7 +153,7 @@ final class AudioSessionModel {
         case .lineIn: "Line in"
         case .lineOut: "Line out"
         case .airPlay: "AirPlay"
-        case .hdmi: "HDMI"
+        case .HDMI: "HDMI"
         default: type.rawValue
         }
     }
