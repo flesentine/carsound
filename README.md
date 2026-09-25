@@ -4,15 +4,17 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#7 — spectrum smoothing** is implemented.
+Development effort **#8 — noise-floor measurement** is implemented.
 
-The live spectrum can now switch between the untouched raw FFT and temporal smoothing. Smoothing is performed in linear power rather than by directly averaging dB values, with **Responsive**, **Balanced**, and **Stable** presets. The default Balanced view is intended to make persistent cabin-noise structure easier to see without hiding the raw measurements.
+The Lab now tracks an adaptive spectral background floor from **20–2,000 Hz**. The estimator works in linear power, falls toward quieter conditions relatively quickly, and rises toward louder conditions slowly so a short transient does not instantly become the new baseline.
 
-To keep the audio callback efficient, smoothing is restricted to the 0–2,000 Hz analysis band used by the Lab graphs.
+The UI reports separate **20–200 Hz** and **20–2,000 Hz** floor values along with how many dB the current spectrum sits above those baselines. The per-frequency floor spectrum is also retained for the dominant-frequency and persistent-tone work that follows.
+
+These measurements are digital dBFS references, not calibrated acoustic SPL.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level and frequency-spectrum bins.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, background floor, frequency peaks, and confidence values.
 
 ## Generate the Xcode project
 
