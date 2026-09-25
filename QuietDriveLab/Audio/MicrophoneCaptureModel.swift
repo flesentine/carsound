@@ -43,6 +43,7 @@ final class MicrophoneCaptureModel {
         let spectrumBins: [SpectrumBin]
         let smoothedSpectrum: SmoothedSpectrumSnapshot
         let noiseFloor: NoiseFloorSnapshot
+        let dominantFrequencies: DominantFrequencySnapshot
 
         static let empty = Snapshot(
             bufferCount: 0,
@@ -67,7 +68,8 @@ final class MicrophoneCaptureModel {
             fftWindowName: FFTAnalyzer.windowName,
             spectrumBins: [],
             smoothedSpectrum: .empty,
-            noiseFloor: .empty
+            noiseFloor: .empty,
+            dominantFrequencies: .empty
         )
     }
 
@@ -181,9 +183,11 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private let fftAnalyzer = FFTAnalyzer()
     private let smoothingBank = SpectrumSmoothingBank()
     private let noiseFloorEstimator = NoiseFloorEstimator()
+    private let dominantFrequencyDetector = DominantFrequencyDetector()
     private var fftSnapshot: FFTSnapshot = .empty
     private var smoothedSpectrum: SmoothedSpectrumSnapshot = .empty
     private var noiseFloor: NoiseFloorSnapshot = .empty
+    private var dominantFrequencies: DominantFrequencySnapshot = .empty
 
     func record(buffer: AVAudioPCMBuffer) {
         let format = buffer.format
@@ -196,6 +200,20 @@ private final class CaptureStatsStore: @unchecked Sendable {
         let latestNoiseFloor = latestSmoothedSpectrum.map {
             noiseFloorEstimator.process($0.balanced)
         }
+        let latestDominantFrequencies: DominantFrequencySnapshot?
+
+        if
+            let latestSmoothedSpectrum,
+            let latestNoiseFloor
+        {
+            latestDominantFrequencies = dominantFrequencyDetector.detect(
+                spectrum: latestSmoothedSpectrum.balanced,
+                noiseFloor: latestNoiseFloor.bins
+            )
+        } else {
+            latestDominantFrequencies = nil
+        }
+
         let durationMilliseconds: Double
 
         if format.sampleRate > 0 {
@@ -230,6 +248,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
             noiseFloor = latestNoiseFloor
         }
 
+        if let latestDominantFrequencies {
+            dominantFrequencies = latestDominantFrequencies
+        }
+
         lock.unlock()
     }
 
@@ -260,7 +282,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
             fftWindowName: fftSnapshot.windowName,
             spectrumBins: fftSnapshot.bins,
             smoothedSpectrum: smoothedSpectrum,
-            noiseFloor: noiseFloor
+            noiseFloor: noiseFloor,
+            dominantFrequencies: dominantFrequencies
         )
     }
 
@@ -285,6 +308,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
         fftSnapshot = .empty
         smoothedSpectrum = .empty
         noiseFloor = .empty
+        dominantFrequencies = .empty
         lock.unlock()
     }
 
