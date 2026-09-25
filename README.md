@@ -4,13 +4,13 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#4 — raw audio diagnostics** is implemented.
+Development effort **#5 — FFT processing** is implemented.
 
-The app now streams live PCM microphone buffers in memory and reports RMS level, peak level, peak hold, digital headroom, clipping, buffer size/duration, sample rate, channel count, and PCM format. Signal levels are reported in dBFS; they are not presented as calibrated cabin SPL.
+The app now accumulates the live 1,024-frame microphone callbacks into a rolling 4,096-sample analysis window, applies a Hann window, performs a radix-2 FFT, and produces a full frequency spectrum in dBFS from DC to Nyquist. At a 48 kHz microphone rate the current spectral resolution is about 11.72 Hz per bin.
 
 ## Privacy principle
 
-Raw microphone audio is not intended to be stored. Analysis stages reduce live microphone buffers to measurements such as level, spectrum, frequency peaks, and confidence values.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level and frequency-spectrum bins.
 
 ## Generate the Xcode project
 
