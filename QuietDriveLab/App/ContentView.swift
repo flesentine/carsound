@@ -23,9 +23,10 @@ struct ContentView: View {
                         diagnosticsCard
                         fftCard
                         spectrumCard
+                        noiseFloorCard
                     }
 
-                    Text("Lab build 0.7 • PCM buffers are analyzed in memory and never written to disk")
+                    Text("Lab build 0.8 • PCM buffers are analyzed in memory and never written to disk")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -410,6 +411,72 @@ struct ContentView: View {
             LabeledContent(
                 "Bins in range",
                 value: "\(SpectrumGraphScale.bins(from: displayedBins, in: spectrumDisplayRange).count)"
+            )
+        }
+        .cardStyle()
+    }
+
+    private var noiseFloorCard: some View {
+        let floor = microphoneCapture.snapshot.noiseFloor
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Noise Floor", systemImage: "waveform.badge.minus")
+                    .font(.headline)
+
+                Spacer()
+
+                Text(floor.updateCount > 0 ? "Tracking" : "Warming up")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(
+                        floor.updateCount > 0
+                            ? Color.green
+                            : Color.secondary
+                    )
+            }
+
+            Text("Adaptive digital background baseline. This is relative dBFS, not calibrated cabin SPL.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Divider()
+
+            LabeledContent(
+                "20–200 Hz floor",
+                value: floor.updateCount > 0
+                    ? dbFSText(floor.lowFrequencyFloorDBFS)
+                    : "—"
+            )
+
+            LabeledContent(
+                "20–2,000 Hz floor",
+                value: floor.updateCount > 0
+                    ? dbFSText(floor.widebandFloorDBFS)
+                    : "—"
+            )
+
+            LabeledContent(
+                "Low-frequency above floor",
+                value: floor.updateCount > 0
+                    ? String(format: "+%.1f dB", floor.lowFrequencyExcessDB)
+                    : "—"
+            )
+
+            LabeledContent(
+                "Wideband above floor",
+                value: floor.updateCount > 0
+                    ? String(format: "+%.1f dB", floor.widebandExcessDB)
+                    : "—"
+            )
+
+            LabeledContent(
+                "Tracked floor bins",
+                value: floor.bins.isEmpty ? "—" : "\(floor.bins.count)"
+            )
+
+            LabeledContent(
+                "Estimator updates",
+                value: "\(floor.updateCount)"
             )
         }
         .cardStyle()
