@@ -61,6 +61,55 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(strongest.magnitudeDBFS, -6.0206, accuracy: 0.15)
     }
 
+    func testSpectrumSmootherSeedsFromFirstFrame() {
+        let smoother = SpectrumSmoother(alpha: 0.15)
+        let bins = [
+            SpectrumBin(frequencyHz: 64, magnitudeDBFS: -30),
+            SpectrumBin(frequencyHz: 128, magnitudeDBFS: -45)
+        ]
+
+        XCTAssertEqual(smoother.process(bins), bins)
+    }
+
+    func testStableSmoothingMovesLessThanResponsive() throws {
+        let bank = SpectrumSmoothingBank()
+        let baseline = [
+            SpectrumBin(frequencyHz: 64, magnitudeDBFS: -60)
+        ]
+        let step = [
+            SpectrumBin(frequencyHz: 64, magnitudeDBFS: -20)
+        ]
+
+        _ = bank.process(baseline)
+        let smoothed = bank.process(step)
+
+        let responsive = try XCTUnwrap(smoothed.responsive.first)
+        let stable = try XCTUnwrap(smoothed.stable.first)
+
+        XCTAssertGreaterThan(responsive.magnitudeDBFS, stable.magnitudeDBFS)
+        XCTAssertLessThan(responsive.magnitudeDBFS, -20)
+        XCTAssertGreaterThan(responsive.magnitudeDBFS, -60)
+        XCTAssertLessThan(stable.magnitudeDBFS, -20)
+        XCTAssertGreaterThan(stable.magnitudeDBFS, -60)
+    }
+
+    func testSmoothingBankLimitsWorkToTwoKilohertz() {
+        let bank = SpectrumSmoothingBank()
+        let bins = [
+            SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 1_000, magnitudeDBFS: -30),
+            SpectrumBin(frequencyHz: 2_000, magnitudeDBFS: -20),
+            SpectrumBin(frequencyHz: 2_100, magnitudeDBFS: -10)
+        ]
+
+        let snapshot = bank.process(bins)
+
+        XCTAssertEqual(
+            snapshot.balanced.map(\.frequencyHz),
+            [20, 1_000, 2_000]
+        )
+    }
+
     func testLowFrequencyGraphRangeFiltersBins() {
         let bins = [
             SpectrumBin(frequencyHz: 10, magnitudeDBFS: -40),
