@@ -60,25 +60,29 @@
   - full app + unit-test simulator build-for-testing green
 - [x] #8 Implement noise-floor measurement
   - adaptive per-frequency background floor from 20–2,000 Hz
-  - uses the Balanced smoothed spectrum as its measurement input
-  - floor estimation performed in linear power
-  - faster downward adaptation when the cabin becomes quieter
-  - slower upward adaptation so transient loud events do not immediately redefine the baseline
-  - low-frequency 20–200 Hz floor estimate
-  - wider 20–2,000 Hz floor estimate
-  - current low-frequency dB above floor
-  - current wider-band dB above floor
-  - per-bin floor spectrum retained for later peak/tone detection
-  - estimator update count and tracked-bin count shown in the Lab UI
-  - floor state resets with capture reset
-  - tests cover initial seeding, slow upward adaptation, faster downward adaptation, and analysis-band limits
+  - low-frequency and wideband floor estimates
+  - dB-above-floor measurements
+  - per-bin floor spectrum retained
+  - full app + unit-test simulator build-for-testing green
+- [x] #9 Build dominant-frequency detection
+  - analyzes the Balanced smoothed 20–200 Hz spectrum
+  - detects local spectral maxima instead of simply choosing the loudest FFT bin
+  - compares each candidate against both the tracked temporal floor and its local spectral neighborhood
+  - avoids missing a steady tone that was already present when the noise-floor estimator initialized
+  - requires minimum local prominence before reporting a candidate
+  - ranks candidates using local prominence plus temporal floor excess
+  - suppresses nearby duplicate peaks with a configurable minimum frequency separation
+  - quadratic/parabolic interpolation refines peak frequency beyond the raw FFT-bin center
+  - returns up to five ranked low-frequency candidates
+  - UI shows frequency, dBFS magnitude, local prominence, and temporal floor excess
+  - explicitly remains instantaneous; persistence/confidence-over-time is deferred to #10
+  - tests cover clear-peak detection, startup-floor peak detection, flat-spectrum rejection, peak separation, and 20–200 Hz range limits
   - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Next
 
-- [ ] #9 Build dominant-frequency detection
 - [ ] #10 Add persistent-tone detection
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. Physical microphone and vehicle-route behavior still require a real iPhone/car test. Noise-floor and spectrum measurements are digital dBFS values, not calibrated SPL.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. Physical microphone and vehicle-route behavior still require a real iPhone/car test. Noise-floor, spectrum, and dominant-frequency measurements are digital dBFS/relative values, not calibrated SPL.
