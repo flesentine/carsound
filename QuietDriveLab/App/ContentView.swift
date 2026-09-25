@@ -16,9 +16,10 @@ struct ContentView: View {
                         audioSessionCard
                         routeCard
                         captureCard
+                        diagnosticsCard
                     }
 
-                    Text("Lab build 0.3 • PCM buffers are analyzed in memory and never written to disk")
+                    Text("Lab build 0.4 • PCM buffers are analyzed in memory and never written to disk")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -201,6 +202,100 @@ struct ContentView: View {
         .cardStyle()
     }
 
+    private var diagnosticsCard: some View {
+        let snapshot = microphoneCapture.snapshot
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Raw Audio Diagnostics", systemImage: "waveform.path.ecg")
+                    .font(.headline)
+
+                Spacer()
+
+                if microphoneCapture.state == .capturing {
+                    Label(
+                        snapshot.isClipping ? "Clipping" : "Live",
+                        systemImage: snapshot.isClipping ? "exclamationmark.triangle.fill" : "dot.radiowaves.left.and.right"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(snapshot.isClipping ? .red : .green)
+                } else {
+                    Text("Idle")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Text("Levels are digital dBFS measurements, not calibrated cabin SPL.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            signalMeter(
+                title: "RMS level",
+                dbFS: snapshot.rmsDBFS,
+                position: AudioLevelAnalyzer.meterPosition(forDBFS: snapshot.rmsDBFS)
+            )
+
+            signalMeter(
+                title: "Peak level",
+                dbFS: snapshot.peakDBFS,
+                position: AudioLevelAnalyzer.meterPosition(forDBFS: snapshot.peakDBFS)
+            )
+
+            Divider()
+
+            LabeledContent("RMS", value: dbFSText(snapshot.rmsDBFS))
+            LabeledContent("Peak", value: dbFSText(snapshot.peakDBFS))
+            LabeledContent("Peak hold", value: dbFSText(snapshot.peakHoldDBFS))
+            LabeledContent("Peak headroom", value: headroomText(snapshot.peakDBFS))
+            LabeledContent(
+                "Last buffer clipping",
+                value: snapshot.isClipping ? "\(snapshot.lastBufferClippedSampleCount) samples" : "None"
+            )
+            LabeledContent("Clipped samples total", value: "\(snapshot.totalClippedSampleCount)")
+            LabeledContent(
+                "Buffer size",
+                value: snapshot.lastBufferFrames > 0 ? "\(snapshot.lastBufferFrames) frames" : "—"
+            )
+            LabeledContent(
+                "Buffer duration",
+                value: snapshot.bufferDurationMilliseconds > 0
+                    ? String(format: "%.2f ms", snapshot.bufferDurationMilliseconds)
+                    : "—"
+            )
+            LabeledContent("Capture rate", value: captureRateText)
+            LabeledContent("Channels", value: captureChannelsText)
+            LabeledContent("PCM format", value: snapshot.formatDescription)
+        }
+        .cardStyle()
+    }
+
+    private func signalMeter(title: String, dbFS: Double, position: Double) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Text(dbFSText(dbFS))
+                    .font(.system(.subheadline, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+
+            ProgressView(value: position, total: 1)
+                .progressViewStyle(.linear)
+
+            HStack {
+                Text("-80")
+                Spacer()
+                Text("-40")
+                Spacer()
+                Text("0 dBFS")
+            }
+            .font(.caption2)
+            .foregroundStyle(.tertiary)
+        }
+    }
+
     @ViewBuilder
     private func routeSection(title: String, ports: [AudioSessionModel.Port]) -> some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -229,6 +324,16 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private func dbFSText(_ value: Double) -> String {
+        guard value > AudioLevelAnalyzer.silenceFloorDBFS else { return "≤ -120.0 dBFS" }
+        return String(format: "%.1f dBFS", value)
+    }
+
+    private func headroomText(_ peakDBFS: Double) -> String {
+        guard peakDBFS > AudioLevelAnalyzer.silenceFloorDBFS else { return "—" }
+        return String(format: "%.1f dB", max(0, -peakDBFS))
     }
 
     private var sampleRateText: String {
