@@ -45,22 +45,28 @@
   - synthetic known-frequency sine-wave test source
   - app and unit-test targets compiled in CI
 - [x] #6 Build live spectrum graph
-  - dedicated SwiftUI Canvas-based spectrum view
-  - raw FFT line rendered live from the capture snapshot
-  - primary 20–200 Hz low-frequency view for road/engine drone research
-  - switchable 20–2,000 Hz wider context view
-  - frequency-axis tick labels
-  - 0 to -120 dBFS vertical scale and grid
-  - empty/warm-up state before the first full FFT window
-  - graph intentionally remains unsmoothed so #7 can be evaluated separately
-  - accessibility summary for spectrum state
-  - graph-range filtering and coordinate-scaling tests
-  - fixed Canvas shading/stroke API integration issue found by CI
+  - SwiftUI Canvas-based live spectrum
+  - 20–200 Hz low-frequency view
+  - optional 20–2,000 Hz context view
+  - frequency and dBFS axes
+  - raw unsmoothed FFT display
+  - graph coordinate/range tests
+- [x] #7 Add spectrum smoothing
+  - raw FFT remains preserved and independently viewable
+  - temporal exponential smoothing performed in linear power, not directly in dB
+  - Responsive, Balanced, and Stable smoothing presets
+  - all three smoothing states maintained independently so switching presets is immediate
+  - smoothing limited to 0–2,000 Hz to reduce real-time audio-callback work
+  - Raw / Smoothed comparison control in the Lab UI
+  - default display uses Balanced smoothing
+  - preset descriptions explain responsiveness tradeoffs
+  - graph label reflects the active raw/smoothing mode
+  - smoothing reset is tied to capture reset
+  - tests cover first-frame seeding, relative preset responsiveness, and 2 kHz analysis-band limit
   - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Next
 
-- [ ] #7 Add spectrum smoothing
 - [ ] #8 Implement noise-floor measurement
 - [ ] #9 Build dominant-frequency detection
 - [ ] #10 Add persistent-tone detection
