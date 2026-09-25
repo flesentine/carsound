@@ -31,23 +31,27 @@
   - audio buffers observed in memory and never written to disk
   - capture automatically stops before audio-session reconfiguration/deactivation
 - [x] #4 Build raw audio diagnostics screen
-  - live RMS signal level
-  - live peak signal level
-  - dBFS conversion with finite silence floor
-  - RMS and peak level meters
-  - peak-hold measurement
-  - peak-headroom readout
-  - per-buffer clipping detection at 0.99 full scale
-  - last-buffer and cumulative clipped-sample counts
-  - actual buffer size and buffer duration
-  - capture sample rate, channel count, and PCM format shown with diagnostics
-  - diagnostics UI refreshes at 10 Hz while raw audio stays on the audio callback
-  - unit coverage added for dBFS and meter math
-  - full iOS simulator build green in GitHub Actions
+  - live RMS and peak signal levels
+  - dBFS conversion, meters, peak hold, and headroom
+  - clipping detection and counts
+  - actual buffer size and duration
+  - unit coverage for dBFS and meter math
+- [x] #5 Implement FFT processing
+  - rolling 4,096-sample analysis window fed by the existing 1,024-frame microphone callbacks
+  - Hann window before every transform
+  - radix-2 FFT implementation
+  - multi-channel input downmixed to mono for spectral analysis
+  - full 0 Hz-to-Nyquist spectrum produced in dBFS
+  - normalized magnitude calculation that accounts for Hann-window coherent gain
+  - finite -140 dBFS spectrum floor
+  - ~11.72 Hz/bin resolution at 48 kHz
+  - FFT size, resolution, bin count, Nyquist, window, and transform count exposed in the Lab UI
+  - synthetic known-frequency sine-wave test source added
+  - CI upgraded to compile both the app and unit-test targets
+  - full simulator build-for-testing green in GitHub Actions
 
 ## Next
 
-- [ ] #5 Implement FFT processing
 - [ ] #6 Build live spectrum graph
 - [ ] #7 Add spectrum smoothing
 - [ ] #8 Implement noise-floor measurement
@@ -56,4 +60,4 @@
 
 ## Verification note
 
-The app compiles successfully in GitHub Actions against the iOS simulator SDK. Physical microphone and vehicle-route behavior still require a real iPhone/car test. dBFS values are digital signal levels and are not calibrated sound-pressure-level (SPL) measurements.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. Physical microphone and vehicle-route behavior still require a real iPhone/car test. Spectrum magnitudes are digital dBFS values, not calibrated SPL.
