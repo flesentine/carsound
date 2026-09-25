@@ -308,7 +308,7 @@ struct ContentView: View {
                 Spacer()
                 Text(snapshot.spectrumBins.isEmpty ? "Warming up" : "Ready")
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(snapshot.spectrumBins.isEmpty ? .secondary : .green)
+                    .foregroundStyle(snapshot.spectrumBins.isEmpty ? Color.secondary : Color.green)
             }
 
             Text("Rolling 4,096-sample Hann-windowed FFT. The live spectrum is computed now; graphing comes in #6.")
