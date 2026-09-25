@@ -24,9 +24,10 @@ struct ContentView: View {
                         fftCard
                         spectrumCard
                         noiseFloorCard
+                        dominantFrequencyCard
                     }
 
-                    Text("Lab build 0.8 • PCM buffers are analyzed in memory and never written to disk")
+                    Text("Lab build 0.9 • PCM buffers are analyzed in memory and never written to disk")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -477,6 +478,88 @@ struct ContentView: View {
             LabeledContent(
                 "Estimator updates",
                 value: "\(floor.updateCount)"
+            )
+        }
+        .cardStyle()
+    }
+
+    private var dominantFrequencyCard: some View {
+        let result = microphoneCapture.snapshot.dominantFrequencies
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Dominant Frequencies", systemImage: "waveform.badge.magnifyingglass")
+                    .font(.headline)
+
+                Spacer()
+
+                Text(result.frequencies.isEmpty ? "None" : "\(result.frequencies.count) found")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(
+                        result.frequencies.isEmpty
+                            ? Color.secondary
+                            : Color.green
+                    )
+            }
+
+            Text("Instantaneous 20–200 Hz peak detection. Persistence and confidence over time come in #10.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Divider()
+
+            if result.frequencies.isEmpty {
+                Text(
+                    result.analyzedBinCount > 0
+                        ? "No sufficiently prominent low-frequency peak is present right now."
+                        : "Start capture and allow the FFT to warm up."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(result.frequencies.enumerated()), id: \.element.id) { index, frequency in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text("#\(index + 1)")
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.secondary)
+
+                            Text(String(format: "%.1f Hz", frequency.frequencyHz))
+                                .font(.title3.monospacedDigit().weight(.semibold))
+
+                            Spacer()
+
+                            Text(dbFSText(frequency.magnitudeDBFS))
+                                .font(.subheadline.monospacedDigit())
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack {
+                            Label(
+                                String(format: "+%.1f dB local", frequency.localProminenceDB),
+                                systemImage: "mountain.2"
+                            )
+
+                            Spacer()
+
+                            Label(
+                                String(format: "+%.1f dB floor", frequency.temporalExcessDB),
+                                systemImage: "waveform.badge.minus"
+                            )
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                        if index < result.frequencies.count - 1 {
+                            Divider()
+                        }
+                    }
+                }
+            }
+
+            LabeledContent(
+                "Analyzed bins",
+                value: "\(result.analyzedBinCount)"
             )
         }
         .cardStyle()
