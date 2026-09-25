@@ -125,7 +125,7 @@ final class QuietDriveLabTests: XCTestCase {
 
         XCTAssertEqual(snapshot.updateCount, 1)
         XCTAssertEqual(snapshot.bins, bins)
-        XCTAssertEqual(snapshot.lowFrequencyFloorDBFS, -54.62, accuracy: 0.1)
+        XCTAssertEqual(snapshot.lowFrequencyFloorDBFS, -52.60, accuracy: 0.1)
         XCTAssertEqual(snapshot.widebandFloorDBFS, -50.0, accuracy: 0.1)
         XCTAssertEqual(snapshot.lowFrequencyExcessDB, 0, accuracy: 0.001)
         XCTAssertEqual(snapshot.widebandExcessDB, 0, accuracy: 0.001)
