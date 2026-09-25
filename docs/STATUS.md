@@ -37,22 +37,29 @@
   - actual buffer size and duration
   - unit coverage for dBFS and meter math
 - [x] #5 Implement FFT processing
-  - rolling 4,096-sample analysis window fed by the existing 1,024-frame microphone callbacks
+  - rolling 4,096-sample analysis window
   - Hann window before every transform
   - radix-2 FFT implementation
-  - multi-channel input downmixed to mono for spectral analysis
-  - full 0 Hz-to-Nyquist spectrum produced in dBFS
-  - normalized magnitude calculation that accounts for Hann-window coherent gain
-  - finite -140 dBFS spectrum floor
+  - full 0 Hz-to-Nyquist spectrum in dBFS
   - ~11.72 Hz/bin resolution at 48 kHz
-  - FFT size, resolution, bin count, Nyquist, window, and transform count exposed in the Lab UI
-  - synthetic known-frequency sine-wave test source added
-  - CI upgraded to compile both the app and unit-test targets
-  - full simulator build-for-testing green in GitHub Actions
+  - synthetic known-frequency sine-wave test source
+  - app and unit-test targets compiled in CI
+- [x] #6 Build live spectrum graph
+  - dedicated SwiftUI Canvas-based spectrum view
+  - raw FFT line rendered live from the capture snapshot
+  - primary 20–200 Hz low-frequency view for road/engine drone research
+  - switchable 20–2,000 Hz wider context view
+  - frequency-axis tick labels
+  - 0 to -120 dBFS vertical scale and grid
+  - empty/warm-up state before the first full FFT window
+  - graph intentionally remains unsmoothed so #7 can be evaluated separately
+  - accessibility summary for spectrum state
+  - graph-range filtering and coordinate-scaling tests
+  - fixed Canvas shading/stroke API integration issue found by CI
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Next
 
-- [ ] #6 Build live spectrum graph
 - [ ] #7 Add spectrum smoothing
 - [ ] #8 Implement noise-floor measurement
 - [ ] #9 Build dominant-frequency detection
