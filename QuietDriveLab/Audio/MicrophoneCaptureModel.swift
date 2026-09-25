@@ -44,6 +44,7 @@ final class MicrophoneCaptureModel {
         let smoothedSpectrum: SmoothedSpectrumSnapshot
         let noiseFloor: NoiseFloorSnapshot
         let dominantFrequencies: DominantFrequencySnapshot
+        let persistentTones: PersistentToneSnapshot
 
         static let empty = Snapshot(
             bufferCount: 0,
@@ -69,7 +70,8 @@ final class MicrophoneCaptureModel {
             spectrumBins: [],
             smoothedSpectrum: .empty,
             noiseFloor: .empty,
-            dominantFrequencies: .empty
+            dominantFrequencies: .empty,
+            persistentTones: .empty
         )
     }
 
@@ -184,10 +186,13 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private let smoothingBank = SpectrumSmoothingBank()
     private let noiseFloorEstimator = NoiseFloorEstimator()
     private let dominantFrequencyDetector = DominantFrequencyDetector()
+    private let persistentToneTracker = PersistentToneTracker()
     private var fftSnapshot: FFTSnapshot = .empty
     private var smoothedSpectrum: SmoothedSpectrumSnapshot = .empty
     private var noiseFloor: NoiseFloorSnapshot = .empty
     private var dominantFrequencies: DominantFrequencySnapshot = .empty
+    private var persistentTones: PersistentToneSnapshot = .empty
+    private var captureTimelineSeconds: Double = 0
 
     func record(buffer: AVAudioPCMBuffer) {
         let format = buffer.format
@@ -222,6 +227,15 @@ private final class CaptureStatsStore: @unchecked Sendable {
             durationMilliseconds = 0
         }
 
+        captureTimelineSeconds += durationMilliseconds / 1_000
+
+        let latestPersistentTones = latestDominantFrequencies.map {
+            persistentToneTracker.process(
+                $0.frequencies,
+                timestampSeconds: captureTimelineSeconds
+            )
+        }
+
         lock.lock()
         bufferCount += 1
         frameCount += UInt64(buffer.frameLength)
@@ -250,6 +264,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
 
         if let latestDominantFrequencies {
             dominantFrequencies = latestDominantFrequencies
+        }
+
+        if let latestPersistentTones {
+            persistentTones = latestPersistentTones
         }
 
         lock.unlock()
@@ -283,7 +301,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
             spectrumBins: fftSnapshot.bins,
             smoothedSpectrum: smoothedSpectrum,
             noiseFloor: noiseFloor,
-            dominantFrequencies: dominantFrequencies
+            dominantFrequencies: dominantFrequencies,
+            persistentTones: persistentTones
         )
     }
 
@@ -291,6 +310,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
         fftAnalyzer.reset()
         smoothingBank.reset()
         noiseFloorEstimator.reset()
+        persistentToneTracker.reset()
 
         lock.lock()
         bufferCount = 0
@@ -309,6 +329,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
         smoothedSpectrum = .empty
         noiseFloor = .empty
         dominantFrequencies = .empty
+        persistentTones = .empty
+        captureTimelineSeconds = 0
         lock.unlock()
     }
 
