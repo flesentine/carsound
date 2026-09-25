@@ -26,6 +26,16 @@ final class MicrophoneCaptureModel {
         let sampleRate: Double
         let channelCount: AVAudioChannelCount
         let formatDescription: String
+        let rmsLinear: Float
+        let peakLinear: Float
+        let peakHoldLinear: Float
+        let rmsDBFS: Double
+        let peakDBFS: Double
+        let peakHoldDBFS: Double
+        let lastBufferClippedSampleCount: UInt64
+        let totalClippedSampleCount: UInt64
+        let isClipping: Bool
+        let bufferDurationMilliseconds: Double
 
         static let empty = Snapshot(
             bufferCount: 0,
@@ -33,7 +43,17 @@ final class MicrophoneCaptureModel {
             lastBufferFrames: 0,
             sampleRate: 0,
             channelCount: 0,
-            formatDescription: "—"
+            formatDescription: "—",
+            rmsLinear: 0,
+            peakLinear: 0,
+            peakHoldLinear: 0,
+            rmsDBFS: AudioLevelAnalyzer.silenceFloorDBFS,
+            peakDBFS: AudioLevelAnalyzer.silenceFloorDBFS,
+            peakHoldDBFS: AudioLevelAnalyzer.silenceFloorDBFS,
+            lastBufferClippedSampleCount: 0,
+            totalClippedSampleCount: 0,
+            isClipping: false,
+            bufferDurationMilliseconds: 0
         )
     }
 
@@ -115,7 +135,7 @@ final class MicrophoneCaptureModel {
         pollingTask?.cancel()
         pollingTask = Task { @MainActor [weak self] in
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: 250_000_000)
+                try? await Task.sleep(nanoseconds: 100_000_000)
                 guard !Task.isCancelled, let self else { return }
                 self.snapshot = self.stats.snapshot()
             }
@@ -138,10 +158,24 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var sampleRate: Double = 0
     private var channelCount: AVAudioChannelCount = 0
     private var formatDescription = "—"
+    private var rmsLinear: Float = 0
+    private var peakLinear: Float = 0
+    private var peakHoldLinear: Float = 0
+    private var lastBufferClippedSampleCount: UInt64 = 0
+    private var totalClippedSampleCount: UInt64 = 0
+    private var bufferDurationMilliseconds: Double = 0
 
     func record(buffer: AVAudioPCMBuffer) {
         let format = buffer.format
         let description = Self.describe(format: format)
+        let measurement = AudioLevelAnalyzer.analyze(buffer: buffer)
+        let durationMilliseconds: Double
+
+        if format.sampleRate > 0 {
+            durationMilliseconds = Double(buffer.frameLength) / format.sampleRate * 1_000
+        } else {
+            durationMilliseconds = 0
+        }
 
         lock.lock()
         bufferCount += 1
@@ -150,6 +184,12 @@ private final class CaptureStatsStore: @unchecked Sendable {
         sampleRate = format.sampleRate
         channelCount = format.channelCount
         formatDescription = description
+        rmsLinear = measurement.rmsLinear
+        peakLinear = measurement.peakLinear
+        peakHoldLinear = max(peakHoldLinear, measurement.peakLinear)
+        lastBufferClippedSampleCount = measurement.clippedSampleCount
+        totalClippedSampleCount += measurement.clippedSampleCount
+        bufferDurationMilliseconds = durationMilliseconds
         lock.unlock()
     }
 
@@ -163,7 +203,17 @@ private final class CaptureStatsStore: @unchecked Sendable {
             lastBufferFrames: lastBufferFrames,
             sampleRate: sampleRate,
             channelCount: channelCount,
-            formatDescription: formatDescription
+            formatDescription: formatDescription,
+            rmsLinear: rmsLinear,
+            peakLinear: peakLinear,
+            peakHoldLinear: peakHoldLinear,
+            rmsDBFS: AudioLevelAnalyzer.decibelsFS(forAmplitude: rmsLinear),
+            peakDBFS: AudioLevelAnalyzer.decibelsFS(forAmplitude: peakLinear),
+            peakHoldDBFS: AudioLevelAnalyzer.decibelsFS(forAmplitude: peakHoldLinear),
+            lastBufferClippedSampleCount: lastBufferClippedSampleCount,
+            totalClippedSampleCount: totalClippedSampleCount,
+            isClipping: lastBufferClippedSampleCount > 0,
+            bufferDurationMilliseconds: bufferDurationMilliseconds
         )
     }
 
@@ -175,6 +225,12 @@ private final class CaptureStatsStore: @unchecked Sendable {
         sampleRate = 0
         channelCount = 0
         formatDescription = "—"
+        rmsLinear = 0
+        peakLinear = 0
+        peakHoldLinear = 0
+        lastBufferClippedSampleCount = 0
+        totalClippedSampleCount = 0
+        bufferDurationMilliseconds = 0
         lock.unlock()
     }
 
