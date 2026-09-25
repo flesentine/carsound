@@ -66,23 +66,41 @@
   - full app + unit-test simulator build-for-testing green
 - [x] #9 Build dominant-frequency detection
   - analyzes the Balanced smoothed 20–200 Hz spectrum
-  - detects local spectral maxima instead of simply choosing the loudest FFT bin
-  - compares each candidate against both the tracked temporal floor and its local spectral neighborhood
-  - avoids missing a steady tone that was already present when the noise-floor estimator initialized
-  - requires minimum local prominence before reporting a candidate
-  - ranks candidates using local prominence plus temporal floor excess
-  - suppresses nearby duplicate peaks with a configurable minimum frequency separation
-  - quadratic/parabolic interpolation refines peak frequency beyond the raw FFT-bin center
-  - returns up to five ranked low-frequency candidates
-  - UI shows frequency, dBFS magnitude, local prominence, and temporal floor excess
-  - explicitly remains instantaneous; persistence/confidence-over-time is deferred to #10
-  - tests cover clear-peak detection, startup-floor peak detection, flat-spectrum rejection, peak separation, and 20–200 Hz range limits
+  - detects and ranks locally prominent low-frequency peaks
+  - combines local prominence with temporal floor excess
+  - frequency interpolation beyond raw FFT-bin centers
+  - nearby duplicate suppression
+  - full app + unit-test simulator build-for-testing green
+- [x] #10 Add persistent-tone detection
+  - tracks dominant-frequency candidates across the audio-sample timeline
+  - frequency matching tolerance keeps the same physical tone attached to one track
+  - brief candidate dropouts are tolerated without immediately losing a track
+  - stale tracks expire after a configurable gap
+  - persistence requires at least 2 seconds by default
+  - persistence also requires minimum presence ratio and frequency stability
+  - running mean frequency and sample standard deviation measure stability
+  - average local prominence and average temporal floor excess retained per tone
+  - confidence score combines duration, presence, frequency stability, and spectral strength
+  - Low / Medium / High confidence labels
+  - UI shows duration, presence %, frequency standard deviation, average prominence, average floor excess, confidence, observations, and Persistent/Building state
+  - tracker time is derived from captured audio duration rather than wall-clock UI timing
+  - tracker resets with capture reset
+  - deterministic tests cover 2-second persistence, brief dropouts, expiration after long gaps, unstable frequency rejection, and low-presence rejection
   - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Next
 
-- [ ] #10 Add persistent-tone detection
+- [ ] #11 Add low-frequency-only analysis mode
+- [ ] #12 Build tone generator
+- [ ] #13 Add manual output-level control
+- [ ] #14 Add manual phase control
+- [ ] #15 Build Lab cancellation control screen
+- [ ] #16 Measure target-frequency energy
+- [ ] #17 Create before/after measurement
+- [ ] #18 Add experiment recorder
+- [ ] #19 Add automatic phase sweep
+- [ ] #20 Refine phase search
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. Physical microphone and vehicle-route behavior still require a real iPhone/car test. Noise-floor, spectrum, and dominant-frequency measurements are digital dBFS/relative values, not calibrated SPL.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Physical microphone and vehicle-route behavior still require a real iPhone/car test. Noise-floor, spectrum, dominant-frequency, and persistence measurements are digital/relative values, not calibrated SPL.
