@@ -42,6 +42,7 @@ final class MicrophoneCaptureModel {
         let fftWindowName: String
         let spectrumBins: [SpectrumBin]
         let smoothedSpectrum: SmoothedSpectrumSnapshot
+        let noiseFloor: NoiseFloorSnapshot
 
         static let empty = Snapshot(
             bufferCount: 0,
@@ -65,7 +66,8 @@ final class MicrophoneCaptureModel {
             fftResolutionHz: 0,
             fftWindowName: FFTAnalyzer.windowName,
             spectrumBins: [],
-            smoothedSpectrum: .empty
+            smoothedSpectrum: .empty,
+            noiseFloor: .empty
         )
     }
 
@@ -178,8 +180,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var bufferDurationMilliseconds: Double = 0
     private let fftAnalyzer = FFTAnalyzer()
     private let smoothingBank = SpectrumSmoothingBank()
+    private let noiseFloorEstimator = NoiseFloorEstimator()
     private var fftSnapshot: FFTSnapshot = .empty
     private var smoothedSpectrum: SmoothedSpectrumSnapshot = .empty
+    private var noiseFloor: NoiseFloorSnapshot = .empty
 
     func record(buffer: AVAudioPCMBuffer) {
         let format = buffer.format
@@ -188,6 +192,9 @@ private final class CaptureStatsStore: @unchecked Sendable {
         let latestFFT = fftAnalyzer.ingest(buffer: buffer)
         let latestSmoothedSpectrum = latestFFT.map {
             smoothingBank.process($0.bins)
+        }
+        let latestNoiseFloor = latestSmoothedSpectrum.map {
+            noiseFloorEstimator.process($0.balanced)
         }
         let durationMilliseconds: Double
 
@@ -219,6 +226,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
             smoothedSpectrum = latestSmoothedSpectrum
         }
 
+        if let latestNoiseFloor {
+            noiseFloor = latestNoiseFloor
+        }
+
         lock.unlock()
     }
 
@@ -248,13 +259,15 @@ private final class CaptureStatsStore: @unchecked Sendable {
             fftResolutionHz: fftSnapshot.frequencyResolutionHz,
             fftWindowName: fftSnapshot.windowName,
             spectrumBins: fftSnapshot.bins,
-            smoothedSpectrum: smoothedSpectrum
+            smoothedSpectrum: smoothedSpectrum,
+            noiseFloor: noiseFloor
         )
     }
 
     func reset() {
         fftAnalyzer.reset()
         smoothingBank.reset()
+        noiseFloorEstimator.reset()
 
         lock.lock()
         bufferCount = 0
@@ -271,6 +284,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
         bufferDurationMilliseconds = 0
         fftSnapshot = .empty
         smoothedSpectrum = .empty
+        noiseFloor = .empty
         lock.unlock()
     }
 
