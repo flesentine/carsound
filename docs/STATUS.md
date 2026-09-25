@@ -53,24 +53,32 @@
   - graph coordinate/range tests
 - [x] #7 Add spectrum smoothing
   - raw FFT remains preserved and independently viewable
-  - temporal exponential smoothing performed in linear power, not directly in dB
-  - Responsive, Balanced, and Stable smoothing presets
-  - all three smoothing states maintained independently so switching presets is immediate
-  - smoothing limited to 0–2,000 Hz to reduce real-time audio-callback work
-  - Raw / Smoothed comparison control in the Lab UI
-  - default display uses Balanced smoothing
-  - preset descriptions explain responsiveness tradeoffs
-  - graph label reflects the active raw/smoothing mode
-  - smoothing reset is tied to capture reset
-  - tests cover first-frame seeding, relative preset responsiveness, and 2 kHz analysis-band limit
+  - temporal exponential smoothing in linear power
+  - Responsive, Balanced, and Stable presets
+  - smoothing limited to 0–2,000 Hz
+  - Raw / Smoothed comparison control
+  - full app + unit-test simulator build-for-testing green
+- [x] #8 Implement noise-floor measurement
+  - adaptive per-frequency background floor from 20–2,000 Hz
+  - uses the Balanced smoothed spectrum as its measurement input
+  - floor estimation performed in linear power
+  - faster downward adaptation when the cabin becomes quieter
+  - slower upward adaptation so transient loud events do not immediately redefine the baseline
+  - low-frequency 20–200 Hz floor estimate
+  - wider 20–2,000 Hz floor estimate
+  - current low-frequency dB above floor
+  - current wider-band dB above floor
+  - per-bin floor spectrum retained for later peak/tone detection
+  - estimator update count and tracked-bin count shown in the Lab UI
+  - floor state resets with capture reset
+  - tests cover initial seeding, slow upward adaptation, faster downward adaptation, and analysis-band limits
   - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Next
 
-- [ ] #8 Implement noise-floor measurement
 - [ ] #9 Build dominant-frequency detection
 - [ ] #10 Add persistent-tone detection
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. Physical microphone and vehicle-route behavior still require a real iPhone/car test. Spectrum magnitudes are digital dBFS values, not calibrated SPL.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. Physical microphone and vehicle-route behavior still require a real iPhone/car test. Noise-floor and spectrum measurements are digital dBFS values, not calibrated SPL.
