@@ -17,9 +17,10 @@ struct ContentView: View {
                         routeCard
                         captureCard
                         diagnosticsCard
+                        fftCard
                     }
 
-                    Text("Lab build 0.4 • PCM buffers are analyzed in memory and never written to disk")
+                    Text("Lab build 0.5 • PCM buffers are analyzed in memory and never written to disk")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -294,6 +295,36 @@ struct ContentView: View {
             .font(.caption2)
             .foregroundStyle(.tertiary)
         }
+    }
+
+    private var fftCard: some View {
+        let snapshot = microphoneCapture.snapshot
+        let nyquist = snapshot.sampleRate > 0 ? snapshot.sampleRate / 2 : 0
+
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("FFT Processing", systemImage: "waveform.path")
+                    .font(.headline)
+                Spacer()
+                Text(snapshot.spectrumBins.isEmpty ? "Warming up" : "Ready")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(snapshot.spectrumBins.isEmpty ? .secondary : .green)
+            }
+
+            Text("Rolling 4,096-sample Hann-windowed FFT. The live spectrum is computed now; graphing comes in #6.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Divider()
+
+            LabeledContent("FFT size", value: snapshot.fftSampleCount > 0 ? "\(snapshot.fftSampleCount) samples" : "—")
+            LabeledContent("Window", value: snapshot.fftWindowName)
+            LabeledContent("Frequency resolution", value: snapshot.fftResolutionHz > 0 ? String(format: "%.2f Hz/bin", snapshot.fftResolutionHz) : "—")
+            LabeledContent("Spectrum bins", value: snapshot.spectrumBins.isEmpty ? "—" : "\(snapshot.spectrumBins.count)")
+            LabeledContent("Nyquist", value: nyquist > 0 ? String(format: "%.0f Hz", nyquist) : "—")
+            LabeledContent("Transforms completed", value: "\(snapshot.fftTransformCount)")
+        }
+        .cardStyle()
     }
 
     @ViewBuilder
