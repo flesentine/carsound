@@ -41,6 +41,7 @@ final class MicrophoneCaptureModel {
         let fftResolutionHz: Double
         let fftWindowName: String
         let spectrumBins: [SpectrumBin]
+        let smoothedSpectrum: SmoothedSpectrumSnapshot
 
         static let empty = Snapshot(
             bufferCount: 0,
@@ -63,7 +64,8 @@ final class MicrophoneCaptureModel {
             fftTransformCount: 0,
             fftResolutionHz: 0,
             fftWindowName: FFTAnalyzer.windowName,
-            spectrumBins: []
+            spectrumBins: [],
+            smoothedSpectrum: .empty
         )
     }
 
@@ -175,13 +177,18 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var totalClippedSampleCount: UInt64 = 0
     private var bufferDurationMilliseconds: Double = 0
     private let fftAnalyzer = FFTAnalyzer()
+    private let smoothingBank = SpectrumSmoothingBank()
     private var fftSnapshot: FFTSnapshot = .empty
+    private var smoothedSpectrum: SmoothedSpectrumSnapshot = .empty
 
     func record(buffer: AVAudioPCMBuffer) {
         let format = buffer.format
         let description = Self.describe(format: format)
         let measurement = AudioLevelAnalyzer.analyze(buffer: buffer)
         let latestFFT = fftAnalyzer.ingest(buffer: buffer)
+        let latestSmoothedSpectrum = latestFFT.map {
+            smoothingBank.process($0.bins)
+        }
         let durationMilliseconds: Double
 
         if format.sampleRate > 0 {
@@ -206,6 +213,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
 
         if let latestFFT {
             fftSnapshot = latestFFT
+        }
+
+        if let latestSmoothedSpectrum {
+            smoothedSpectrum = latestSmoothedSpectrum
         }
 
         lock.unlock()
@@ -236,12 +247,14 @@ private final class CaptureStatsStore: @unchecked Sendable {
             fftTransformCount: fftSnapshot.transformCount,
             fftResolutionHz: fftSnapshot.frequencyResolutionHz,
             fftWindowName: fftSnapshot.windowName,
-            spectrumBins: fftSnapshot.bins
+            spectrumBins: fftSnapshot.bins,
+            smoothedSpectrum: smoothedSpectrum
         )
     }
 
     func reset() {
         fftAnalyzer.reset()
+        smoothingBank.reset()
 
         lock.lock()
         bufferCount = 0
@@ -257,6 +270,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
         totalClippedSampleCount = 0
         bufferDurationMilliseconds = 0
         fftSnapshot = .empty
+        smoothedSpectrum = .empty
         lock.unlock()
     }
 
