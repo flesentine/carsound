@@ -36,6 +36,11 @@ final class MicrophoneCaptureModel {
         let totalClippedSampleCount: UInt64
         let isClipping: Bool
         let bufferDurationMilliseconds: Double
+        let fftSampleCount: Int
+        let fftTransformCount: UInt64
+        let fftResolutionHz: Double
+        let fftWindowName: String
+        let spectrumBins: [SpectrumBin]
 
         static let empty = Snapshot(
             bufferCount: 0,
@@ -53,7 +58,12 @@ final class MicrophoneCaptureModel {
             lastBufferClippedSampleCount: 0,
             totalClippedSampleCount: 0,
             isClipping: false,
-            bufferDurationMilliseconds: 0
+            bufferDurationMilliseconds: 0,
+            fftSampleCount: 0,
+            fftTransformCount: 0,
+            fftResolutionHz: 0,
+            fftWindowName: FFTAnalyzer.windowName,
+            spectrumBins: []
         )
     }
 
@@ -164,11 +174,14 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var lastBufferClippedSampleCount: UInt64 = 0
     private var totalClippedSampleCount: UInt64 = 0
     private var bufferDurationMilliseconds: Double = 0
+    private let fftAnalyzer = FFTAnalyzer()
+    private var fftSnapshot: FFTSnapshot = .empty
 
     func record(buffer: AVAudioPCMBuffer) {
         let format = buffer.format
         let description = Self.describe(format: format)
         let measurement = AudioLevelAnalyzer.analyze(buffer: buffer)
+        let latestFFT = fftAnalyzer.ingest(buffer: buffer)
         let durationMilliseconds: Double
 
         if format.sampleRate > 0 {
@@ -190,6 +203,11 @@ private final class CaptureStatsStore: @unchecked Sendable {
         lastBufferClippedSampleCount = measurement.clippedSampleCount
         totalClippedSampleCount += measurement.clippedSampleCount
         bufferDurationMilliseconds = durationMilliseconds
+
+        if let latestFFT {
+            fftSnapshot = latestFFT
+        }
+
         lock.unlock()
     }
 
@@ -213,11 +231,18 @@ private final class CaptureStatsStore: @unchecked Sendable {
             lastBufferClippedSampleCount: lastBufferClippedSampleCount,
             totalClippedSampleCount: totalClippedSampleCount,
             isClipping: lastBufferClippedSampleCount > 0,
-            bufferDurationMilliseconds: bufferDurationMilliseconds
+            bufferDurationMilliseconds: bufferDurationMilliseconds,
+            fftSampleCount: fftSnapshot.sampleCount,
+            fftTransformCount: fftSnapshot.transformCount,
+            fftResolutionHz: fftSnapshot.frequencyResolutionHz,
+            fftWindowName: fftSnapshot.windowName,
+            spectrumBins: fftSnapshot.bins
         )
     }
 
     func reset() {
+        fftAnalyzer.reset()
+
         lock.lock()
         bufferCount = 0
         frameCount = 0
@@ -231,6 +256,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
         lastBufferClippedSampleCount = 0
         totalClippedSampleCount = 0
         bufferDurationMilliseconds = 0
+        fftSnapshot = .empty
         lock.unlock()
     }
 
