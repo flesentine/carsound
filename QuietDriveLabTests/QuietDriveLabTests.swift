@@ -60,4 +60,48 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(strongest.frequencyHz, frequency, accuracy: 0.01)
         XCTAssertEqual(strongest.magnitudeDBFS, -6.0206, accuracy: 0.15)
     }
+
+    func testLowFrequencyGraphRangeFiltersBins() {
+        let bins = [
+            SpectrumBin(frequencyHz: 10, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 20, magnitudeDBFS: -30),
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -20),
+            SpectrumBin(frequencyHz: 200, magnitudeDBFS: -25),
+            SpectrumBin(frequencyHz: 250, magnitudeDBFS: -35)
+        ]
+
+        let filtered = SpectrumGraphScale.bins(from: bins, in: .lowFrequency)
+
+        XCTAssertEqual(filtered.map(\.frequencyHz), [20, 100, 200])
+    }
+
+    func testSpectrumGraphCoordinateScaling() {
+        XCTAssertEqual(
+            SpectrumGraphScale.xPosition(
+                frequencyHz: 110,
+                range: 20...200,
+                width: 180
+            ),
+            90,
+            accuracy: 0.0001
+        )
+
+        XCTAssertEqual(
+            SpectrumGraphScale.yPosition(dbFS: 0, height: 120),
+            0,
+            accuracy: 0.0001
+        )
+
+        XCTAssertEqual(
+            SpectrumGraphScale.yPosition(dbFS: -60, height: 120),
+            60,
+            accuracy: 0.0001
+        )
+
+        XCTAssertEqual(
+            SpectrumGraphScale.yPosition(dbFS: -120, height: 120),
+            120,
+            accuracy: 0.0001
+        )
+    }
 }
