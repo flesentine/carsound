@@ -4,9 +4,9 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#5 — FFT processing** is implemented.
+Development effort **#6 — live spectrum graph** is implemented.
 
-The app now accumulates the live 1,024-frame microphone callbacks into a rolling 4,096-sample analysis window, applies a Hann window, performs a radix-2 FFT, and produces a full frequency spectrum in dBFS from DC to Nyquist. At a 48 kHz microphone rate the current spectral resolution is about 11.72 Hz per bin.
+The Lab now renders the rolling FFT as a live raw spectrum using a SwiftUI Canvas. The default view focuses on **20–200 Hz**, the range most relevant to persistent road and powertrain drone experiments, with an optional **20–2,000 Hz** context view. The spectrum is deliberately unsmoothed so the next milestone can add and evaluate smoothing separately.
 
 ## Privacy principle
 
