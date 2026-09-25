@@ -54,6 +54,8 @@ struct SmoothedSpectrumSnapshot: Equatable, Sendable {
 }
 
 final class SpectrumSmoothingBank {
+    static let maximumFrequencyHz = 2_000.0
+
     private var smoothers: [SpectrumSmoothingPreset: SpectrumSmoother] = {
         Dictionary(
             uniqueKeysWithValues: SpectrumSmoothingPreset.allCases.map {
@@ -69,10 +71,14 @@ final class SpectrumSmoothingBank {
     }
 
     func process(_ bins: [SpectrumBin]) -> SmoothedSpectrumSnapshot {
-        SmoothedSpectrumSnapshot(
-            responsive: smoothers[.responsive]?.process(bins) ?? bins,
-            balanced: smoothers[.balanced]?.process(bins) ?? bins,
-            stable: smoothers[.stable]?.process(bins) ?? bins
+        let analysisBins = Array(
+            bins.prefix { $0.frequencyHz <= Self.maximumFrequencyHz }
+        )
+
+        return SmoothedSpectrumSnapshot(
+            responsive: smoothers[.responsive]?.process(analysisBins) ?? analysisBins,
+            balanced: smoothers[.balanced]?.process(analysisBins) ?? analysisBins,
+            stable: smoothers[.stable]?.process(analysisBins) ?? analysisBins
         )
     }
 }
