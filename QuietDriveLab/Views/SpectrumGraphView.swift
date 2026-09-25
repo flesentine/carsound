@@ -144,7 +144,7 @@ struct SpectrumGraphView: View {
 
             context.stroke(
                 line,
-                with: .foreground.opacity(db == 0 || db == -120 ? 0.35 : 0.14),
+                with: .color(Color.primary.opacity(db == 0 || db == -120 ? 0.35 : 0.14)),
                 style: db == 0 || db == -120 ? axisStyle : gridStyle
             )
 
@@ -184,7 +184,7 @@ struct SpectrumGraphView: View {
 
             context.stroke(
                 line,
-                with: .foreground.opacity(0.12),
+                with: .color(Color.primary.opacity(0.12)),
                 style: gridStyle
             )
 
@@ -254,11 +254,11 @@ struct SpectrumGraphView: View {
 
         context.stroke(
             path,
-            with: .tint,
+            with: .color(Color.accentColor),
             style: StrokeStyle(
                 lineWidth: 2,
-                lineJoin: .round,
-                lineCap: .round
+                lineCap: .round,
+                lineJoin: .round
             )
         )
     }
