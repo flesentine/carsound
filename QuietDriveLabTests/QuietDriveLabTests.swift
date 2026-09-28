@@ -492,6 +492,119 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertFalse(tone.isPersistent)
     }
 
+    func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
+        let bins = [
+            SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 30, magnitudeDBFS: -35),
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -25),
+            SpectrumBin(frequencyHz: 200, magnitudeDBFS: -30),
+            SpectrumBin(frequencyHz: 250, magnitudeDBFS: -20)
+        ]
+
+        let filtered = AnalysisMode.ancFocus.filter(bins)
+
+        XCTAssertEqual(
+            filtered.map(\.frequencyHz),
+            [30, 100, 200]
+        )
+    }
+
+    func testWideLabFiltersToTwentyThroughTwoKilohertz() {
+        let bins = [
+            SpectrumBin(frequencyHz: 10, magnitudeDBFS: -50),
+            SpectrumBin(frequencyHz: 20, magnitudeDBFS: -45),
+            SpectrumBin(frequencyHz: 500, magnitudeDBFS: -30),
+            SpectrumBin(frequencyHz: 2_000, magnitudeDBFS: -35),
+            SpectrumBin(frequencyHz: 2_100, magnitudeDBFS: -20)
+        ]
+
+        let filtered = AnalysisMode.wideLab.filter(bins)
+
+        XCTAssertEqual(
+            filtered.map(\.frequencyHz),
+            [20, 500, 2_000]
+        )
+    }
+
+    func testSpectrumSmoothingANCFocusDropsOutOfBandBins() {
+        let bank = SpectrumSmoothingBank()
+        let bins = [
+            SpectrumBin(frequencyHz: 20, magnitudeDBFS: -50),
+            SpectrumBin(frequencyHz: 30, magnitudeDBFS: -45),
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -25),
+            SpectrumBin(frequencyHz: 200, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 300, magnitudeDBFS: -30)
+        ]
+
+        let snapshot = bank.process(
+            bins,
+            analysisMode: .ancFocus
+        )
+
+        XCTAssertEqual(
+            snapshot.balanced.map(\.frequencyHz),
+            [30, 80, 200]
+        )
+    }
+
+    func testDominantDetectorHonorsANCFocusLowerBound() {
+        let detector = DominantFrequencyDetector(
+            maximumResults: 5,
+            minimumSeparationHz: 10,
+            minimumLocalProminenceDB: 2,
+            minimumScoreDB: 2
+        )
+        let spectrum = [
+            SpectrumBin(frequencyHz: 20, magnitudeDBFS: -60),
+            SpectrumBin(frequencyHz: 25, magnitudeDBFS: -20),
+            SpectrumBin(frequencyHz: 30, magnitudeDBFS: -60),
+            SpectrumBin(frequencyHz: 40, magnitudeDBFS: -55),
+            SpectrumBin(frequencyHz: 50, magnitudeDBFS: -25),
+            SpectrumBin(frequencyHz: 60, magnitudeDBFS: -55),
+            SpectrumBin(frequencyHz: 70, magnitudeDBFS: -60)
+        ]
+        let floor = spectrum.map {
+            SpectrumBin(
+                frequencyHz: $0.frequencyHz,
+                magnitudeDBFS: -65
+            )
+        }
+
+        let result = detector.detect(
+            spectrum: spectrum,
+            noiseFloor: floor,
+            frequencyRange: AnalysisMode.ancFocus.dominantFrequencyRange
+        )
+
+        XCTAssertTrue(
+            result.frequencies.allSatisfy {
+                $0.frequencyHz >= 30 &&
+                $0.frequencyHz <= 200
+            }
+        )
+        XCTAssertTrue(
+            result.frequencies.contains {
+                abs($0.frequencyHz - 50) < 2
+            }
+        )
+        XCTAssertFalse(
+            result.frequencies.contains {
+                $0.frequencyHz < 30
+            }
+        )
+    }
+
+    func testANCFocusGraphRangeIsThirtyToTwoHundredHertz() {
+        XCTAssertEqual(
+            SpectrumDisplayRange.ancFocus.frequencyRange,
+            30...200
+        )
+        XCTAssertEqual(
+            SpectrumDisplayRange.ancFocus.frequencyTicks,
+            [30, 50, 100, 150, 200]
+        )
+    }
+
     func testLowFrequencyGraphRangeFiltersBins() {
         let bins = [
             SpectrumBin(frequencyHz: 10, magnitudeDBFS: -40),
