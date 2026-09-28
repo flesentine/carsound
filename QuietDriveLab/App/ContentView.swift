@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @State private var spectrumDisplayRange: SpectrumDisplayRange = .lowFrequency
+    @State private var spectrumDisplayRange: SpectrumDisplayRange = .ancFocus
     @State private var spectrumRenderMode: SpectrumRenderMode = .smoothed
     @State private var smoothingPreset: SpectrumSmoothingPreset = .balanced
 
@@ -19,6 +19,7 @@ struct ContentView: View {
                     if microphonePermission.status == .granted {
                         audioSessionCard
                         routeCard
+                        analysisModeCard
                         captureCard
                         diagnosticsCard
                         fftCard
@@ -28,7 +29,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 1.0 • PCM buffers are analyzed in memory and never written to disk")
+                    Text("Lab build 1.1 • PCM buffers are analyzed in memory and never written to disk")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -145,6 +146,55 @@ struct ContentView: View {
                 audioSession.refreshRoute()
             }
             .buttonStyle(.bordered)
+        }
+        .cardStyle()
+    }
+
+    private var analysisModeCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Analysis Mode", systemImage: "scope")
+                    .font(.headline)
+
+                Spacer()
+
+                Text(microphoneCapture.analysisMode.rawValue)
+                    .font(.subheadline.weight(.semibold))
+            }
+
+            Picker(
+                "Analysis mode",
+                selection: Binding(
+                    get: { microphoneCapture.analysisMode },
+                    set: { mode in
+                        microphoneCapture.setAnalysisMode(mode)
+                        spectrumDisplayRange = mode == .ancFocus
+                            ? .ancFocus
+                            : .wide
+                    }
+                )
+            ) {
+                ForEach(AnalysisMode.allCases) { mode in
+                    Text(mode.rawValue).tag(mode)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(microphoneCapture.state == .capturing)
+
+            Text(microphoneCapture.analysisMode.description)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            LabeledContent(
+                "Active downstream band",
+                value: analysisRangeText
+            )
+
+            if microphoneCapture.state == .capturing {
+                Text("Stop capture before changing the analysis mode so smoothing, floor, and persistence state cannot mix across bands.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .cardStyle()
     }
@@ -319,7 +369,7 @@ struct ContentView: View {
                     .foregroundStyle(snapshot.spectrumBins.isEmpty ? Color.secondary : Color.green)
             }
 
-            Text("Rolling 4,096-sample Hann-windowed FFT. The live spectrum is computed now; graphing comes in #6.")
+            Text("Rolling 4,096-sample Hann-windowed FFT. Downstream analysis is filtered by the selected Analysis Mode.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
@@ -342,7 +392,9 @@ struct ContentView: View {
 
         switch spectrumRenderMode {
         case .raw:
-            displayedBins = snapshot.spectrumBins
+            displayedBins = microphoneCapture.analysisMode.filter(
+                snapshot.spectrumBins
+            )
             seriesLabel = "Raw FFT"
         case .smoothed:
             displayedBins = snapshot.smoothedSpectrum.bins(for: smoothingPreset)
@@ -363,7 +415,7 @@ struct ContentView: View {
                     )
             }
 
-            Text("Compare the untouched FFT with temporal smoothing calculated in linear power.")
+            Text("Compare the raw FFT bins inside the active analysis band with temporal smoothing calculated in linear power.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
@@ -444,32 +496,39 @@ struct ContentView: View {
             Divider()
 
             LabeledContent(
-                "20–200 Hz floor",
-                value: floor.updateCount > 0
-                    ? dbFSText(floor.lowFrequencyFloorDBFS)
-                    : "—"
+                "Active band",
+                value: analysisRangeText
             )
 
             LabeledContent(
-                "20–2,000 Hz floor",
+                "Analysis floor",
                 value: floor.updateCount > 0
                     ? dbFSText(floor.widebandFloorDBFS)
                     : "—"
             )
 
             LabeledContent(
-                "Low-frequency above floor",
-                value: floor.updateCount > 0
-                    ? String(format: "+%.1f dB", floor.lowFrequencyExcessDB)
-                    : "—"
-            )
-
-            LabeledContent(
-                "Wideband above floor",
+                "Current above floor",
                 value: floor.updateCount > 0
                     ? String(format: "+%.1f dB", floor.widebandExcessDB)
                     : "—"
             )
+
+            if microphoneCapture.analysisMode == .wideLab {
+                LabeledContent(
+                    "20–200 Hz floor",
+                    value: floor.updateCount > 0
+                        ? dbFSText(floor.lowFrequencyFloorDBFS)
+                        : "—"
+                )
+
+                LabeledContent(
+                    "20–200 Hz above floor",
+                    value: floor.updateCount > 0
+                        ? String(format: "+%.1f dB", floor.lowFrequencyExcessDB)
+                        : "—"
+                )
+            }
 
             LabeledContent(
                 "Tracked floor bins",
@@ -503,7 +562,7 @@ struct ContentView: View {
                     )
             }
 
-            Text("Instantaneous 20–200 Hz peak detection. Persistence and confidence over time come in #10.")
+            Text("Instantaneous peak detection inside \(dominantRangeText). Persistence is tracked separately over time.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
@@ -719,6 +778,24 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private var analysisRangeText: String {
+        let range = microphoneCapture.analysisMode.frequencyRange
+        return String(
+            format: "%.0f–%.0f Hz",
+            range.lowerBound,
+            range.upperBound
+        )
+    }
+
+    private var dominantRangeText: String {
+        let range = microphoneCapture.analysisMode.dominantFrequencyRange
+        return String(
+            format: "%.0f–%.0f Hz",
+            range.lowerBound,
+            range.upperBound
+        )
     }
 
     private func dbFSText(_ value: Double) -> String {
