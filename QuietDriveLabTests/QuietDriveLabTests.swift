@@ -516,7 +516,7 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(samples.count, 48_000)
     }
 
-    func testToneGeneratorNeverExceedsFixedAmplitude() throws {
+    func testToneGeneratorNeverExceedsHardMaximumAmplitude() throws {
         let samples = ToneGeneratorMath.makeOneSecondLoop(
             frequencyHz: 137,
             sampleRate: 48_000
@@ -527,7 +527,7 @@ final class QuietDriveLabTests: XCTestCase {
 
         XCTAssertLessThanOrEqual(
             peak,
-            ToneGeneratorMath.fixedAmplitude + 0.000001
+            ToneGeneratorMath.maximumAmplitude + 0.000001
         )
     }
 
@@ -550,11 +550,62 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
-    func testToneFixedLevelIsMinusFortyDBFS() {
+    func testToneOutputPercentIsHardClamped() {
         XCTAssertEqual(
-            ToneGeneratorMath.fixedLevelDBFS,
+            ToneGeneratorMath.sanitizedOutputPercent(-10),
+            0
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.sanitizedOutputPercent(42),
+            42
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.sanitizedOutputPercent(125),
+            100
+        )
+    }
+
+    func testToneDefaultOutputPreservesPreviousMinusFortyDBFSLevel() {
+        XCTAssertEqual(
+            ToneGeneratorMath.defaultOutputPercent,
+            50,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.effectiveAmplitude(
+                forPercent: ToneGeneratorMath.defaultOutputPercent
+            ),
+            0.01,
+            accuracy: 0.000001
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.levelDBFS(
+                forOutputPercent: ToneGeneratorMath.defaultOutputPercent
+            ),
             -40,
             accuracy: 0.001
+        )
+    }
+
+    func testToneHardCeilingIsAboutMinusThirtyFourDBFS() {
+        XCTAssertEqual(
+            ToneGeneratorMath.maximumAmplitude,
+            0.02,
+            accuracy: 0.000001
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.maximumLevelDBFS,
+            -33.9794,
+            accuracy: 0.001
+        )
+    }
+
+    func testZeroToneOutputUsesFiniteSilenceFloor() {
+        XCTAssertEqual(
+            ToneGeneratorMath.levelDBFS(
+                forOutputPercent: 0
+            ),
+            AudioLevelAnalyzer.silenceFloorDBFS
         )
     }
 
