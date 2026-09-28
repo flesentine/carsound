@@ -31,7 +31,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 1.2 • Generated tones are fixed at a conservative level for this milestone")
+                    Text("Lab build 1.3 • Manual tone level is hard-capped; car volume still controls acoustic loudness")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -211,16 +211,20 @@ struct ContentView: View {
 
                 Spacer()
 
-                Text(toneGenerator.state.label)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(
-                        toneGenerator.state == .playing
-                            ? Color.green
-                            : Color.secondary
-                    )
+                Text(
+                    toneGenerator.isMuted && toneGenerator.state == .playing
+                        ? "Muted"
+                        : toneGenerator.state.label
+                )
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(
+                    toneGenerator.state == .playing && !toneGenerator.isMuted
+                        ? Color.green
+                        : Color.secondary
+                )
             }
 
-            Text("Generates a clean 20–200 Hz sine wave. Output is fixed at a conservative level until manual amplitude control is added in #13.")
+            Text("Generates a clean 20–200 Hz sine wave with live manual level control inside a hard digital ceiling. Digital level does not guarantee acoustic loudness; keep the car stereo volume conservative.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
@@ -252,6 +256,49 @@ struct ContentView: View {
                 .foregroundStyle(.secondary)
             }
 
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Output Level")
+                        .font(.subheadline.weight(.semibold))
+
+                    Spacer()
+
+                    Text(
+                        String(
+                            format: "%.0f%%",
+                            toneGenerator.outputPercent
+                        )
+                    )
+                    .font(
+                        .system(
+                            .subheadline,
+                            design: .monospaced
+                        )
+                    )
+                }
+
+                Slider(
+                    value: Binding(
+                        get: {
+                            toneGenerator.outputPercent
+                        },
+                        set: {
+                            toneGenerator.setOutputPercent($0)
+                        }
+                    ),
+                    in: 0...100,
+                    step: 1
+                )
+
+                HStack {
+                    Text("0%")
+                    Spacer()
+                    Text("Hard max 100%")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
             if case let .failed(message) = toneGenerator.state {
                 Text(message)
                     .font(.footnote)
@@ -266,6 +313,19 @@ struct ContentView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
+
+                    Button(
+                        toneGenerator.isMuted
+                            ? "Resume"
+                            : "MUTE NOW"
+                    ) {
+                        if toneGenerator.isMuted {
+                            toneGenerator.unmute()
+                        } else {
+                            toneGenerator.muteImmediately()
+                        }
+                    }
+                    .buttonStyle(.bordered)
                 } else {
                     Button("Start Tone") {
                         toneGenerator.start()
@@ -284,18 +344,36 @@ struct ContentView: View {
             Divider()
 
             LabeledContent(
-                "Fixed sample amplitude",
+                "Selected amplitude",
                 value: String(
-                    format: "%.3f",
-                    toneGenerator.fixedAmplitude
+                    format: "%.4f",
+                    toneGenerator.targetAmplitude
                 )
             )
 
             LabeledContent(
-                "Fixed digital level",
+                "Selected digital level",
+                value: toneGenerator.outputPercent > 0
+                    ? String(
+                        format: "%.1f dBFS",
+                        toneGenerator.targetLevelDBFS
+                    )
+                    : "Silent"
+            )
+
+            LabeledContent(
+                "Hard max amplitude",
+                value: String(
+                    format: "%.3f",
+                    toneGenerator.maximumAmplitude
+                )
+            )
+
+            LabeledContent(
+                "Hard digital ceiling",
                 value: String(
                     format: "%.1f dBFS",
-                    toneGenerator.fixedLevelDBFS
+                    toneGenerator.maximumLevelDBFS
                 )
             )
 
@@ -303,7 +381,15 @@ struct ContentView: View {
                 "Start/stop ramp",
                 value: String(
                     format: "%.0f ms",
-                    toneGenerator.rampDurationSeconds * 1_000
+                    toneGenerator.startStopRampDurationSeconds * 1_000
+                )
+            )
+
+            LabeledContent(
+                "Live level ramp",
+                value: String(
+                    format: "%.0f ms",
+                    toneGenerator.liveLevelRampDurationSeconds * 1_000
                 )
             )
 
