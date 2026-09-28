@@ -4,13 +4,15 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#10 — persistent-tone detection** is implemented.
+Development effort **#11 — low-frequency-only analysis mode** is implemented.
 
-QuietDrive now tracks dominant 20–200 Hz candidates across the captured-audio timeline instead of treating each FFT frame independently. A candidate is matched across frames by frequency, allowed brief dropouts, and evaluated for duration, presence rate, frequency stability, local spectral prominence, and temporal floor excess.
+QuietDrive now defaults to **ANC Focus**, which keeps downstream signal analysis inside **30–200 Hz**, the primary band for the upcoming cancellation experiments. A **Wide Lab** mode retains **20–2,000 Hz** context for broader diagnostics.
 
-By default, a tone must survive for at least **2 seconds**, appear often enough, and remain frequency-stable before the Lab marks it **Persistent**. The UI also reports a Low / Medium / High confidence score and the underlying measurements used to derive it.
+The 4,096-sample FFT is still computed normally because the transform itself requires the full time-domain window. The mode filter is applied immediately afterward, so smoothing, noise-floor tracking, dominant-frequency detection, persistence tracking, and the raw-spectrum display only consume the selected band.
 
-This completes items #1–#10 of the original development roadmap. Item #11 is the dedicated low-frequency-only analysis mode before the tone-generation/cancellation work begins.
+Mode switching is intentionally disabled while microphone capture is active so state from two different frequency bands cannot be mixed.
+
+This completes **Milestone 1 — Hear the car (#1–#11)**. The next phase begins with **#12 — tone generator**.
 
 ## Privacy principle
 
