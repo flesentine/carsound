@@ -8,6 +8,7 @@ enum SpectrumRenderMode: String, CaseIterable, Identifiable {
 }
 
 enum SpectrumDisplayRange: String, CaseIterable, Identifiable {
+    case ancFocus = "30–200 Hz"
     case lowFrequency = "20–200 Hz"
     case wide = "20–2,000 Hz"
 
@@ -15,6 +16,8 @@ enum SpectrumDisplayRange: String, CaseIterable, Identifiable {
 
     var frequencyRange: ClosedRange<Double> {
         switch self {
+        case .ancFocus:
+            30...200
         case .lowFrequency:
             20...200
         case .wide:
@@ -24,6 +27,8 @@ enum SpectrumDisplayRange: String, CaseIterable, Identifiable {
 
     var frequencyTicks: [Double] {
         switch self {
+        case .ancFocus:
+            [30, 50, 100, 150, 200]
         case .lowFrequency:
             [20, 50, 100, 150, 200]
         case .wide:
