@@ -4,15 +4,13 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#11 — low-frequency-only analysis mode** is implemented.
+Development effort **#12 — tone generator** is implemented.
 
-QuietDrive now defaults to **ANC Focus**, which keeps downstream signal analysis inside **30–200 Hz**, the primary band for the upcoming cancellation experiments. A **Wide Lab** mode retains **20–2,000 Hz** context for broader diagnostics.
+The Lab can now generate a continuous **20–200 Hz sine wave** through an `AVAudioPlayerNode`. Frequencies are integer-Hz values so the one-second PCM buffer contains an integer number of cycles and loops without a phase discontinuity at the buffer boundary.
 
-The 4,096-sample FFT is still computed normally because the transform itself requires the full time-domain window. The mode filter is applied immediately afterward, so smoothing, noise-floor tracking, dominant-frequency detection, persistence tracking, and the raw-spectrum display only consume the selected band.
+For this milestone, output is intentionally fixed at a conservative **0.01 sample amplitude (about -40 dBFS)**. Start and stop use a **120 ms volume ramp** to reduce clicks and abrupt low-frequency transients. Manual output-level control is deliberately deferred to **#13**.
 
-Mode switching is intentionally disabled while microphone capture is active so state from two different frequency bands cannot be mixed.
-
-This completes **Milestone 1 — Hear the car (#1–#11)**. The next phase begins with **#12 — tone generator**.
+The generator follows the active output-route sample rate and can run alongside the existing play-and-record session. Physical iPhone/car testing is still required before treating simultaneous microphone capture and generated car-speaker output as verified behavior.
 
 ## Privacy principle
 
