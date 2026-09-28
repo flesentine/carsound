@@ -7,14 +7,13 @@ enum ToneGeneratorMath {
     static let maximumFrequencyHz = 200.0
     static let defaultFrequencyHz = 80.0
 
-    // Fixed conservative amplitude for milestone #12.
-    // Manual output level arrives in #13.
-    static let fixedAmplitude: Float = 0.01
-    static let rampDurationSeconds = 0.12
+    // Hard digital ceiling for the generated PCM samples.
+    // This limits digital amplitude, not acoustic SPL at the car speakers.
+    static let maximumAmplitude: Float = 0.02
+    static let defaultOutputPercent = 50.0
 
-    static var fixedLevelDBFS: Double {
-        20.0 * log10(Double(fixedAmplitude))
-    }
+    static let startStopRampDurationSeconds = 0.12
+    static let liveLevelRampDurationSeconds = 0.06
 
     static func sanitizedFrequency(_ frequencyHz: Double) -> Double {
         min(
@@ -22,6 +21,41 @@ enum ToneGeneratorMath {
             max(
                 minimumFrequencyHz,
                 frequencyHz.rounded()
+            )
+        )
+    }
+
+    static func sanitizedOutputPercent(_ percent: Double) -> Double {
+        min(100, max(0, percent))
+    }
+
+    static func outputGain(forPercent percent: Double) -> Float {
+        Float(sanitizedOutputPercent(percent) / 100.0)
+    }
+
+    static func effectiveAmplitude(forPercent percent: Double) -> Float {
+        maximumAmplitude * outputGain(forPercent: percent)
+    }
+
+    static func levelDBFS(forAmplitude amplitude: Float) -> Double {
+        guard amplitude > 0 else {
+            return AudioLevelAnalyzer.silenceFloorDBFS
+        }
+
+        return max(
+            AudioLevelAnalyzer.silenceFloorDBFS,
+            20.0 * log10(Double(amplitude))
+        )
+    }
+
+    static var maximumLevelDBFS: Double {
+        levelDBFS(forAmplitude: maximumAmplitude)
+    }
+
+    static func levelDBFS(forOutputPercent percent: Double) -> Double {
+        levelDBFS(
+            forAmplitude: effectiveAmplitude(
+                forPercent: percent
             )
         )
     }
@@ -43,7 +77,7 @@ enum ToneGeneratorMath {
                 Double(frame) /
                 sampleRate
 
-            return fixedAmplitude * Float(sin(phase))
+            return maximumAmplitude * Float(sin(phase))
         }
     }
 }
@@ -69,12 +103,19 @@ final class ToneGeneratorModel {
     }
 
     private(set) var state: State = .stopped
-    private(set) var frequencyHz = ToneGeneratorMath.defaultFrequencyHz
+    private(set) var frequencyHz =
+        ToneGeneratorMath.defaultFrequencyHz
+    private(set) var outputPercent =
+        ToneGeneratorMath.defaultOutputPercent
+    private(set) var isMuted = false
     private(set) var sampleRate: Double = 0
     private(set) var generatedFrames = 0
 
-    let fixedAmplitude = ToneGeneratorMath.fixedAmplitude
-    let rampDurationSeconds = ToneGeneratorMath.rampDurationSeconds
+    let maximumAmplitude = ToneGeneratorMath.maximumAmplitude
+    let startStopRampDurationSeconds =
+        ToneGeneratorMath.startStopRampDurationSeconds
+    let liveLevelRampDurationSeconds =
+        ToneGeneratorMath.liveLevelRampDurationSeconds
 
     @ObservationIgnored
     private let engine = AVAudioEngine()
@@ -89,14 +130,52 @@ final class ToneGeneratorModel {
         engine.attach(player)
     }
 
-    var fixedLevelDBFS: Double {
-        ToneGeneratorMath.fixedLevelDBFS
+    var outputGain: Float {
+        ToneGeneratorMath.outputGain(
+            forPercent: outputPercent
+        )
+    }
+
+    var targetAmplitude: Float {
+        ToneGeneratorMath.effectiveAmplitude(
+            forPercent: outputPercent
+        )
+    }
+
+    var targetLevelDBFS: Double {
+        ToneGeneratorMath.levelDBFS(
+            forOutputPercent: outputPercent
+        )
+    }
+
+    var maximumLevelDBFS: Double {
+        ToneGeneratorMath.maximumLevelDBFS
     }
 
     func setFrequency(_ frequencyHz: Double) {
         guard state != .playing else { return }
+
         self.frequencyHz =
-            ToneGeneratorMath.sanitizedFrequency(frequencyHz)
+            ToneGeneratorMath.sanitizedFrequency(
+                frequencyHz
+            )
+    }
+
+    func setOutputPercent(_ percent: Double) {
+        outputPercent =
+            ToneGeneratorMath.sanitizedOutputPercent(
+                percent
+            )
+
+        guard state == .playing, !isMuted else {
+            return
+        }
+
+        beginRamp(
+            to: outputGain,
+            duration:
+                ToneGeneratorMath.liveLevelRampDurationSeconds
+        )
     }
 
     func start() {
@@ -126,7 +205,8 @@ final class ToneGeneratorModel {
 
         guard
             let monoFormat = AVAudioFormat(
-                standardFormatWithSampleRate: renderSampleRate,
+                standardFormatWithSampleRate:
+                    renderSampleRate,
                 channels: 1
             )
         else {
@@ -145,9 +225,11 @@ final class ToneGeneratorModel {
             !samples.isEmpty,
             let buffer = AVAudioPCMBuffer(
                 pcmFormat: monoFormat,
-                frameCapacity: AVAudioFrameCount(samples.count)
+                frameCapacity:
+                    AVAudioFrameCount(samples.count)
             ),
-            let channel = buffer.floatChannelData?[0]
+            let channel =
+                buffer.floatChannelData?[0]
         else {
             state = .failed(
                 "Could not allocate the tone buffer."
@@ -155,7 +237,8 @@ final class ToneGeneratorModel {
             return
         }
 
-        buffer.frameLength = AVAudioFrameCount(samples.count)
+        buffer.frameLength =
+            AVAudioFrameCount(samples.count)
 
         for index in samples.indices {
             channel[index] = samples[index]
@@ -183,18 +266,44 @@ final class ToneGeneratorModel {
             sampleRate = renderSampleRate
             generatedFrames = samples.count
             state = .playing
+            isMuted = false
 
-            rampTask = Task { @MainActor [weak self] in
-                await self?.rampVolume(
-                    to: 1.0,
-                    duration: ToneGeneratorMath.rampDurationSeconds
-                )
-            }
+            beginRamp(
+                to: outputGain,
+                duration:
+                    ToneGeneratorMath
+                        .startStopRampDurationSeconds
+            )
         } catch {
             player.stop()
             engine.stop()
-            state = .failed(error.localizedDescription)
+            state = .failed(
+                error.localizedDescription
+            )
         }
+    }
+
+    func muteImmediately() {
+        guard state == .playing else { return }
+
+        rampTask?.cancel()
+        rampTask = nil
+        player.volume = 0
+        isMuted = true
+    }
+
+    func unmute() {
+        guard state == .playing, isMuted else {
+            return
+        }
+
+        isMuted = false
+
+        beginRamp(
+            to: outputGain,
+            duration:
+                ToneGeneratorMath.liveLevelRampDurationSeconds
+        )
     }
 
     func stop() async {
@@ -208,7 +317,9 @@ final class ToneGeneratorModel {
 
         await rampVolume(
             to: 0,
-            duration: ToneGeneratorMath.rampDurationSeconds
+            duration:
+                ToneGeneratorMath
+                    .startStopRampDurationSeconds
         )
 
         finishStop()
@@ -221,6 +332,20 @@ final class ToneGeneratorModel {
         finishStop()
     }
 
+    private func beginRamp(
+        to target: Float,
+        duration: TimeInterval
+    ) {
+        rampTask?.cancel()
+
+        rampTask = Task { @MainActor [weak self] in
+            await self?.rampVolume(
+                to: target,
+                duration: duration
+            )
+        }
+    }
+
     private func finishStop() {
         player.stop()
 
@@ -228,6 +353,7 @@ final class ToneGeneratorModel {
             engine.stop()
         }
 
+        isMuted = false
         state = .stopped
     }
 
@@ -235,17 +361,26 @@ final class ToneGeneratorModel {
         to target: Float,
         duration: TimeInterval
     ) async {
+        let safeTarget = min(
+            1,
+            max(0, target)
+        )
         let steps = 24
         let startingVolume = player.volume
-        let stepDuration = duration / Double(steps)
+        let stepDuration =
+            duration / Double(steps)
 
         for step in 1...steps {
-            guard !Task.isCancelled else { return }
+            guard !Task.isCancelled else {
+                return
+            }
 
-            let progress = Float(step) / Float(steps)
+            let progress =
+                Float(step) / Float(steps)
+
             player.volume =
                 startingVolume +
-                (target - startingVolume) *
+                (safeTarget - startingVolume) *
                 progress
 
             try? await Task.sleep(
@@ -257,7 +392,7 @@ final class ToneGeneratorModel {
         }
 
         if !Task.isCancelled {
-            player.volume = target
+            player.volume = safeTarget
         }
     }
 }
