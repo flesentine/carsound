@@ -50,11 +50,11 @@ final class DominantFrequencyDetector {
 
     func detect(
         spectrum: [SpectrumBin],
-        noiseFloor: [SpectrumBin]
+        noiseFloor: [SpectrumBin],
+        frequencyRange: ClosedRange<Double> = Self.minimumFrequencyHz...Self.maximumFrequencyHz
     ) -> DominantFrequencySnapshot {
         let analysisBins = spectrum.filter {
-            $0.frequencyHz >= Self.minimumFrequencyHz &&
-            $0.frequencyHz <= Self.maximumFrequencyHz
+            frequencyRange.contains($0.frequencyHz)
         }
 
         guard analysisBins.count >= 3 else {
