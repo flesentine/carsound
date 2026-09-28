@@ -492,6 +492,72 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertFalse(tone.isPersistent)
     }
 
+    func testToneFrequencySanitizesToSupportedIntegerRange() {
+        XCTAssertEqual(
+            ToneGeneratorMath.sanitizedFrequency(12.4),
+            20
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.sanitizedFrequency(79.6),
+            80
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.sanitizedFrequency(250.2),
+            200
+        )
+    }
+
+    func testToneLoopContainsExactlyOneSecondOfFrames() {
+        let samples = ToneGeneratorMath.makeOneSecondLoop(
+            frequencyHz: 80,
+            sampleRate: 48_000
+        )
+
+        XCTAssertEqual(samples.count, 48_000)
+    }
+
+    func testToneGeneratorNeverExceedsFixedAmplitude() throws {
+        let samples = ToneGeneratorMath.makeOneSecondLoop(
+            frequencyHz: 137,
+            sampleRate: 48_000
+        )
+        let peak = try XCTUnwrap(
+            samples.map { abs($0) }.max()
+        )
+
+        XCTAssertLessThanOrEqual(
+            peak,
+            ToneGeneratorMath.fixedAmplitude + 0.000001
+        )
+    }
+
+    func testToneLoopWrapIsPhaseContinuousForIntegerFrequency() throws {
+        let samples = ToneGeneratorMath.makeOneSecondLoop(
+            frequencyHz: 80,
+            sampleRate: 48_000
+        )
+        let first = try XCTUnwrap(samples.first)
+        let second = samples[1]
+        let last = try XCTUnwrap(samples.last)
+
+        let normalStep = second - first
+        let wrapStep = first - last
+
+        XCTAssertEqual(
+            wrapStep,
+            normalStep,
+            accuracy: 0.00001
+        )
+    }
+
+    func testToneFixedLevelIsMinusFortyDBFS() {
+        XCTAssertEqual(
+            ToneGeneratorMath.fixedLevelDBFS,
+            -40,
+            accuracy: 0.001
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
