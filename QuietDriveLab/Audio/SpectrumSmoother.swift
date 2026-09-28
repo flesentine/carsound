@@ -71,9 +71,14 @@ final class SpectrumSmoothingBank {
     }
 
     func process(_ bins: [SpectrumBin]) -> SmoothedSpectrumSnapshot {
-        let analysisBins = Array(
-            bins.prefix { $0.frequencyHz <= Self.maximumFrequencyHz }
-        )
+        process(bins, analysisMode: .wideLab)
+    }
+
+    func process(
+        _ bins: [SpectrumBin],
+        analysisMode: AnalysisMode
+    ) -> SmoothedSpectrumSnapshot {
+        let analysisBins = analysisMode.filter(bins)
 
         return SmoothedSpectrumSnapshot(
             responsive: smoothers[.responsive]?.process(analysisBins) ?? analysisBins,
