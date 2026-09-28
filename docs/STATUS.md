@@ -13,22 +13,22 @@
 - [x] #9 Build dominant-frequency detection
 - [x] #10 Add persistent-tone detection
 - [x] #11 Add low-frequency-only analysis mode
-  - new selectable Analysis Mode with ANC Focus and Wide Lab
-  - ANC Focus is the default mode
-  - ANC Focus narrows downstream analysis to 30–200 Hz
-  - Wide Lab retains 20–2,000 Hz diagnostic context
-  - the 4,096-sample FFT remains intact; filtering happens after the transform
-  - smoothing now receives only bins inside the selected analysis band
-  - adaptive noise-floor tracking operates only on the selected band
-  - dominant-frequency detection honors the active mode's frequency range
-  - persistent-tone tracking receives only candidates from the active mode
-  - mode switching is disabled during active capture so state cannot mix across bands
-  - changing modes resets analysis state before the next capture
-  - raw spectrum display is also filtered to the active downstream band
-  - dedicated 30–200 Hz graph range added
-  - UI reports the active downstream and dominant-detection ranges
-  - regression tests cover ANC-band filtering, Wide Lab filtering, smoothing-band filtering, dominant-detector lower-bound enforcement, and the 30–200 Hz graph scale
-  - fixed a Swift 6 default-argument compile issue found by CI
+- [x] #12 Build tone generator
+  - 20–200 Hz sine-wave generation
+  - integer-Hz frequency control
+  - one-second phase-continuous PCM loop
+  - AVAudioPlayerNode playback through a dedicated AVAudioEngine
+  - mono generator connected through the engine main mixer
+  - output sample rate follows the active hardware/output route
+  - fixed conservative sample amplitude of 0.01 for this milestone
+  - fixed digital level of approximately -40 dBFS
+  - 120 ms software fade-in and fade-out to reduce start/stop clicks
+  - manual amplitude adjustment intentionally deferred to #13
+  - frequency changes disabled while tone playback is active
+  - tone output requires an already-active play-and-record audio session
+  - audio-session reconfigure/deactivate immediately mutes and stops the tone
+  - Lab UI shows frequency, fixed amplitude, fixed dBFS level, ramp duration, render sample rate, and loop-buffer frames
+  - tests cover frequency clamping/rounding, one-second loop length, amplitude ceiling, loop-wrap phase continuity, and fixed -40 dBFS level
   - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Milestone status
@@ -37,7 +37,7 @@
 - [x] #1–#11 complete
 
 ### Milestone 2 — Fight one frequency
-- [ ] #12 Build tone generator
+- [x] #12 Build tone generator
 - [ ] #13 Add manual output-level control
 - [ ] #14 Add manual phase control
 - [ ] #15 Build Lab cancellation control screen
@@ -51,4 +51,4 @@
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Physical microphone, Bluetooth, and vehicle-route behavior still require a real iPhone/car test. Noise-floor, spectrum, dominant-frequency, and persistence measurements are digital/relative values, not calibrated SPL.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Physical iPhone verification is now especially important: simultaneous microphone capture plus generated output, Bluetooth/car routing, actual acoustic level, and click-free ramps cannot be validated by simulator CI. Generated-tone digital level is not a calibrated acoustic SPL.
