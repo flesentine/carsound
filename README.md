@@ -4,13 +4,13 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#12 — tone generator** is implemented.
+Development effort **#13 — manual output-level control** is implemented.
 
-The Lab can now generate a continuous **20–200 Hz sine wave** through an `AVAudioPlayerNode`. Frequencies are integer-Hz values so the one-second PCM buffer contains an integer number of cycles and loops without a phase discontinuity at the buffer boundary.
+The tone generator now has a live **0–100% output control** inside a hard digital ceiling. The generated PCM waveform is capped at **0.02 sample amplitude**, about **-33.98 dBFS** at the maximum setting. The default is **50%**, which preserves the previous milestone's effective **0.01 amplitude / about -40 dBFS** level rather than silently making the default louder.
 
-For this milestone, output is intentionally fixed at a conservative **0.01 sample amplitude (about -40 dBFS)**. Start and stop use a **120 ms volume ramp** to reduce clicks and abrupt low-frequency transients. Manual output-level control is deliberately deferred to **#13**.
+Live output changes use a short **60 ms ramp**. Start and stop retain their **120 ms ramps**. The Lab also has an immediate **MUTE NOW** control that sets player output to zero without waiting for a ramp; Resume returns to the selected level smoothly.
 
-The generator follows the active output-route sample rate and can run alongside the existing play-and-record session. Physical iPhone/car testing is still required before treating simultaneous microphone capture and generated car-speaker output as verified behavior.
+The digital cap is only a signal-level limit. It does **not** guarantee a particular acoustic SPL because the phone route, car amplifier, and stereo volume still determine actual speaker loudness.
 
 ## Privacy principle
 
