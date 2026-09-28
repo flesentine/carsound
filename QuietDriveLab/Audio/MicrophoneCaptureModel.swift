@@ -77,6 +77,7 @@ final class MicrophoneCaptureModel {
 
     private(set) var state: State = .stopped
     private(set) var snapshot: Snapshot = .empty
+    private(set) var analysisMode: AnalysisMode = .ancFocus
 
     @ObservationIgnored
     private let stats = CaptureStatsStore()
@@ -90,10 +91,19 @@ final class MicrophoneCaptureModel {
     @ObservationIgnored
     private var tapInstalled = false
 
+    func setAnalysisMode(_ mode: AnalysisMode) {
+        guard state != .capturing, mode != analysisMode else { return }
+
+        analysisMode = mode
+        stats.setAnalysisMode(mode)
+        snapshot = stats.snapshot()
+    }
+
     func startCapture() {
         guard state != .capturing else { return }
 
         stopCapture()
+        stats.setAnalysisMode(analysisMode)
         stats.reset()
 
         let inputNode = engine.inputNode
@@ -170,6 +180,7 @@ final class MicrophoneCaptureModel {
 private final class CaptureStatsStore: @unchecked Sendable {
     private let lock = NSLock()
 
+    private var analysisMode: AnalysisMode = .ancFocus
     private var bufferCount: UInt64 = 0
     private var frameCount: UInt64 = 0
     private var lastBufferFrames: AVAudioFrameCount = 0
@@ -182,11 +193,13 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var lastBufferClippedSampleCount: UInt64 = 0
     private var totalClippedSampleCount: UInt64 = 0
     private var bufferDurationMilliseconds: Double = 0
+
     private let fftAnalyzer = FFTAnalyzer()
     private let smoothingBank = SpectrumSmoothingBank()
     private let noiseFloorEstimator = NoiseFloorEstimator()
     private let dominantFrequencyDetector = DominantFrequencyDetector()
     private let persistentToneTracker = PersistentToneTracker()
+
     private var fftSnapshot: FFTSnapshot = .empty
     private var smoothedSpectrum: SmoothedSpectrumSnapshot = .empty
     private var noiseFloor: NoiseFloorSnapshot = .empty
@@ -194,13 +207,31 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var persistentTones: PersistentToneSnapshot = .empty
     private var captureTimelineSeconds: Double = 0
 
+    func setAnalysisMode(_ mode: AnalysisMode) {
+        lock.lock()
+        let changed = mode != analysisMode
+        analysisMode = mode
+        lock.unlock()
+
+        if changed {
+            reset()
+        }
+    }
+
     func record(buffer: AVAudioPCMBuffer) {
+        lock.lock()
+        let currentAnalysisMode = analysisMode
+        lock.unlock()
+
         let format = buffer.format
         let description = Self.describe(format: format)
         let measurement = AudioLevelAnalyzer.analyze(buffer: buffer)
         let latestFFT = fftAnalyzer.ingest(buffer: buffer)
         let latestSmoothedSpectrum = latestFFT.map {
-            smoothingBank.process($0.bins)
+            smoothingBank.process(
+                $0.bins,
+                analysisMode: currentAnalysisMode
+            )
         }
         let latestNoiseFloor = latestSmoothedSpectrum.map {
             noiseFloorEstimator.process($0.balanced)
@@ -213,7 +244,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
         {
             latestDominantFrequencies = dominantFrequencyDetector.detect(
                 spectrum: latestSmoothedSpectrum.balanced,
-                noiseFloor: latestNoiseFloor.bins
+                noiseFloor: latestNoiseFloor.bins,
+                frequencyRange: currentAnalysisMode.dominantFrequencyRange
             )
         } else {
             latestDominantFrequencies = nil
@@ -222,7 +254,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
         let durationMilliseconds: Double
 
         if format.sampleRate > 0 {
-            durationMilliseconds = Double(buffer.frameLength) / format.sampleRate * 1_000
+            durationMilliseconds =
+                Double(buffer.frameLength) /
+                format.sampleRate *
+                1_000
         } else {
             durationMilliseconds = 0
         }
