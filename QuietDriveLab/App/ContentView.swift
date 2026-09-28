@@ -8,6 +8,7 @@ struct ContentView: View {
     @Environment(MicrophonePermissionModel.self) private var microphonePermission
     @Environment(AudioSessionModel.self) private var audioSession
     @Environment(MicrophoneCaptureModel.self) private var microphoneCapture
+    @Environment(ToneGeneratorModel.self) private var toneGenerator
 
     var body: some View {
         NavigationStack {
@@ -20,6 +21,7 @@ struct ContentView: View {
                         audioSessionCard
                         routeCard
                         analysisModeCard
+                        toneGeneratorCard
                         captureCard
                         diagnosticsCard
                         fftCard
@@ -29,7 +31,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 1.1 • PCM buffers are analyzed in memory and never written to disk")
+                    Text("Lab build 1.2 • Generated tones are fixed at a conservative level for this milestone")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -110,6 +112,7 @@ struct ContentView: View {
 
             HStack {
                 Button(audioSession.state == .active ? "Reconfigure" : "Activate Audio Session") {
+                    toneGenerator.stopImmediately()
                     microphoneCapture.stopCapture()
                     audioSession.configureAndActivate()
                 }
@@ -117,6 +120,7 @@ struct ContentView: View {
 
                 if audioSession.state == .active {
                     Button("Deactivate") {
+                        toneGenerator.stopImmediately()
                         microphoneCapture.stopCapture()
                         audioSession.deactivate()
                     }
@@ -195,6 +199,130 @@ struct ContentView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .cardStyle()
+    }
+
+    private var toneGeneratorCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label("Tone Generator", systemImage: "speaker.wave.3")
+                    .font(.headline)
+
+                Spacer()
+
+                Text(toneGenerator.state.label)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(
+                        toneGenerator.state == .playing
+                            ? Color.green
+                            : Color.secondary
+                    )
+            }
+
+            Text("Generates a clean 20–200 Hz sine wave. Output is fixed at a conservative level until manual amplitude control is added in #13.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Frequency")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Text(String(format: "%.0f Hz", toneGenerator.frequencyHz))
+                        .font(.system(.subheadline, design: .monospaced))
+                }
+
+                Slider(
+                    value: Binding(
+                        get: { toneGenerator.frequencyHz },
+                        set: { toneGenerator.setFrequency($0) }
+                    ),
+                    in: ToneGeneratorMath.minimumFrequencyHz...ToneGeneratorMath.maximumFrequencyHz,
+                    step: 1
+                )
+                .disabled(toneGenerator.state == .playing)
+
+                HStack {
+                    Text("20 Hz")
+                    Spacer()
+                    Text("200 Hz")
+                }
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+            }
+
+            if case let .failed(message) = toneGenerator.state {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            HStack {
+                if toneGenerator.state == .playing {
+                    Button("Stop Tone") {
+                        Task {
+                            await toneGenerator.stop()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Start Tone") {
+                        toneGenerator.start()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(audioSession.state != .active)
+                }
+            }
+
+            if audioSession.state != .active {
+                Text("Activate the audio session before generating a tone.")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            LabeledContent(
+                "Fixed sample amplitude",
+                value: String(
+                    format: "%.3f",
+                    toneGenerator.fixedAmplitude
+                )
+            )
+
+            LabeledContent(
+                "Fixed digital level",
+                value: String(
+                    format: "%.1f dBFS",
+                    toneGenerator.fixedLevelDBFS
+                )
+            )
+
+            LabeledContent(
+                "Start/stop ramp",
+                value: String(
+                    format: "%.0f ms",
+                    toneGenerator.rampDurationSeconds * 1_000
+                )
+            )
+
+            LabeledContent(
+                "Render sample rate",
+                value: toneGenerator.sampleRate > 0
+                    ? String(
+                        format: "%.0f Hz",
+                        toneGenerator.sampleRate
+                    )
+                    : "—"
+            )
+
+            LabeledContent(
+                "Loop buffer",
+                value: toneGenerator.generatedFrames > 0
+                    ? "\(toneGenerator.generatedFrames) frames"
+                    : "—"
+            )
         }
         .cardStyle()
     }
@@ -842,4 +970,5 @@ private extension View {
         .environment(MicrophonePermissionModel())
         .environment(AudioSessionModel())
         .environment(MicrophoneCaptureModel())
+        .environment(ToneGeneratorModel())
 }
