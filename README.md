@@ -4,49 +4,63 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#24 — processing latency** is implemented.
+Development effort **#25 — audio-route testing** is implemented.
 
-QuietDrive now measures the timing of its own microphone/analysis path instead of treating latency as one opaque number.
+QuietDrive can now save durable, route-specific diagnostic snapshots instead of mixing measurements from different audio paths.
 
-The live Processing Latency panel reports:
+The app distinguishes these route families:
 
+- Built-in
+- Wired analog
+- USB audio
+- Car audio
+- Bluetooth A2DP
+- Bluetooth HFP
+- Bluetooth LE
+- AirPlay
+- HDMI
+- Mixed / unknown configurations
+
+Bluetooth A2DP, HFP, and LE are deliberately kept separate because their behavior can differ substantially.
+
+Each saved route test records:
+
+- route family
+- stable input/output route signature
+- route-revision number
+- input/output port descriptions
+- sample rate
+- actual I/O buffer duration
+- iOS-reported input/output latency
 - microphone buffer duration
-- latest microphone callback interval
-- rolling average callback interval
-- callback jitter (standard deviation)
-- minimum/maximum callback interval
-- latest analysis/DSP processing time
-- rolling average processing time
-- maximum observed processing time
-- FFT analysis-window duration
-- age of the latest analyzed snapshot when it is published
-- estimated age of the **center of the FFT time window** at publication
+- callback cadence and jitter
+- DSP processing timing
+- FFT-window duration
+- snapshot age
+- estimated spectrum-center age
+- buffer and FFT-transform counts
 
-For the current 4096-sample FFT at 48 kHz, the analysis window itself spans about **85.33 ms**. QuietDrive therefore reports that time support explicitly instead of implying the spectrum is instantaneous.
+Route signatures use port type and displayed name, sorted for stability, and do not persist raw AVAudioSession port UIDs.
 
-The app also now exposes iOS's route-reported:
+The Cancellation Lab now has an **Audio Route Testing** panel with a live route summary, Refresh Route, Capture Route Test, durable newest-first history, distinct-route count, per-record delete, and clear-all controls.
 
-- I/O buffer duration
-- input latency
-- output latency
-
-Those values are shown separately from measured app/DSP timing. They are useful diagnostics, but they are **not yet a measured Bluetooth or acoustic round-trip delay**. Route-specific and Bluetooth timing work remains in #25–#27.
-
-The latency instrumentation uses monotonic uptime timestamps inside the microphone callback path and rolling statistics, so it can reveal whether timing instability comes from callback cadence, DSP work, or snapshot-publication age.
+A route test requires an active audio session, active microphone capture, valid input/output routes, and at least one completed FFT transform so timing fields are meaningful.
 
 ## Verification status
 
 The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so tests compile but are not executed there.
 
-Simulator timing does not represent a real iPhone/car audio route. The useful numbers from #24 must be collected on physical hardware before drawing conclusions about cancellation feasibility.
+The simulator can verify the route-testing code path, but useful route records must be captured on a physical iPhone with the real connection types you want to compare.
+
+Route tests still do **not** measure end-to-end acoustic round-trip latency. They create the controlled route dataset needed for the Bluetooth-specific characterization in #26 and jitter diagnostics in #27.
 
 ## What comes next
 
-**#25 — audio-route testing** is next. That will make route identity/configuration a first-class experiment dimension so built-in speaker, wired/USB/CarPlay, Bluetooth, and car-audio paths can be characterized separately.
+**#26 — Bluetooth behavior** is next. With route identity now explicit, QuietDrive can characterize what actually changes when the output path is A2DP/HFP/LE instead of built-in, USB, or car audio.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, persistence, target-band energy, search/controller state, stability diagnostics, latency diagnostics, and saved experiment metadata.
+Raw microphone audio is not stored. Route testing stores diagnostic metadata such as port display names/types, timing measurements, sample rate, and processing statistics; it does not persist raw AVAudioSession port UIDs.
 
 ## Generate the Xcode project
 
