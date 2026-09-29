@@ -1231,7 +1231,54 @@ struct CancellationLabView: View {
                 value: adaptiveController.lastAction
             )
 
-            Text("Fail-safe mute triggers on route/session loss, missing target measurement, repeated unstable windows, or measured target amplification of 3 dB or more above baseline.")
+            Divider()
+
+            Text("Stability Protection")
+                .font(.subheadline.weight(.semibold))
+
+            LabeledContent(
+                "Phase drift from seed",
+                value: String(
+                    format: "%.0f° / %.0f° max",
+                    adaptiveController.phaseExcursionDegrees,
+                    AdaptiveStabilityGuard.maximumPhaseExcursionDegrees
+                )
+            )
+
+            LabeledContent(
+                "Output drift from seed",
+                value: String(
+                    format: "%.0f%% / %.0f%% max",
+                    adaptiveController.outputExcursionPercent,
+                    AdaptiveStabilityGuard.maximumOutputExcursionPercent
+                )
+            )
+
+            LabeledContent(
+                "Stability holds",
+                value: "\(adaptiveController.stabilityHoldCount)"
+            )
+
+            LabeledContent(
+                "Hold remaining",
+                value: "\(adaptiveController.stabilityHoldIterationsRemaining) iterations"
+            )
+
+            LabeledContent(
+                "Phase reversal streak",
+                value: "\(adaptiveController.phaseDirectionReversalStreak)"
+            )
+
+            LabeledContent(
+                "Amplitude reversal streak",
+                value: "\(adaptiveController.amplitudeDirectionReversalStreak)"
+            )
+
+            Text("Adaptive settings stay inside a trusted envelope around the optimized seed. Repeated rollbacks trigger temporary probe holds; repeated accepted direction reversals trigger fail-safe shutdown.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("Fail-safe mute triggers on route/session loss, clipping, stale or missing target measurement, repeated unstable windows, oscillation, or measured target amplification of 3 dB or more above baseline.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
@@ -1661,7 +1708,21 @@ struct CancellationLabView: View {
                     )
                 },
                 measurementProvider: {
-                    measurementForTarget(target)
+                    let snapshot =
+                        microphoneCapture.snapshot
+
+                    guard
+                        let measurement =
+                            measurementForTarget(target)
+                    else {
+                        return nil
+                    }
+
+                    return AdaptiveMeasurementSample(
+                        sequence:
+                            snapshot.fftTransformCount,
+                        measurement: measurement
+                    )
                 },
                 safetyCheck: {
                     if audioSession.state != .active {
@@ -1670,6 +1731,10 @@ struct CancellationLabView: View {
 
                     if microphoneCapture.state != .capturing {
                         return "Microphone capture stopped."
+                    }
+
+                    if microphoneCapture.snapshot.isClipping {
+                        return "Microphone input is clipping."
                     }
 
                     if microphoneCapture.analysisMode != .ancFocus {
