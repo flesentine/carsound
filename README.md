@@ -4,28 +4,19 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#15 — Lab cancellation control screen** is implemented.
+Development effort **#16 — target-frequency energy measurement** is implemented.
 
-The app now has a dedicated **Cancellation Lab** instead of forcing the experimenter to jump between diagnostic cards. The screen centralizes the controls needed for the first manual cancellation tests:
+The Cancellation Lab now reports live energy around the selected target frequency instead of relying only on the spectrum graph or listening by ear.
 
-- audio/input/output readiness
-- 30–200 Hz target frequency
-- highest-confidence persistent-tone targeting
-- manual output level
-- manual 0–360° phase
-- phase presets and +180° inversion
-- microphone capture controls
-- tone-generator controls
-- combined Start Capture + Tone
-- Stop All
-- immediate MUTE NOW / Resume
-- live generator and microphone state
+The meter uses the **Balanced** smoothed spectrum and measures a small multi-bin band around the target. Energy is summed in **linear power** and converted back to dB, which is more appropriate than averaging dB values directly. It also reports a separately interpolated center-frequency level, the nearest FFT bin, the exact measured band, and the matching tracked noise-floor energy.
 
-The screen intentionally does **not** report whether a phase setting improved the target noise yet. That begins with **#16 — target-frequency energy measurement**, which will provide an objective measurement at the selected frequency rather than relying on listening alone.
+When floor data is available, the Lab shows **dB above floor** for the target band. This makes phase experiments observable in real time: if the same target, phone position, route, vehicle volume, and operating condition are held steady, a lower narrow-band energy indicates less measured energy near that frequency.
+
+This is still a live measurement only. **#17 — before/after measurement** adds a controlled baseline-versus-treatment comparison so the app can quantify the change instead of making the user compare moving numbers manually.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, and persistence metrics.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, and target-band energy.
 
 ## Generate the Xcode project
 
