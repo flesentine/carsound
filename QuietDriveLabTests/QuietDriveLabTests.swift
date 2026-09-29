@@ -2271,6 +2271,163 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testProcessingLatencyFFTWindowAtFortyEightKilohertz() {
+        XCTAssertEqual(
+            ProcessingLatencyMath.fftWindowMilliseconds(
+                sampleCount: 4_096,
+                sampleRate: 48_000
+            ),
+            85.3333,
+            accuracy: 0.001
+        )
+    }
+
+    func testProcessingLatencySpectrumCenterAgeAddsHalfWindowProcessingAndPublishAge() {
+        XCTAssertEqual(
+            ProcessingLatencyMath
+                .estimatedSpectrumCenterAgeMilliseconds(
+                    fftWindowMilliseconds: 80,
+                    analysisProcessingMilliseconds: 3,
+                    snapshotAgeMilliseconds: 7
+                ),
+            50,
+            accuracy: 0.001
+        )
+    }
+
+    func testLatencyRunningStatisticsTracksMeanRangeAndJitter() {
+        var statistics = LatencyRunningStatistics()
+
+        statistics.record(20)
+        statistics.record(22)
+        statistics.record(24)
+
+        XCTAssertEqual(
+            statistics.meanMilliseconds,
+            22,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            statistics.minimumMilliseconds,
+            20,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            statistics.maximumMilliseconds,
+            24,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            statistics.standardDeviationMilliseconds,
+            2,
+            accuracy: 0.001
+        )
+    }
+
+    func testProcessingLatencyTrackerMeasuresCallbackDSPAndSnapshotAge() {
+        var tracker = ProcessingLatencyTracker()
+
+        tracker.record(
+            callbackStartedNanoseconds: 1_000_000_000,
+            analysisCompletedNanoseconds: 1_002_000_000
+        )
+        tracker.record(
+            callbackStartedNanoseconds: 1_021_000_000,
+            analysisCompletedNanoseconds: 1_024_000_000
+        )
+
+        let snapshot = tracker.snapshot(
+            nowNanoseconds: 1_030_000_000,
+            fftSampleCount: 4_096,
+            sampleRate: 48_000
+        )
+
+        XCTAssertEqual(
+            snapshot.latestCallbackIntervalMilliseconds,
+            21,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.averageCallbackIntervalMilliseconds,
+            21,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.latestAnalysisProcessingMilliseconds,
+            3,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.averageAnalysisProcessingMilliseconds,
+            2.5,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.maximumAnalysisProcessingMilliseconds,
+            3,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.snapshotAgeMilliseconds,
+            6,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.fftWindowMilliseconds,
+            85.3333,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.estimatedSpectrumCenterAgeMilliseconds,
+            51.6667,
+            accuracy: 0.002
+        )
+    }
+
+    func testProcessingLatencyTrackerCallbackJitterUsesIntervals() {
+        var tracker = ProcessingLatencyTracker()
+
+        tracker.record(
+            callbackStartedNanoseconds: 1_000_000_000,
+            analysisCompletedNanoseconds: 1_001_000_000
+        )
+        tracker.record(
+            callbackStartedNanoseconds: 1_020_000_000,
+            analysisCompletedNanoseconds: 1_021_000_000
+        )
+        tracker.record(
+            callbackStartedNanoseconds: 1_042_000_000,
+            analysisCompletedNanoseconds: 1_043_000_000
+        )
+
+        let snapshot = tracker.snapshot(
+            nowNanoseconds: 1_045_000_000,
+            fftSampleCount: 4_096,
+            sampleRate: 48_000
+        )
+
+        XCTAssertEqual(
+            snapshot.averageCallbackIntervalMilliseconds,
+            21,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.callbackJitterMilliseconds,
+            1.4142,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.minimumCallbackIntervalMilliseconds,
+            20,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.maximumCallbackIntervalMilliseconds,
+            22,
+            accuracy: 0.001
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
