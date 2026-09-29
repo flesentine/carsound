@@ -4,23 +4,27 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#19 — automatic phase sweep** is implemented.
+Development effort **#20 — refined phase search** is implemented.
 
-After a baseline has been captured, the Cancellation Lab can now automatically test a coarse phase grid:
+After the coarse 45° sweep from #19 identifies a promising region, QuietDrive can now run a **two-stage fine phase search** around that result.
 
-**0° → 45° → 90° → 135° → 180° → 225° → 270° → 315°**
+**Stage 1** tests the coarse winner **±30° at 15° spacing**.
 
-The target frequency and output level remain fixed. For every phase, QuietDrive waits for the generator/acoustic path to settle, collects the same 20-sample target-energy treatment window used by the A/B measurement system, compares it against the same baseline, and saves the result to the durable experiment history.
+**Stage 2** takes the best Stage-1 result and tests **±10° at 5° spacing**.
 
-The live sweep table reports each phase's treatment-band energy and its change relative to baseline. The best coarse candidate is selected by the **lowest measured treatment-band energy**, with lower variability used as the tie-breaker when two results are effectively equal.
+The phase grid wraps correctly across 0°/360°, and both stages reuse the same baseline, target frequency, output level, settling delay, target-energy measurement, and treatment-window averaging used by the existing experiment system.
 
-The generator is automatically muted when the sweep finishes. The user can then apply the best coarse phase explicitly. Cancel Sweep, MUTE NOW, and Stop All all safely terminate an active sweep.
+Every fine-search measurement is automatically saved to durable experiment history. The Cancellation Lab shows Stage 1 and Stage 2 result tables separately, identifies the best result from each stage, and then reports the **best refined phase across both stages**. The user can explicitly apply that refined phase after the search.
 
-This is deliberately only a **coarse 45° search**. **#20 — refine phase search** will search more tightly around the best coarse region instead of treating the winning 45° point as the final optimum.
+Generated output is automatically muted when refinement completes. Cancel Fine Search, MUTE NOW, and Stop All all safely terminate active refinement.
+
+The refined result is now resolved to a **5° digital-phase grid**. It is still an experimentally measured digital setting rather than a direct measurement of physical acoustic phase.
+
+With phase search now coarse-to-fine, **#21 — automatic amplitude search** can hold the refined phase fixed and search for the output level that produces the lowest target-band energy without exceeding the existing digital safety ceiling.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, comparison summaries, phase-sweep results, and saved experiment metadata.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, comparison summaries, phase-search results, and saved experiment metadata.
 
 ## Generate the Xcode project
 
