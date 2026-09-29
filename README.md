@@ -4,13 +4,13 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#13 — manual output-level control** is implemented.
+Development effort **#14 — manual phase control** is implemented.
 
-The tone generator now has a live **0–100% output control** inside a hard digital ceiling. The generated PCM waveform is capped at **0.02 sample amplitude**, about **-33.98 dBFS** at the maximum setting. The default is **50%**, which preserves the previous milestone's effective **0.01 amplitude / about -40 dBFS** level rather than silently making the default louder.
+The generated low-frequency sine can now be shifted manually through **0–360°**, with quick **0° / 90° / 180° / 270°** presets and an **Invert +180°** control. Phase is normalized modulo one complete cycle, and the PCM generator applies that phase without changing the selected frequency or the hard-capped output amplitude.
 
-Live output changes use a short **60 ms ramp**. Start and stop retain their **120 ms ramps**. The Lab also has an immediate **MUTE NOW** control that sets player output to zero without waiting for a ramp; Resume returns to the selected level smoothly.
+Phase can also be changed while the tone is playing. To reduce hard discontinuities, live slider changes are briefly debounced, the output ramps down for about **35 ms**, the player swaps to the newly phased loop, and output ramps back to the selected level over another **35 ms**.
 
-The digital cap is only a signal-level limit. It does **not** guarantee a particular acoustic SPL because the phone route, car amplifier, and stereo volume still determine actual speaker loudness.
+A crucial physical limitation remains: this is **generated digital phase**. Bluetooth/car-audio latency and jitter can shift the acoustic phase that ultimately reaches the phone microphone. The later measurement and phase-search milestones are what determine whether a particular generated phase actually reduces the target cabin tone.
 
 ## Privacy principle
 
