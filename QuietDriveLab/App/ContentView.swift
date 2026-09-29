@@ -31,7 +31,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 1.3 • Manual tone level is hard-capped; car volume still controls acoustic loudness")
+                    Text("Lab build 1.4 • Manual frequency, level, and phase controls are active")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -258,6 +258,72 @@ struct ContentView: View {
 
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
+                    Text("Phase")
+                        .font(.subheadline.weight(.semibold))
+
+                    Spacer()
+
+                    Text(
+                        String(
+                            format: "%.0f°",
+                            toneGenerator.phaseDegrees
+                        )
+                    )
+                    .font(
+                        .system(
+                            .subheadline,
+                            design: .monospaced
+                        )
+                    )
+                }
+
+                Slider(
+                    value: Binding(
+                        get: {
+                            toneGenerator.phaseDegrees
+                        },
+                        set: {
+                            toneGenerator.setPhaseDegrees($0)
+                        }
+                    ),
+                    in: 0...360,
+                    step: 1
+                )
+
+                HStack {
+                    Button("0°") {
+                        toneGenerator.setPhaseDegrees(0)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("90°") {
+                        toneGenerator.setPhaseDegrees(90)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("180°") {
+                        toneGenerator.setPhaseDegrees(180)
+                    }
+                    .buttonStyle(.bordered)
+
+                    Button("270°") {
+                        toneGenerator.setPhaseDegrees(270)
+                    }
+                    .buttonStyle(.bordered)
+                }
+
+                Button("Invert +180°") {
+                    toneGenerator.invertPhase()
+                }
+                .buttonStyle(.borderedProminent)
+
+                Text("360° is equivalent to 0°. Live phase changes briefly ramp down, swap the phased loop, then ramp back up to reduce clicks.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
                     Text("Output Level")
                         .font(.subheadline.weight(.semibold))
 
@@ -342,6 +408,23 @@ struct ContentView: View {
             }
 
             Divider()
+
+            LabeledContent(
+                "Phase",
+                value: String(
+                    format: "%.0f°",
+                    toneGenerator.phaseDegrees
+                )
+            )
+
+            LabeledContent(
+                "Live phase transition",
+                value: String(
+                    format: "%.0f ms down + %.0f ms up",
+                    toneGenerator.phaseChangeRampDurationSeconds * 1_000,
+                    toneGenerator.phaseChangeRampDurationSeconds * 1_000
+                )
+            )
 
             LabeledContent(
                 "Selected amplitude",
