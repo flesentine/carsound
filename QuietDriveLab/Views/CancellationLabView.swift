@@ -1576,11 +1576,11 @@ struct CancellationLabView: View {
     private var adaptiveControllerStatusText: String? {
         switch adaptiveController.state {
         case .idle:
-            nil
+            return nil
         case .starting:
-            "Starting • verifying optimized settings"
+            return "Starting • verifying optimized settings"
         case let .monitoring(iteration):
-            "Iteration \(iteration) • monitoring accepted settings"
+            return "Iteration \(iteration) • monitoring accepted settings"
         case let .probing(
             dimension,
             value,
@@ -1607,9 +1607,9 @@ struct CancellationLabView: View {
                 value
             )
         case .running:
-            "Running • accepted settings active"
+            return "Running • accepted settings active"
         case .failed:
-            nil
+            return nil
         }
     }
 
