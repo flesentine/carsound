@@ -10,6 +10,7 @@ struct CancellationLabView: View {
     @Environment(PhaseRefinementModel.self) private var phaseRefinement
     @Environment(AmplitudeSearchModel.self) private var amplitudeSearch
     @Environment(AdaptiveControllerModel.self) private var adaptiveController
+    @Environment(AudioRouteTestingModel.self) private var audioRouteTesting
 
     @State private var lastSavedComparisonKey: String?
     @State private var phaseRefinementProgressText: String?
@@ -20,6 +21,7 @@ struct CancellationLabView: View {
             VStack(spacing: 16) {
                 readinessCard
                 processingLatencyCard
+                audioRouteTestingCard
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
@@ -234,6 +236,259 @@ struct CancellationLabView: View {
             )
 
             Text("Estimated spectrum-center age describes how old the middle of the FFT time window is when the published snapshot is created. It is not end-to-end cancellation latency.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
+    private var audioRouteTestingCard: some View {
+        let inputRecords =
+            AudioRouteTestingMath.records(
+                from: audioSession.inputs
+            )
+        let outputRecords =
+            AudioRouteTestingMath.records(
+                from: audioSession.outputs
+            )
+        let family =
+            AudioRouteTestingMath.classify(
+                inputs: inputRecords,
+                outputs: outputRecords
+            )
+        let signature =
+            AudioRouteTestingMath.signature(
+                inputs: inputRecords,
+                outputs: outputRecords
+            )
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Audio Route Testing", systemImage: "point.3.connected.trianglepath.dotted")
+                    .font(.headline)
+
+                Spacer()
+
+                Text(family.rawValue)
+                    .font(.caption.weight(.bold))
+            }
+
+            Text("Capture comparable route snapshots after switching connection types. Each record stores route identity plus the current sample rate, buffer, iOS I/O latency, and measured processing timing.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            LabeledContent(
+                "Route revision",
+                value: "\(audioSession.routeRevision)"
+            )
+
+            LabeledContent(
+                "Input",
+                value: inputRouteSummary
+            )
+
+            LabeledContent(
+                "Output",
+                value: outputRouteSummary
+            )
+
+            LabeledContent(
+                "Sample rate",
+                value: String(
+                    format: "%.0f Hz",
+                    audioSession.sampleRate
+                )
+            )
+
+            LabeledContent(
+                "I/O buffer",
+                value: String(
+                    format: "%.2f ms",
+                    audioSession.ioBufferDuration * 1_000
+                )
+            )
+
+            LabeledContent(
+                "Input latency",
+                value: String(
+                    format: "%.2f ms",
+                    audioSession.inputLatency * 1_000
+                )
+            )
+
+            LabeledContent(
+                "Output latency",
+                value: String(
+                    format: "%.2f ms",
+                    audioSession.outputLatency * 1_000
+                )
+            )
+
+            Text(
+                signature.isEmpty
+                    ? "No active route signature"
+                    : signature
+            )
+            .font(.caption2.monospaced())
+            .foregroundStyle(.secondary)
+            .textSelection(.enabled)
+
+            HStack {
+                Button("Refresh Route") {
+                    audioSession.refreshRoute()
+                }
+                .buttonStyle(.bordered)
+
+                Button("Capture Route Test") {
+                    _ = audioRouteTesting.capture(
+                        inputs: audioSession.inputs,
+                        outputs: audioSession.outputs,
+                        routeRevision:
+                            audioSession.routeRevision,
+                        sampleRate:
+                            audioSession.sampleRate,
+                        ioBufferDuration:
+                            audioSession.ioBufferDuration,
+                        inputLatency:
+                            audioSession.inputLatency,
+                        outputLatency:
+                            audioSession.outputLatency,
+                        microphoneSnapshot:
+                            microphoneCapture.snapshot
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canCaptureRouteTest)
+            }
+
+            if !canCaptureRouteTest {
+                Text("Activate the audio session and run microphone capture until at least one FFT transform is available before saving a route test.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            HStack {
+                Text("Saved route tests")
+                    .font(.subheadline.weight(.semibold))
+
+                Spacer()
+
+                Text(
+                    "\(audioRouteTesting.records.count) tests • \(audioRouteTesting.distinctRouteCount) routes"
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            if let error = audioRouteTesting.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            if audioRouteTesting.records.isEmpty {
+                Text("No route tests saved yet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(
+                    Array(
+                        audioRouteTesting.records
+                            .prefix(10)
+                            .enumerated()
+                    ),
+                    id: \.element.id
+                ) { index, record in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack {
+                            Text(record.family.rawValue)
+                                .font(.subheadline.weight(.semibold))
+
+                            Spacer()
+
+                            Text(
+                                record.capturedAt.formatted(
+                                    date: .abbreviated,
+                                    time: .standard
+                                )
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        Text(
+                            String(
+                                format:
+                                    "%.0f Hz • buffer %.2f ms • in %.2f ms • out %.2f ms",
+                                record.sampleRate,
+                                record.ioBufferMilliseconds,
+                                record.inputLatencyMilliseconds,
+                                record.outputLatencyMilliseconds
+                            )
+                        )
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+
+                        Text(
+                            String(
+                                format:
+                                    "callback %.2f ± %.3f ms • DSP %.2f ms • spectrum center %.2f ms",
+                                record.callbackAverageMilliseconds,
+                                record.callbackJitterMilliseconds,
+                                record.analysisAverageMilliseconds,
+                                record.estimatedSpectrumCenterAgeMilliseconds
+                            )
+                        )
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+
+                        Text(
+                            "IN: " +
+                            routePortSummary(record.inputs)
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                        Text(
+                            "OUT: " +
+                            routePortSummary(record.outputs)
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                        Button("Delete Route Test") {
+                            audioRouteTesting.delete(
+                                id: record.id
+                            )
+                        }
+                        .buttonStyle(.bordered)
+
+                        if index <
+                            min(
+                                audioRouteTesting.records.count,
+                                10
+                            ) - 1
+                        {
+                            Divider()
+                        }
+                    }
+                }
+
+                if audioRouteTesting.records.count > 10 {
+                    Text("Showing the 10 most recent route tests.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button("Clear All Route Tests", role: .destructive) {
+                    audioRouteTesting.clearAll()
+                }
+                .buttonStyle(.bordered)
+            }
+
+            Text("Route snapshots are diagnostic metadata only; they do not measure acoustic round-trip latency. Bluetooth-specific behavior is #26 and jitter characterization is #27.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -1783,6 +2038,26 @@ struct CancellationLabView: View {
             )
         }
         .cancellationCard()
+    }
+
+    private var canCaptureRouteTest: Bool {
+        audioSession.state == .active &&
+        !audioSession.inputs.isEmpty &&
+        !audioSession.outputs.isEmpty &&
+        microphoneCapture.state == .capturing &&
+        microphoneCapture.snapshot.fftTransformCount > 0
+    }
+
+    private func routePortSummary(
+        _ ports: [AudioRoutePortRecord]
+    ) -> String {
+        guard !ports.isEmpty else {
+            return "None"
+        }
+
+        return ports
+            .map { "\($0.name) • \($0.type)" }
+            .joined(separator: ", ")
     }
 
     private var adaptiveControllerStatusText: String? {
