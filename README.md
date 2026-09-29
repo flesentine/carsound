@@ -4,26 +4,34 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#17 — before/after measurement** is implemented.
+Development effort **#18 — experiment recorder** is implemented.
 
-The Cancellation Lab can now run a controlled two-window A/B comparison instead of forcing the experimenter to watch a moving live number.
+Completed before/after comparisons can now be saved as durable experiment runs instead of disappearing when the comparison is reset. The recorder writes local JSON under the app's Application Support directory and reloads the history automatically on launch.
 
-**Baseline** captures about two seconds of target-band energy with the generated tone muted/off. **Treatment** captures the same kind of window with the generated tone actively audible. Each window collects 20 valid readings at 10 Hz after a short settling delay, then averages them in **linear power** before converting back to dB.
+Each saved run includes:
 
-The result reports both:
+- timestamp
+- target frequency
+- treatment phase
+- treatment output level
+- baseline and treatment target-band energy
+- treatment-minus-baseline dB
+- measured reduction dB
+- center-frequency levels
+- baseline and treatment variability
+- sample counts and measurement-window durations
+- input route
+- output route
 
-- **treatment − baseline dB**
-- **measured reduction dB**
+The Cancellation Lab shows a newest-first experiment history with per-run delete and clear-all controls. The screen displays the 20 most recent runs while the local recorder retains the full history.
 
-A positive measured reduction means the treatment window contained less target-band energy than the baseline window.
+Only measurement summaries and settings are stored. **Raw microphone audio is never written to the experiment recorder.**
 
-The UI also preserves the target, phase, output level, sample count, duration, and window variability so a comparison is not just a naked number. If the target frequency changes between baseline and treatment, the comparison is rejected and a new baseline is required.
-
-This is still a single in-memory comparison. **#18 — experiment recorder** will preserve runs/history so multiple phase and amplitude trials can be compared systematically.
+With durable trial history in place, **#19 — automatic phase sweep** can systematically test multiple phase values and compare them rather than relying on manual one-off trials.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, and comparison summaries.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, comparison summaries, and saved experiment metadata.
 
 ## Generate the Xcode project
 
