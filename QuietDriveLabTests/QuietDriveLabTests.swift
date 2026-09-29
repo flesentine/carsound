@@ -2183,10 +2183,7 @@ final class QuietDriveLabTests: XCTestCase {
             )
         )
 
-        for _ in 0..<
-            AdaptiveStabilityGuard
-                .rollbackStreakBeforeHold
-        {
+        for _ in 0..<AdaptiveStabilityGuard.rollbackStreakBeforeHold {
             guardState.recordRollback()
         }
 
