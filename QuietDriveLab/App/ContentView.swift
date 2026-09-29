@@ -1190,4 +1190,5 @@ private extension View {
         .environment(PhaseRefinementModel())
         .environment(AmplitudeSearchModel())
         .environment(AdaptiveControllerModel())
+        .environment(AudioRouteTestingModel(storageURL: nil))
 }
