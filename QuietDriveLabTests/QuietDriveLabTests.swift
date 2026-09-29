@@ -704,6 +704,112 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testTargetEnergyUsesNarrowMultiBinBand() throws {
+        let spectrum = [
+            SpectrumBin(frequencyHz: 60, magnitudeDBFS: -60),
+            SpectrumBin(frequencyHz: 70, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -30),
+            SpectrumBin(frequencyHz: 90, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 100, magnitudeDBFS: -60)
+        ]
+
+        let measurement = try XCTUnwrap(
+            TargetFrequencyEnergyMeter.measure(
+                spectrum: spectrum,
+                noiseFloor: [],
+                targetFrequencyHz: 80,
+                frequencyResolutionHz: 10
+            )
+        )
+
+        XCTAssertEqual(measurement.binCount, 3)
+        XCTAssertEqual(measurement.lowerFrequencyHz, 70, accuracy: 0.001)
+        XCTAssertEqual(measurement.upperFrequencyHz, 90, accuracy: 0.001)
+        XCTAssertEqual(measurement.nearestBinFrequencyHz, 80, accuracy: 0.001)
+        XCTAssertEqual(measurement.centerLevelDBFS, -30, accuracy: 0.001)
+    }
+
+    func testTargetEnergySumsLinearPowerAcrossBand() {
+        let bins = [
+            SpectrumBin(frequencyHz: 70, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 90, magnitudeDBFS: -40)
+        ]
+
+        XCTAssertEqual(
+            TargetFrequencyEnergyMeter.bandEnergyDBFS(bins),
+            -35.2288,
+            accuracy: 0.001
+        )
+    }
+
+    func testTargetEnergyReportsTenDBAboveMatchingFloor() throws {
+        let spectrum = [
+            SpectrumBin(frequencyHz: 70, magnitudeDBFS: -30),
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -30),
+            SpectrumBin(frequencyHz: 90, magnitudeDBFS: -30)
+        ]
+        let floor = [
+            SpectrumBin(frequencyHz: 70, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 90, magnitudeDBFS: -40)
+        ]
+
+        let measurement = try XCTUnwrap(
+            TargetFrequencyEnergyMeter.measure(
+                spectrum: spectrum,
+                noiseFloor: floor,
+                targetFrequencyHz: 80,
+                frequencyResolutionHz: 10
+            )
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(measurement.excessDB),
+            10,
+            accuracy: 0.001
+        )
+    }
+
+    func testTargetEnergyWithIncompleteFloorLeavesFloorUnavailable() throws {
+        let spectrum = [
+            SpectrumBin(frequencyHz: 70, magnitudeDBFS: -35),
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -25),
+            SpectrumBin(frequencyHz: 90, magnitudeDBFS: -35)
+        ]
+        let incompleteFloor = [
+            SpectrumBin(frequencyHz: 80, magnitudeDBFS: -45)
+        ]
+
+        let measurement = try XCTUnwrap(
+            TargetFrequencyEnergyMeter.measure(
+                spectrum: spectrum,
+                noiseFloor: incompleteFloor,
+                targetFrequencyHz: 80,
+                frequencyResolutionHz: 10
+            )
+        )
+
+        XCTAssertNil(measurement.floorBandEnergyDBFS)
+        XCTAssertNil(measurement.excessDB)
+    }
+
+    func testTargetEnergyInterpolatesInLinearPower() throws {
+        let bins = [
+            SpectrumBin(frequencyHz: 70, magnitudeDBFS: -40),
+            SpectrumBin(frequencyHz: 90, magnitudeDBFS: -20)
+        ]
+
+        let interpolated = try XCTUnwrap(
+            TargetFrequencyEnergyMeter.interpolatedPowerDBFS(
+                bins: bins,
+                targetFrequencyHz: 80
+            )
+        )
+
+        XCTAssertEqual(interpolated, -22.9671, accuracy: 0.001)
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
