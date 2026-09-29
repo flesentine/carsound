@@ -21,6 +21,7 @@ struct ContentView: View {
                         audioSessionCard
                         routeCard
                         analysisModeCard
+                        cancellationLabLaunchCard
                         toneGeneratorCard
                         captureCard
                         diagnosticsCard
@@ -31,7 +32,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 1.4 • Manual frequency, level, and phase controls are active")
+                    Text("Lab build 1.5 • Dedicated cancellation experiment controls are available")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -196,6 +197,42 @@ struct ContentView: View {
 
             if microphoneCapture.state == .capturing {
                 Text("Stop capture before changing the analysis mode so smoothing, floor, and persistence state cannot mix across bands.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .cardStyle()
+    }
+
+    private var cancellationLabLaunchCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Cancellation Lab", systemImage: "waveform.path.ecg.rectangle")
+                    .font(.headline)
+
+                Spacer()
+
+                if cancellationLabReady {
+                    Text("Ready")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.green)
+                }
+            }
+
+            Text("Open the focused experiment screen for target frequency, output level, phase, microphone/tone controls, route readiness, and emergency mute.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            NavigationLink {
+                CancellationLabView()
+            } label: {
+                Label("Open Cancellation Lab", systemImage: "arrow.right.circle.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+
+            if !cancellationLabReady {
+                Text("For a full readiness check, activate the audio session and use ANC Focus.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -1075,6 +1112,13 @@ struct ContentView: View {
                 }
             }
         }
+    }
+
+    private var cancellationLabReady: Bool {
+        audioSession.state == .active &&
+        microphoneCapture.analysisMode == .ancFocus &&
+        !audioSession.outputs.isEmpty &&
+        !audioSession.inputs.isEmpty
     }
 
     private var analysisRangeText: String {
