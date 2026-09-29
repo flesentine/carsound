@@ -10,6 +10,7 @@ struct CancellationLabView: View {
             VStack(spacing: 16) {
                 readinessCard
                 targetCard
+                targetEnergyCard
                 controlsCard
                 liveStateCard
                 safetyCard
@@ -204,6 +205,136 @@ struct CancellationLabView: View {
         .cancellationCard()
     }
 
+    private var targetEnergyCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Target Energy", systemImage: "waveform.path")
+                    .font(.headline)
+
+                Spacer()
+
+                if targetEnergyMeasurement != nil {
+                    Text("Live")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.green)
+                }
+            }
+
+            Text("Measured from the Balanced spectrum in a narrow multi-bin band around the selected target. Lower is quieter at that target.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if let measurement = targetEnergyMeasurement {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Narrow-band energy")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text(
+                            String(
+                                format: "%.1f dBFS",
+                                measurement.bandEnergyDBFS
+                            )
+                        )
+                        .font(.title2.monospacedDigit().weight(.semibold))
+                    }
+
+                    Spacer()
+
+                    VStack(alignment: .trailing, spacing: 3) {
+                        Text("Center level")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text(
+                            String(
+                                format: "%.1f dBFS",
+                                measurement.centerLevelDBFS
+                            )
+                        )
+                        .font(.headline.monospacedDigit())
+                    }
+                }
+
+                Divider()
+
+                if
+                    let floor = measurement.floorBandEnergyDBFS,
+                    let excess = measurement.excessDB
+                {
+                    LabeledContent(
+                        "Tracked floor energy",
+                        value: String(
+                            format: "%.1f dBFS",
+                            floor
+                        )
+                    )
+
+                    LabeledContent(
+                        "Above floor",
+                        value: String(
+                            format: "+%.1f dB",
+                            excess
+                        )
+                    )
+                } else {
+                    LabeledContent(
+                        "Tracked floor energy",
+                        value: "Warming up"
+                    )
+                }
+
+                LabeledContent(
+                    "Measured target",
+                    value: String(
+                        format: "%.1f Hz",
+                        measurement.targetFrequencyHz
+                    )
+                )
+
+                LabeledContent(
+                    "Nearest FFT bin",
+                    value: String(
+                        format: "%.1f Hz",
+                        measurement.nearestBinFrequencyHz
+                    )
+                )
+
+                LabeledContent(
+                    "Measurement band",
+                    value: String(
+                        format: "%.1f–%.1f Hz • %d bins",
+                        measurement.lowerFrequencyHz,
+                        measurement.upperFrequencyHz,
+                        measurement.binCount
+                    )
+                )
+
+                LabeledContent(
+                    "FFT resolution",
+                    value: String(
+                        format: "%.2f Hz/bin",
+                        measurement.frequencyResolutionHz
+                    )
+                )
+            } else {
+                Text(
+                    microphoneCapture.state == .capturing
+                        ? "Waiting for enough FFT data to measure the selected target."
+                        : "Start microphone capture to measure target-frequency energy."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            }
+
+            Text("Relative digital measurement only. Keep phone position, route, stereo volume, and driving condition as consistent as possible when comparing settings.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
     private var controlsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Experiment Controls", systemImage: "slider.horizontal.3")
@@ -259,7 +390,7 @@ struct CancellationLabView: View {
             }
             .buttonStyle(.bordered)
 
-            Text("This screen only gives you manual control. It does not yet decide whether a phase setting improved or worsened the target tone; measurement begins in #16.")
+            Text("Watch Target Energy while changing phase or level. A lower narrow-band energy means less measured energy near the selected target, but formal before/after comparison begins in #17.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -358,6 +489,17 @@ struct CancellationLabView: View {
             )
         }
         .cancellationCard()
+    }
+
+    private var targetEnergyMeasurement: TargetFrequencyEnergyMeasurement? {
+        let snapshot = microphoneCapture.snapshot
+
+        return TargetFrequencyEnergyMeter.measure(
+            spectrum: snapshot.smoothedSpectrum.balanced,
+            noiseFloor: snapshot.noiseFloor.bins,
+            targetFrequencyHz: toneGenerator.frequencyHz,
+            frequencyResolutionHz: snapshot.fftResolutionHz
+        )
     }
 
     private var bestPersistentTone: PersistentTone? {
