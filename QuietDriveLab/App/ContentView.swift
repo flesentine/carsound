@@ -32,7 +32,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 1.9 • Automatic coarse phase sweep is available")
+                    Text("Lab build 2.0 • Two-stage fine phase refinement is available")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
