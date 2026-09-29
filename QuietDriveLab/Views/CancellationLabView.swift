@@ -5,6 +5,9 @@ struct CancellationLabView: View {
     @Environment(MicrophoneCaptureModel.self) private var microphoneCapture
     @Environment(ToneGeneratorModel.self) private var toneGenerator
     @Environment(BeforeAfterMeasurementModel.self) private var beforeAfterMeasurement
+    @Environment(ExperimentRecorderModel.self) private var experimentRecorder
+
+    @State private var lastSavedComparisonKey: String?
 
     var body: some View {
         ScrollView {
@@ -13,6 +16,7 @@ struct CancellationLabView: View {
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
+                experimentHistoryCard
                 controlsCard
                 liveStateCard
                 safetyCard
@@ -458,6 +462,25 @@ struct CancellationLabView: View {
                 Text("A positive measured reduction means the treatment window had less target-band energy than baseline. This is a relative A/B result, not calibrated SPL.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+
+                Button(
+                    comparisonKey(comparison) == lastSavedComparisonKey
+                        ? "Run Saved"
+                        : "Save Run"
+                ) {
+                    let record = experimentRecorder.record(
+                        comparison: comparison,
+                        inputRoute: inputRouteSummary,
+                        outputRoute: outputRouteSummary
+                    )
+                    lastSavedComparisonKey = comparisonKey(comparison)
+
+                    _ = record
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    comparisonKey(comparison) == lastSavedComparisonKey
+                )
             }
 
             if
@@ -466,9 +489,150 @@ struct CancellationLabView: View {
             {
                 Button("Reset Comparison") {
                     beforeAfterMeasurement.reset()
+                    lastSavedComparisonKey = nil
                 }
                 .buttonStyle(.bordered)
                 .disabled(beforeAfterMeasurement.state.isBusy)
+            }
+        }
+        .cancellationCard()
+    }
+
+    private var experimentHistoryCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Experiment History", systemImage: "clock.arrow.circlepath")
+                    .font(.headline)
+
+                Spacer()
+
+                Text("\(experimentRecorder.records.count) saved")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Saved locally as measurement summaries only. Raw microphone audio is never written to the experiment history.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if let error = experimentRecorder.lastError {
+                Text(error)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            if experimentRecorder.records.isEmpty {
+                Text("No saved runs yet. Complete a baseline/treatment comparison and tap Save Run.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            } else {
+                ForEach(Array(experimentRecorder.records.prefix(20).enumerated()), id: \.element.id) { index, record in
+                    VStack(alignment: .leading, spacing: 7) {
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(
+                                    String(
+                                        format: "%.0f Hz • %.0f° • %.0f%%",
+                                        record.targetFrequencyHz,
+                                        record.phaseDegrees,
+                                        record.outputPercent
+                                    )
+                                )
+                                .font(.subheadline.monospacedDigit().weight(.semibold))
+
+                                Text(
+                                    record.recordedAt.formatted(
+                                        date: .abbreviated,
+                                        time: .standard
+                                    )
+                                )
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                            }
+
+                            Spacer()
+
+                            Text(
+                                record.measuredReductionDB >= 0
+                                    ? String(
+                                        format: "−%.2f dB",
+                                        record.measuredReductionDB
+                                    )
+                                    : String(
+                                        format: "+%.2f dB",
+                                        abs(record.measuredReductionDB)
+                                    )
+                            )
+                            .font(.headline.monospacedDigit())
+                        }
+
+                        HStack {
+                            Text(
+                                String(
+                                    format: "Baseline %.2f",
+                                    record.baselineBandEnergyDBFS
+                                )
+                            )
+
+                            Spacer()
+
+                            Text(
+                                String(
+                                    format: "Treatment %.2f dBFS",
+                                    record.treatmentBandEnergyDBFS
+                                )
+                            )
+                        }
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+
+                        Text(
+                            String(
+                                format: "σ %.2f → %.2f dB • %d/%d samples",
+                                record.baselineStandardDeviationDB,
+                                record.treatmentStandardDeviationDB,
+                                record.baselineSampleCount,
+                                record.treatmentSampleCount
+                            )
+                        )
+                        .font(.caption2.monospacedDigit())
+                        .foregroundStyle(.secondary)
+
+                        Text("Input: \(record.inputRoute)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        Text("Output: \(record.outputRoute)")
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+
+                        Button("Delete Run") {
+                            experimentRecorder.delete(id: record.id)
+                        }
+                        .buttonStyle(.bordered)
+
+                        if index <
+                            min(
+                                experimentRecorder.records.count,
+                                20
+                            ) - 1
+                        {
+                            Divider()
+                        }
+                    }
+                }
+
+                if experimentRecorder.records.count > 20 {
+                    Text("Showing the 20 most recent runs.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Button("Clear All Saved Runs", role: .destructive) {
+                    experimentRecorder.clearAll()
+                    lastSavedComparisonKey = nil
+                }
+                .buttonStyle(.bordered)
             }
         }
         .cancellationCard()
@@ -666,6 +830,8 @@ struct CancellationLabView: View {
     }
 
     private func captureBaseline() {
+        lastSavedComparisonKey = nil
+
         if
             toneGenerator.state == .playing,
             !toneGenerator.isMuted
@@ -769,6 +935,20 @@ struct CancellationLabView: View {
             .font(.caption2.monospacedDigit())
             .foregroundStyle(.secondary)
         }
+    }
+
+    private func comparisonKey(
+        _ comparison: BeforeAfterComparison
+    ) -> String {
+        String(
+            format: "%.3f|%.3f|%.3f|%.3f|%.3f|%.3f",
+            comparison.baseline.condition.targetFrequencyHz,
+            comparison.baseline.averageBandEnergyDBFS,
+            comparison.treatment.condition.phaseDegrees,
+            comparison.treatment.condition.outputPercent,
+            comparison.treatment.averageBandEnergyDBFS,
+            comparison.measuredReductionDB
+        )
     }
 
     private func comparisonResultText(
