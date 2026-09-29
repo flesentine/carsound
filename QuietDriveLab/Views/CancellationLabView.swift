@@ -7,8 +7,10 @@ struct CancellationLabView: View {
     @Environment(BeforeAfterMeasurementModel.self) private var beforeAfterMeasurement
     @Environment(ExperimentRecorderModel.self) private var experimentRecorder
     @Environment(PhaseSweepModel.self) private var phaseSweep
+    @Environment(PhaseRefinementModel.self) private var phaseRefinement
 
     @State private var lastSavedComparisonKey: String?
+    @State private var phaseRefinementProgressText: String?
 
     var body: some View {
         ScrollView {
@@ -18,6 +20,7 @@ struct CancellationLabView: View {
                 targetEnergyCard
                 beforeAfterCard
                 phaseSweepCard
+                phaseRefinementCard
                 experimentHistoryCard
                 controlsCard
                 liveStateCard
@@ -213,7 +216,8 @@ struct CancellationLabView: View {
         .cancellationCard()
         .disabled(
             beforeAfterMeasurement.state.isBusy ||
-            phaseSweep.state.isRunning
+            phaseSweep.state.isRunning ||
+            phaseRefinement.state.isRunning
         )
     }
 
@@ -658,6 +662,184 @@ struct CancellationLabView: View {
             {
                 Button("Reset Sweep") {
                     phaseSweep.reset()
+                    phaseRefinement.reset()
+                    phaseRefinementProgressText = nil
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .cancellationCard()
+    }
+
+    private var phaseRefinementCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Fine Phase Refinement", systemImage: "scope")
+                    .font(.headline)
+
+                Spacer()
+
+                if phaseRefinement.state.isRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            Text("Two-stage search around the best coarse phase: first ±30° at 15° spacing, then ±10° around the Stage-1 winner at 5° spacing.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if let progress = phaseRefinementProgressText {
+                Text(progress)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Button("Start Fine Search") {
+                    startPhaseRefinement()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canStartPhaseRefinement)
+
+                if phaseRefinement.state.isRunning {
+                    Button("Cancel Fine Search") {
+                        phaseRefinement.cancel()
+                        phaseRefinementProgressText = nil
+                        toneGenerator.muteImmediately()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            if phaseSweep.bestResult == nil {
+                Text("Run the coarse 8-phase sweep first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if toneGenerator.state == .playing && toneGenerator.isMuted {
+                Text("Resume the tone before starting fine refinement. QuietDrive will mute it again when refinement finishes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if case let .failed(message) = phaseRefinement.state {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            ForEach(phaseRefinement.stages, id: \.stage) { stage in
+                Divider()
+
+                HStack {
+                    Text(
+                        stage.stage == 1
+                            ? "Stage 1 • 15° grid"
+                            : "Stage 2 • 5° grid"
+                    )
+                    .font(.subheadline.weight(.semibold))
+
+                    Spacer()
+
+                    if let best = stage.bestResult {
+                        Text(
+                            String(
+                                format: "best %.0f°",
+                                best.phaseDegrees
+                            )
+                        )
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
+                ForEach(stage.results) { result in
+                    HStack {
+                        Text(
+                            String(
+                                format: "%.0f°",
+                                result.phaseDegrees
+                            )
+                        )
+                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .frame(width: 48, alignment: .leading)
+
+                        Text(
+                            String(
+                                format: "%.2f dBFS",
+                                result.treatment.averageBandEnergyDBFS
+                            )
+                        )
+                        .font(.subheadline.monospacedDigit())
+
+                        Spacer()
+
+                        Text(
+                            result.comparison.measuredReductionDB >= 0
+                                ? String(
+                                    format: "−%.2f dB",
+                                    result.comparison.measuredReductionDB
+                                )
+                                : String(
+                                    format: "+%.2f dB",
+                                    abs(result.comparison.measuredReductionDB)
+                                )
+                        )
+                        .font(.subheadline.monospacedDigit())
+                    }
+                }
+            }
+
+            if let best = phaseRefinement.bestResult {
+                Divider()
+
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Best refined phase")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text(
+                            String(
+                                format: "%.0f° • %.2f dBFS",
+                                best.phaseDegrees,
+                                best.treatment.averageBandEnergyDBFS
+                            )
+                        )
+                        .font(.title3.monospacedDigit().weight(.semibold))
+                    }
+
+                    Spacer()
+
+                    Text(
+                        String(
+                            format: "%.2f dB reduction",
+                            best.comparison.measuredReductionDB
+                        )
+                    )
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                }
+
+                Button("Apply Best Refined Phase") {
+                    toneGenerator.setPhaseDegrees(
+                        best.phaseDegrees
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(toneGenerator.state != .playing)
+
+                Text("This is the best measured point on the 5° refinement grid. #21 will hold this phase while searching output amplitude.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !phaseRefinement.stages.isEmpty &&
+                !phaseRefinement.state.isRunning
+            {
+                Button("Reset Fine Search") {
+                    phaseRefinement.reset()
+                    phaseRefinementProgressText = nil
                 }
                 .buttonStyle(.bordered)
             }
@@ -870,6 +1052,8 @@ struct CancellationLabView: View {
             Button("Stop All") {
                 beforeAfterMeasurement.cancelCapture()
                 phaseSweep.cancel()
+                phaseRefinement.cancel()
+                phaseRefinementProgressText = nil
                 toneGenerator.stopImmediately()
                 microphoneCapture.stopCapture()
             }
@@ -956,6 +1140,8 @@ struct CancellationLabView: View {
                     toneGenerator.unmute()
                 } else {
                     phaseSweep.cancel()
+                    phaseRefinement.cancel()
+                    phaseRefinementProgressText = nil
                     toneGenerator.muteImmediately()
                 }
             }
@@ -975,6 +1161,99 @@ struct CancellationLabView: View {
             )
         }
         .cancellationCard()
+    }
+
+    private var canStartPhaseRefinement: Bool {
+        phaseSweep.bestResult != nil &&
+        beforeAfterMeasurement.baseline != nil &&
+        baselineMatchesCurrentTarget &&
+        microphoneCapture.state == .capturing &&
+        toneGenerator.state == .playing &&
+        !toneGenerator.isMuted &&
+        toneGenerator.outputPercent > 0 &&
+        targetEnergyMeasurement != nil &&
+        !beforeAfterMeasurement.state.isBusy &&
+        !phaseSweep.state.isRunning &&
+        !phaseRefinement.state.isRunning
+    }
+
+    private func startPhaseRefinement() {
+        guard
+            let coarseBest = phaseSweep.bestResult,
+            let baseline = beforeAfterMeasurement.baseline
+        else {
+            return
+        }
+
+        let target = baseline.condition.targetFrequencyHz
+        let output = toneGenerator.outputPercent
+        let inputRoute = inputRouteSummary
+        let outputRoute = outputRouteSummary
+
+        phaseRefinementProgressText = "Preparing fine phase search..."
+
+        Task { @MainActor in
+            await phaseRefinement.run(
+                coarseBestPhaseDegrees:
+                    coarseBest.phaseDegrees,
+                baseline: baseline,
+                outputPercent: output,
+                applyPhase: { phase in
+                    toneGenerator.setPhaseDegrees(phase)
+                },
+                measurementProvider: {
+                    measurementForTarget(target)
+                },
+                onComparison: { comparison in
+                    _ = experimentRecorder.record(
+                        comparison: comparison,
+                        inputRoute: inputRoute,
+                        outputRoute: outputRoute
+                    )
+                },
+                onProgress: {
+                    stage,
+                    phase,
+                    index,
+                    total,
+                    collected,
+                    required in
+
+                    if
+                        let collected,
+                        let required
+                    {
+                        phaseRefinementProgressText =
+                            String(
+                                format:
+                                    "Stage %d • %d/%d • %.0f° • %d/%d samples",
+                                stage,
+                                index,
+                                total,
+                                phase,
+                                collected,
+                                required
+                            )
+                    } else {
+                        phaseRefinementProgressText =
+                            String(
+                                format:
+                                    "Stage %d • %d/%d • %.0f° • settling...",
+                                stage,
+                                index,
+                                total,
+                                phase
+                            )
+                    }
+                }
+            )
+
+            if phaseRefinement.state == .completed {
+                phaseRefinementProgressText =
+                    "Fine phase search complete"
+                toneGenerator.muteImmediately()
+            }
+        }
     }
 
     private var phaseSweepProgressText: String? {
@@ -1019,10 +1298,14 @@ struct CancellationLabView: View {
         toneGenerator.outputPercent > 0 &&
         targetEnergyMeasurement != nil &&
         !beforeAfterMeasurement.state.isBusy &&
-        !phaseSweep.state.isRunning
+        !phaseSweep.state.isRunning &&
+        !phaseRefinement.state.isRunning
     }
 
     private func startPhaseSweep() {
+        phaseRefinement.reset()
+        phaseRefinementProgressText = nil
+
         guard
             let baseline = beforeAfterMeasurement.baseline
         else {
