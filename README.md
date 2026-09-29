@@ -4,19 +4,26 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#16 — target-frequency energy measurement** is implemented.
+Development effort **#17 — before/after measurement** is implemented.
 
-The Cancellation Lab now reports live energy around the selected target frequency instead of relying only on the spectrum graph or listening by ear.
+The Cancellation Lab can now run a controlled two-window A/B comparison instead of forcing the experimenter to watch a moving live number.
 
-The meter uses the **Balanced** smoothed spectrum and measures a small multi-bin band around the target. Energy is summed in **linear power** and converted back to dB, which is more appropriate than averaging dB values directly. It also reports a separately interpolated center-frequency level, the nearest FFT bin, the exact measured band, and the matching tracked noise-floor energy.
+**Baseline** captures about two seconds of target-band energy with the generated tone muted/off. **Treatment** captures the same kind of window with the generated tone actively audible. Each window collects 20 valid readings at 10 Hz after a short settling delay, then averages them in **linear power** before converting back to dB.
 
-When floor data is available, the Lab shows **dB above floor** for the target band. This makes phase experiments observable in real time: if the same target, phone position, route, vehicle volume, and operating condition are held steady, a lower narrow-band energy indicates less measured energy near that frequency.
+The result reports both:
 
-This is still a live measurement only. **#17 — before/after measurement** adds a controlled baseline-versus-treatment comparison so the app can quantify the change instead of making the user compare moving numbers manually.
+- **treatment − baseline dB**
+- **measured reduction dB**
+
+A positive measured reduction means the treatment window contained less target-band energy than the baseline window.
+
+The UI also preserves the target, phase, output level, sample count, duration, and window variability so a comparison is not just a naked number. If the target frequency changes between baseline and treatment, the comparison is rejected and a new baseline is required.
+
+This is still a single in-memory comparison. **#18 — experiment recorder** will preserve runs/history so multiple phase and amplitude trials can be compared systematically.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, and target-band energy.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, and comparison summaries.
 
 ## Generate the Xcode project
 
