@@ -4,32 +4,41 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#22 — adaptive controller** is implemented. This completes **Milestone 2 — Fight one frequency (#12–#22)**.
+Development effort **#23 — stability protection** is implemented.
 
-The controller starts from the best phase/output found by the coarse phase sweep, fine phase refinement, and amplitude search. It then performs a deliberately bounded local search rather than making large uncontrolled changes.
+The adaptive controller from #22 is now wrapped in a conservative stability layer designed to prevent it from chasing measurement noise or drifting far away from the phase/output settings established by the controlled search pipeline.
 
-The loop alternates:
+The controller is confined to a **trusted envelope** around its optimized starting point:
 
-- **phase probes:** current accepted phase ±5°
-- **output probes:** current accepted output ±2%
+- phase: no more than **±20°**
+- output: no more than **±8 percentage points**
+- output also remains below the user-selected amplitude-search ceiling and the existing hard PCM ceiling
 
-Each setting is measured with a 10-sample target-energy window. A candidate must improve target-band energy by at least **0.35 dB** before QuietDrive accepts it. Otherwise the controller restores the previous accepted settings.
+The phase limit uses circular distance, so a seed near 360° behaves correctly across the 0° boundary.
 
-Adaptive output remains bounded by the user's amplitude-search ceiling, the 2% automatic-control minimum, and the app's existing hard PCM ceiling.
+After an adaptive adjustment is accepted, QuietDrive forces a full monitoring iteration before probing again. If four probe cycles in a row are rejected, the controller enters a three-iteration **stability hold** rather than continuously hunting around a stable optimum.
 
-The controller includes conservative fail-safe behavior. Generated output is immediately muted if the measurement path disappears, the input/output route changes, the audio session or microphone capture stops, ANC Focus is lost, the target frequency changes, measurements remain unstable, or the active treatment measures **3 dB or more above the no-tone baseline**.
+QuietDrive also watches for accepted-control oscillation. If phase or amplitude repeatedly reverses direction three accepted times in succession, the controller treats that behavior as instability and triggers the existing fail-safe mute path.
 
-Accepted adaptive adjustments are stored in the durable experiment history. The Cancellation Lab shows the active accepted phase/output, latest target energy and reduction, measurement variability, iterations, accepted adjustments, rollbacks, and the controller's latest action.
+Adaptive measurement windows now accept only **fresh FFT transforms**. The controller tracks the FFT transform sequence and will not count the same published spectrum snapshot multiple times as independent samples. If fresh measurements stop arriving, the bounded collection window eventually triggers the existing missing-measurement fail-safe.
 
-This remains an **experimental lab controller**. Simulator CI can prove the code and test target compile, but it cannot prove acoustic cancellation, Bluetooth timing stability, safe speaker output, or sustained feedback stability in a real vehicle.
+Microphone clipping is now an explicit adaptive fail-safe as well.
+
+The Cancellation Lab reports phase/output drift from the seed, stability-hold count, remaining hold iterations, and phase/amplitude reversal streaks.
+
+## Verification status
+
+The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so the tests compile but are not executed there.
+
+These protections reduce software-side instability risk, but they do **not** prove physical acoustic-loop stability. Real iPhone/car testing is still required, particularly for route latency, Bluetooth jitter, amplifier/speaker behavior, and physical feedback.
 
 ## What comes next
 
-**Milestone 3 — Reality** starts with #23 stability protection, then latency measurement, audio-route testing, Bluetooth characterization/jitter diagnostics, vibration sensing, sound/vibration correlation, music-interference detection, and overall confidence scoring.
+**#24 — processing latency** is next in Milestone 3. After that come audio-route testing, Bluetooth characterization and jitter diagnostics, vibration sensing, sound/vibration correlation, music-interference detection, and overall confidence scoring.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, comparison summaries, search/controller results, and saved experiment metadata.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, comparison summaries, search/controller results, stability diagnostics, and saved experiment metadata.
 
 ## Generate the Xcode project
 
