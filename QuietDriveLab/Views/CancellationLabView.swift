@@ -19,6 +19,7 @@ struct CancellationLabView: View {
         ScrollView {
             VStack(spacing: 16) {
                 readinessCard
+                processingLatencyCard
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
@@ -71,6 +72,170 @@ struct CancellationLabView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+        }
+        .cancellationCard()
+    }
+
+    private var processingLatencyCard: some View {
+        let latency =
+            microphoneCapture.snapshot.processingLatency
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Processing Latency", systemImage: "timer")
+                    .font(.headline)
+
+                Spacer()
+
+                if microphoneCapture.state == .capturing {
+                    Text("Live")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.green)
+                }
+            }
+
+            Text("Separates measured app/DSP timing from iOS-reported audio I/O latency. These numbers do not yet include measured Bluetooth or acoustic round-trip delay.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if microphoneCapture.state == .capturing {
+                LabeledContent(
+                    "Mic buffer duration",
+                    value: String(
+                        format: "%.2f ms",
+                        microphoneCapture.snapshot
+                            .bufferDurationMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Callback interval",
+                    value: String(
+                        format: "%.2f ms",
+                        latency
+                            .latestCallbackIntervalMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Callback average",
+                    value: String(
+                        format: "%.2f ms",
+                        latency
+                            .averageCallbackIntervalMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Callback jitter σ",
+                    value: String(
+                        format: "%.3f ms",
+                        latency.callbackJitterMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Callback min / max",
+                    value: String(
+                        format: "%.2f / %.2f ms",
+                        latency
+                            .minimumCallbackIntervalMilliseconds,
+                        latency
+                            .maximumCallbackIntervalMilliseconds
+                    )
+                )
+
+                Divider()
+
+                LabeledContent(
+                    "DSP processing latest",
+                    value: String(
+                        format: "%.2f ms",
+                        latency
+                            .latestAnalysisProcessingMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "DSP processing average",
+                    value: String(
+                        format: "%.2f ms",
+                        latency
+                            .averageAnalysisProcessingMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "DSP processing max",
+                    value: String(
+                        format: "%.2f ms",
+                        latency
+                            .maximumAnalysisProcessingMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "FFT analysis window",
+                    value: String(
+                        format: "%.2f ms",
+                        latency.fftWindowMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Published snapshot age",
+                    value: String(
+                        format: "%.2f ms",
+                        latency.snapshotAgeMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Estimated spectrum-center age",
+                    value: String(
+                        format: "%.2f ms",
+                        latency
+                            .estimatedSpectrumCenterAgeMilliseconds
+                    )
+                )
+            } else {
+                Text("Start microphone capture to measure callback cadence and DSP timing.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Divider()
+
+            Text("iOS-reported route timing")
+                .font(.subheadline.weight(.semibold))
+
+            LabeledContent(
+                "I/O buffer",
+                value: String(
+                    format: "%.2f ms",
+                    audioSession.ioBufferDuration * 1_000
+                )
+            )
+
+            LabeledContent(
+                "Input latency",
+                value: String(
+                    format: "%.2f ms",
+                    audioSession.inputLatency * 1_000
+                )
+            )
+
+            LabeledContent(
+                "Output latency",
+                value: String(
+                    format: "%.2f ms",
+                    audioSession.outputLatency * 1_000
+                )
+            )
+
+            Text("Estimated spectrum-center age describes how old the middle of the FFT time window is when the published snapshot is created. It is not end-to-end cancellation latency.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .cancellationCard()
     }
