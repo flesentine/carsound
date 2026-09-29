@@ -132,7 +132,7 @@
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use. #23 reduces software-side instability risk, but it does not replace physical feedback-stability, latency, or route characterization.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use. #23 reduces software-side instability risk. #24 now measures the app-side processing path and exposes system-reported I/O latency, but physical route/acoustic latency still requires #25–#27 characterization.
 
 
 ### Milestone 3 — Reality
@@ -157,7 +157,30 @@ The app and unit-test targets compile successfully in GitHub Actions against the
   - UI documents the trusted-envelope and rollback-backoff behavior
   - tests cover trusted envelope limits, circular phase distance, post-acceptance cooldown, rollback backoff, phase oscillation detection, and amplitude oscillation detection
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #24 Measure processing latency
+- [x] #24 Measure processing latency
+  - new ProcessingLatencyDiagnostics model with deterministic latency math
+  - monotonic uptime timestamps are recorded inside the microphone callback path
+  - latest callback interval is measured directly
+  - rolling callback interval average is tracked
+  - callback timing jitter is reported as standard deviation
+  - callback interval minimum and maximum are tracked
+  - latest analysis/DSP processing duration is measured from callback entry through the completed analysis pipeline
+  - rolling average DSP processing duration is tracked
+  - maximum observed DSP processing duration is tracked
+  - FFT analysis-window duration is derived from the actual FFT sample count and sample rate
+  - at 4096 samples / 48 kHz the analysis window is approximately 85.33 ms
+  - published snapshot age is measured from analysis completion to snapshot creation
+  - estimated spectrum-center age combines half the FFT window, latest analysis processing time, and snapshot publication age
+  - measured app/DSP timing is explicitly separated from route/audio hardware latency
+  - AudioSessionModel now exposes iOS-reported input latency
+  - AudioSessionModel now exposes iOS-reported output latency
+  - existing actual I/O buffer duration remains visible
+  - dedicated Processing Latency card added to Cancellation Lab
+  - card shows mic buffer duration, callback cadence, jitter, min/max cadence, latest/average/max DSP time, FFT window, snapshot age, and estimated spectrum-center age
+  - card separately shows iOS-reported I/O buffer, input latency, and output latency
+  - UI explicitly warns that these numbers do not yet equal Bluetooth/acoustic end-to-end round-trip latency
+  - tests cover FFT-window timing, spectrum-center-age math, rolling latency statistics, callback/DSP/snapshot tracking, and callback-jitter calculation
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #25 Add audio-route testing
 - [ ] #26 Characterize Bluetooth behavior
 - [ ] #27 Add Bluetooth jitter diagnostics
