@@ -12,6 +12,11 @@ struct AdaptiveControllerObservation: Equatable, Sendable {
     let comparison: BeforeAfterComparison
 }
 
+struct AdaptiveMeasurementSample: Equatable, Sendable {
+    let sequence: UInt64
+    let measurement: TargetFrequencyEnergyMeasurement
+}
+
 enum AdaptiveAdjustmentDimension: String, Equatable, Sendable {
     case phase = "Phase"
     case amplitude = "Amplitude"
@@ -171,11 +176,19 @@ final class AdaptiveControllerModel {
     private(set) var rollbackCount = 0
     private(set) var searchCeilingPercent: Double = 0
     private(set) var lastAction = "Not running"
+    private(set) var stabilityHoldCount = 0
+    private(set) var stabilityHoldIterationsRemaining = 0
+    private(set) var phaseExcursionDegrees = 0.0
+    private(set) var outputExcursionPercent = 0.0
+    private(set) var phaseDirectionReversalStreak = 0
+    private(set) var amplitudeDirectionReversalStreak = 0
 
     private var generation: UInt64 = 0
     private var nextDimension:
         AdaptiveAdjustmentDimension = .phase
     private var consecutiveUnstableWindows = 0
+    private var stabilityGuard: AdaptiveStabilityGuard?
+    private var lastMeasurementSequence: UInt64 = 0
 
     func reset() {
         generation += 1
@@ -187,8 +200,16 @@ final class AdaptiveControllerModel {
         rollbackCount = 0
         searchCeilingPercent = 0
         lastAction = "Not running"
+        stabilityHoldCount = 0
+        stabilityHoldIterationsRemaining = 0
+        phaseExcursionDegrees = 0
+        outputExcursionPercent = 0
+        phaseDirectionReversalStreak = 0
+        amplitudeDirectionReversalStreak = 0
         nextDimension = .phase
         consecutiveUnstableWindows = 0
+        stabilityGuard = nil
+        lastMeasurementSequence = 0
     }
 
     func cancel() {
@@ -206,7 +227,7 @@ final class AdaptiveControllerModel {
             (AdaptiveControllerSettings) -> Void,
         measurementProvider:
             @escaping @MainActor
-            () -> TargetFrequencyEnergyMeasurement?,
+            () -> AdaptiveMeasurementSample?,
         safetyCheck:
             @escaping @MainActor () -> String?,
         onAcceptedComparison:
@@ -258,6 +279,13 @@ final class AdaptiveControllerModel {
         rollbackCount = 0
         nextDimension = .phase
         consecutiveUnstableWindows = 0
+        stabilityGuard = AdaptiveStabilityGuard(
+            seed: seed
+        )
+        lastMeasurementSequence = 0
+        updateStabilityMetrics(
+            settings: seed
+        )
         state = .starting
         lastAction = "Applying optimized starting point"
 
@@ -350,6 +378,14 @@ final class AdaptiveControllerModel {
             }
 
             lastObservation = current
+
+            if consumeStabilityHoldIfNeeded() {
+                state = .running
+                await pauseBetweenIterations(
+                    generation: currentGeneration
+                )
+                continue
+            }
 
             let dimension = nextDimension
             nextDimension =
@@ -475,6 +511,21 @@ final class AdaptiveControllerModel {
                 acceptedAdjustmentCount += 1
                 consecutiveUnstableWindows = 0
 
+                if
+                    let stabilityReason =
+                        recordStabilityAcceptance(
+                            from: settings,
+                            to: bestCandidate.settings,
+                            dimension: dimension
+                        )
+                {
+                    failSafe(
+                        stabilityReason,
+                        onFailSafe: onFailSafe
+                    )
+                    return
+                }
+
                 let improvement =
                     current.treatment
                         .averageBandEnergyDBFS -
@@ -498,6 +549,7 @@ final class AdaptiveControllerModel {
                 rollbackCount += 1
                 acceptedSettings = settings
                 lastObservation = current
+                recordStabilityRollback()
                 lastAction =
                     "\(dimension.rawValue) probe rolled back"
                 applySettings(settings)
@@ -514,9 +566,11 @@ final class AdaptiveControllerModel {
         around settings: AdaptiveControllerSettings,
         dimension: AdaptiveAdjustmentDimension
     ) -> [AdaptiveControllerSettings] {
+        let candidates: [AdaptiveControllerSettings]
+
         switch dimension {
         case .phase:
-            return AdaptiveControllerMath
+            candidates = AdaptiveControllerMath
                 .phaseCandidates(
                     around: settings.phaseDegrees
                 )
@@ -529,7 +583,7 @@ final class AdaptiveControllerModel {
                 }
 
         case .amplitude:
-            return AdaptiveControllerMath
+            candidates = AdaptiveControllerMath
                 .amplitudeCandidates(
                     around: settings.outputPercent,
                     ceilingPercent:
@@ -543,6 +597,17 @@ final class AdaptiveControllerModel {
                     )
                 }
         }
+
+        guard let stabilityGuard else {
+            return candidates
+        }
+
+        return candidates.filter {
+            stabilityGuard.allows(
+                $0,
+                ceilingPercent: searchCeilingPercent
+            )
+        }
     }
 
     private func measure(
@@ -553,7 +618,7 @@ final class AdaptiveControllerModel {
             @escaping @MainActor () -> String?,
         measurementProvider:
             @escaping @MainActor
-            () -> TargetFrequencyEnergyMeasurement?,
+            () -> AdaptiveMeasurementSample?,
         onFailSafe:
             @escaping @MainActor (String) -> Void
     ) async -> AdaptiveControllerObservation? {
@@ -604,15 +669,19 @@ final class AdaptiveControllerModel {
             attempts += 1
 
             if
-                let measurement =
-                    measurementProvider(),
+                let sample = measurementProvider(),
+                sample.sequence > lastMeasurementSequence,
                 abs(
-                    measurement.targetFrequencyHz -
+                    sample.measurement.targetFrequencyHz -
                     baseline.condition
                         .targetFrequencyHz
                 ) <= 0.5
             {
-                measurements.append(measurement)
+                lastMeasurementSequence =
+                    sample.sequence
+                measurements.append(
+                    sample.measurement
+                )
             }
 
             try? await Task.sleep(
@@ -666,6 +735,98 @@ final class AdaptiveControllerModel {
             treatment: treatment,
             comparison: comparison
         )
+    }
+
+    private func consumeStabilityHoldIfNeeded() -> Bool {
+        guard var guardState = stabilityGuard else {
+            return false
+        }
+
+        let held = guardState.consumeHoldIteration()
+        stabilityGuard = guardState
+        updateStabilityMetrics(
+            settings: acceptedSettings
+        )
+
+        if held {
+            lastAction = String(
+                format:
+                    "Stability hold • %d iterations remaining",
+                stabilityHoldIterationsRemaining
+            )
+        }
+
+        return held
+    }
+
+    private func recordStabilityAcceptance(
+        from previous: AdaptiveControllerSettings,
+        to accepted: AdaptiveControllerSettings,
+        dimension: AdaptiveAdjustmentDimension
+    ) -> String? {
+        guard var guardState = stabilityGuard else {
+            return nil
+        }
+
+        let reason = guardState.recordAcceptance(
+            from: previous,
+            to: accepted,
+            dimension: dimension
+        )
+        stabilityGuard = guardState
+        updateStabilityMetrics(
+            settings: accepted
+        )
+        return reason
+    }
+
+    private func recordStabilityRollback() {
+        guard var guardState = stabilityGuard else {
+            return
+        }
+
+        guardState.recordRollback()
+        stabilityGuard = guardState
+        updateStabilityMetrics(
+            settings: acceptedSettings
+        )
+    }
+
+    private func updateStabilityMetrics(
+        settings: AdaptiveControllerSettings?
+    ) {
+        guard let stabilityGuard else {
+            stabilityHoldCount = 0
+            stabilityHoldIterationsRemaining = 0
+            phaseExcursionDegrees = 0
+            outputExcursionPercent = 0
+            phaseDirectionReversalStreak = 0
+            amplitudeDirectionReversalStreak = 0
+            return
+        }
+
+        stabilityHoldCount =
+            stabilityGuard.holdCount
+        stabilityHoldIterationsRemaining =
+            stabilityGuard.holdIterationsRemaining
+        phaseDirectionReversalStreak =
+            stabilityGuard.phaseReversalStreak
+        amplitudeDirectionReversalStreak =
+            stabilityGuard.amplitudeReversalStreak
+
+        if let settings {
+            phaseExcursionDegrees =
+                stabilityGuard.phaseExcursionDegrees(
+                    for: settings
+                )
+            outputExcursionPercent =
+                stabilityGuard.outputExcursionPercent(
+                    for: settings
+                )
+        } else {
+            phaseExcursionDegrees = 0
+            outputExcursionPercent = 0
+        }
     }
 
     private func validateAcceptedObservation(
