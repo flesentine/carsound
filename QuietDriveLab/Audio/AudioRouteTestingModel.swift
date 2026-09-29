@@ -259,6 +259,13 @@ final class AudioRouteTestingModel {
                 microphoneSnapshot.fftTransformCount
         )
 
+        return save(record)
+    }
+
+    @discardableResult
+    func save(
+        _ record: AudioRouteTestRecord
+    ) -> AudioRouteTestRecord {
         records.insert(record, at: 0)
         persist()
         return record
