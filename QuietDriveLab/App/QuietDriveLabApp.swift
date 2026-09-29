@@ -12,6 +12,7 @@ struct QuietDriveLabApp: App {
     @State private var phaseRefinement = PhaseRefinementModel()
     @State private var amplitudeSearch = AmplitudeSearchModel()
     @State private var adaptiveController = AdaptiveControllerModel()
+    @State private var audioRouteTesting = AudioRouteTestingModel()
 
     var body: some Scene {
         WindowGroup {
@@ -26,6 +27,7 @@ struct QuietDriveLabApp: App {
                 .environment(phaseRefinement)
                 .environment(amplitudeSearch)
                 .environment(adaptiveController)
+                .environment(audioRouteTesting)
                 .task {
                     microphonePermission.refresh()
                     audioSession.refreshRoute()
