@@ -32,7 +32,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 1.5 • Dedicated cancellation experiment controls are available")
+                    Text("Lab build 1.8 • Cancellation experiments can be measured and saved locally")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
@@ -1185,4 +1185,5 @@ private extension View {
         .environment(MicrophoneCaptureModel())
         .environment(ToneGeneratorModel())
         .environment(BeforeAfterMeasurementModel())
+        .environment(ExperimentRecorderModel(storageURL: nil))
 }
