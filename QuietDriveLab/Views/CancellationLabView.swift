@@ -4,6 +4,7 @@ struct CancellationLabView: View {
     @Environment(AudioSessionModel.self) private var audioSession
     @Environment(MicrophoneCaptureModel.self) private var microphoneCapture
     @Environment(ToneGeneratorModel.self) private var toneGenerator
+    @Environment(BeforeAfterMeasurementModel.self) private var beforeAfterMeasurement
 
     var body: some View {
         ScrollView {
@@ -11,6 +12,7 @@ struct CancellationLabView: View {
                 readinessCard
                 targetCard
                 targetEnergyCard
+                beforeAfterCard
                 controlsCard
                 liveStateCard
                 safetyCard
@@ -203,6 +205,7 @@ struct CancellationLabView: View {
             .buttonStyle(.bordered)
         }
         .cancellationCard()
+        .disabled(beforeAfterMeasurement.state.isBusy)
     }
 
     private var targetEnergyCard: some View {
@@ -335,6 +338,142 @@ struct CancellationLabView: View {
         .cancellationCard()
     }
 
+    private var beforeAfterCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Before / After", systemImage: "arrow.left.arrow.right")
+                    .font(.headline)
+
+                Spacer()
+
+                if beforeAfterMeasurement.state.isBusy {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            Text("Each window averages 20 target-energy readings in linear power. Baseline is captured with generated output muted/off; treatment is captured with the tone actively audible.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if let progress = comparisonProgressText {
+                Text(progress)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Button("Capture Baseline") {
+                    captureBaseline()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    microphoneCapture.state != .capturing ||
+                    targetEnergyMeasurement == nil ||
+                    beforeAfterMeasurement.state.isBusy
+                )
+
+                Button("Capture Treatment") {
+                    captureTreatment()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    beforeAfterMeasurement.baseline == nil ||
+                    microphoneCapture.state != .capturing ||
+                    toneGenerator.state != .playing ||
+                    toneGenerator.isMuted ||
+                    targetEnergyMeasurement == nil ||
+                    !baselineMatchesCurrentTarget ||
+                    beforeAfterMeasurement.state.isBusy
+                )
+            }
+
+            if
+                beforeAfterMeasurement.baseline != nil,
+                !baselineMatchesCurrentTarget
+            {
+                Text("The target frequency changed after the baseline. Capture a new baseline before comparing treatment.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if
+                beforeAfterMeasurement.baseline != nil,
+                toneGenerator.state == .playing,
+                toneGenerator.isMuted
+            {
+                Text("Baseline captured. Set the phase/level you want to test, then Resume Tone before capturing treatment.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if case let .failed(message) = beforeAfterMeasurement.state {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            if let baseline = beforeAfterMeasurement.baseline {
+                Divider()
+
+                comparisonWindowRow(
+                    title: "Baseline",
+                    summary: baseline
+                )
+            }
+
+            if let treatment = beforeAfterMeasurement.treatment {
+                Divider()
+
+                comparisonWindowRow(
+                    title: "Treatment",
+                    summary: treatment
+                )
+            }
+
+            if let comparison = beforeAfterMeasurement.comparison {
+                Divider()
+
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Measured change")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text(comparisonResultText(comparison))
+                            .font(.title3.monospacedDigit().weight(.semibold))
+                    }
+
+                    Spacer()
+
+                    Text(
+                        String(
+                            format: "%+.2f dB treatment − baseline",
+                            comparison.treatmentMinusBaselineDB
+                        )
+                    )
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.trailing)
+                }
+
+                Text("A positive measured reduction means the treatment window had less target-band energy than baseline. This is a relative A/B result, not calibrated SPL.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if
+                beforeAfterMeasurement.baseline != nil ||
+                beforeAfterMeasurement.treatment != nil
+            {
+                Button("Reset Comparison") {
+                    beforeAfterMeasurement.reset()
+                }
+                .buttonStyle(.bordered)
+                .disabled(beforeAfterMeasurement.state.isBusy)
+            }
+        }
+        .cancellationCard()
+    }
+
     private var controlsCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Experiment Controls", systemImage: "slider.horizontal.3")
@@ -390,7 +529,7 @@ struct CancellationLabView: View {
             }
             .buttonStyle(.bordered)
 
-            Text("Watch Target Energy while changing phase or level. A lower narrow-band energy means less measured energy near the selected target, but formal before/after comparison begins in #17.")
+            Text("Use Before / After for an averaged A/B result. Experiment recording and saved run history begin in #18.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -489,6 +628,156 @@ struct CancellationLabView: View {
             )
         }
         .cancellationCard()
+    }
+
+    private var comparisonProgressText: String? {
+        switch beforeAfterMeasurement.state {
+        case .idle:
+            nil
+        case let .settling(window):
+            "\(window.rawValue): settling..."
+        case let .capturing(window, collected, required):
+            "\(window.rawValue): \(collected)/\(required) samples"
+        case .failed:
+            nil
+        }
+    }
+
+    private var baselineMatchesCurrentTarget: Bool {
+        guard let baseline = beforeAfterMeasurement.baseline else {
+            return true
+        }
+
+        return abs(
+            baseline.condition.targetFrequencyHz -
+            toneGenerator.frequencyHz
+        ) <= 0.5
+    }
+
+    private func captureBaseline() {
+        if
+            toneGenerator.state == .playing,
+            !toneGenerator.isMuted
+        {
+            toneGenerator.muteImmediately()
+        }
+
+        let target = toneGenerator.frequencyHz
+        let condition = MeasurementCondition(
+            targetFrequencyHz: target,
+            phaseDegrees: toneGenerator.phaseDegrees,
+            outputPercent: toneGenerator.outputPercent,
+            toneAudible: false
+        )
+
+        Task { @MainActor in
+            await beforeAfterMeasurement.capture(
+                window: .baseline,
+                condition: condition
+            ) {
+                measurementForTarget(target)
+            }
+        }
+    }
+
+    private func captureTreatment() {
+        let target = toneGenerator.frequencyHz
+        let condition = MeasurementCondition(
+            targetFrequencyHz: target,
+            phaseDegrees: toneGenerator.phaseDegrees,
+            outputPercent: toneGenerator.outputPercent,
+            toneAudible: true
+        )
+
+        Task { @MainActor in
+            await beforeAfterMeasurement.capture(
+                window: .treatment,
+                condition: condition
+            ) {
+                measurementForTarget(target)
+            }
+        }
+    }
+
+    private func measurementForTarget(
+        _ targetFrequencyHz: Double
+    ) -> TargetFrequencyEnergyMeasurement? {
+        let snapshot = microphoneCapture.snapshot
+
+        return TargetFrequencyEnergyMeter.measure(
+            spectrum: snapshot.smoothedSpectrum.balanced,
+            noiseFloor: snapshot.noiseFloor.bins,
+            targetFrequencyHz: targetFrequencyHz,
+            frequencyResolutionHz: snapshot.fftResolutionHz
+        )
+    }
+
+    @ViewBuilder
+    private func comparisonWindowRow(
+        title: String,
+        summary: TargetEnergyWindowSummary
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+
+                Spacer()
+
+                Text(
+                    String(
+                        format: "%.2f dBFS",
+                        summary.averageBandEnergyDBFS
+                    )
+                )
+                .font(.subheadline.monospacedDigit().weight(.semibold))
+            }
+
+            Text(
+                String(
+                    format: "%.0f Hz • phase %.0f° • output %.0f%% • %@",
+                    summary.condition.targetFrequencyHz,
+                    summary.condition.phaseDegrees,
+                    summary.condition.outputPercent,
+                    summary.condition.toneAudible
+                        ? "tone audible"
+                        : "tone muted/off"
+                )
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Text(
+                String(
+                    format: "%d samples • %.1f sec • σ %.2f dB",
+                    summary.sampleCount,
+                    summary.durationSeconds,
+                    summary.standardDeviationDB
+                )
+            )
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
+        }
+    }
+
+    private func comparisonResultText(
+        _ comparison: BeforeAfterComparison
+    ) -> String {
+        if abs(comparison.measuredReductionDB) < 0.05 {
+            return "No meaningful measured change • 0.00 dB"
+        }
+
+        if comparison.measuredReductionDB > 0 {
+            return String(
+                format: "Reduction %.2f dB",
+                comparison.measuredReductionDB
+            )
+        }
+
+        return String(
+            format: "Increase %.2f dB",
+            abs(comparison.measuredReductionDB)
+        )
     }
 
     private var targetEnergyMeasurement: TargetFrequencyEnergyMeasurement? {
