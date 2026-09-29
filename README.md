@@ -4,27 +4,30 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#20 — refined phase search** is implemented.
+Development effort **#21 — automatic amplitude search** is implemented.
 
-After the coarse 45° sweep from #19 identifies a promising region, QuietDrive can now run a **two-stage fine phase search** around that result.
+After coarse and fine phase search identify a refined phase, QuietDrive can now hold that phase fixed and automatically search output amplitude.
 
-**Stage 1** tests the coarse winner **±30° at 15° spacing**.
+The user's **currently selected output level becomes the search ceiling**. QuietDrive may test lower output levels, but it will not silently test above that selected level. The existing hard PCM ceiling remains underneath this additional user-controlled ceiling.
 
-**Stage 2** takes the best Stage-1 result and tests **±10° at 5° spacing**.
+The amplitude search runs in two stages:
 
-The phase grid wraps correctly across 0°/360°, and both stages reuse the same baseline, target frequency, output level, settling delay, target-energy measurement, and treatment-window averaging used by the existing experiment system.
+- **Stage 1:** coarse 10% output steps up to the selected ceiling.
+- **Stage 2:** ±10% around the coarse winner using 2% steps, clamped to the same ceiling.
 
-Every fine-search measurement is automatically saved to durable experiment history. The Cancellation Lab shows Stage 1 and Stage 2 result tables separately, identifies the best result from each stage, and then reports the **best refined phase across both stages**. The user can explicitly apply that refined phase after the search.
+A non-round ceiling is included exactly. For example, a 42% ceiling produces a coarse grid of **10%, 20%, 30%, 40%, 42%**.
 
-Generated output is automatically muted when refinement completes. Cancel Fine Search, MUTE NOW, and Stop All all safely terminate active refinement.
+Every level uses the same baseline, target frequency, refined phase, settling interval, 20-sample treatment window, and linear-power comparison math used elsewhere in the Cancellation Lab. Every result is automatically saved to durable experiment history.
 
-The refined result is now resolved to a **5° digital-phase grid**. It is still an experimentally measured digital setting rather than a direct measurement of physical acoustic phase.
+The winning output is the level with the **lowest measured treatment-band energy**. If energies are effectively equal, QuietDrive prefers lower variability; if those are also equal, it prefers the **lower output level**.
 
-With phase search now coarse-to-fine, **#21 — automatic amplitude search** can hold the refined phase fixed and search for the output level that produces the lowest target-band energy without exceeding the existing digital safety ceiling.
+The generator is automatically muted when the search completes. Cancel Amplitude Search, MUTE NOW, and Stop All safely terminate an active search.
+
+With target detection, measurement, A/B comparison, durable experiments, coarse/fine phase search, and amplitude search now in place, **#22 — adaptive controller** is the remaining Milestone 2 item.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, comparison summaries, phase-search results, and saved experiment metadata.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, comparison summaries, phase/amplitude search results, and saved experiment metadata.
 
 ## Generate the Xcode project
 
