@@ -1188,4 +1188,5 @@ private extension View {
         .environment(ExperimentRecorderModel(storageURL: nil))
         .environment(PhaseSweepModel())
         .environment(PhaseRefinementModel())
+        .environment(AmplitudeSearchModel())
 }
