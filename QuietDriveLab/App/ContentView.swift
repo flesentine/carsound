@@ -1189,4 +1189,5 @@ private extension View {
         .environment(PhaseSweepModel())
         .environment(PhaseRefinementModel())
         .environment(AmplitudeSearchModel())
+        .environment(AdaptiveControllerModel())
 }
