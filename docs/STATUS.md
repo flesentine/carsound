@@ -19,28 +19,23 @@
 - [x] #15 Build Lab cancellation control screen
 - [x] #16 Measure target-frequency energy
 - [x] #17 Create before/after measurement
-  - new reusable before/after measurement model
-  - baseline and treatment are measured as windows rather than single FFT frames
-  - each window collects 20 valid target-energy samples at 10 Hz
-  - 350 ms settling delay before each window begins
-  - window averages are calculated in linear power before converting back to dB
-  - baseline capture automatically mutes generated output if it is currently audible
-  - baseline can also be captured with the tone already stopped/muted
-  - treatment capture requires the generated tone to be actively playing and unmuted
-  - treatment is disabled if the target frequency changed after baseline
-  - changing target requires a fresh baseline
-  - baseline capture clears any previous treatment result
-  - comparison reports treatment-minus-baseline dB and measured reduction dB
-  - positive measured reduction means less target-band energy in treatment than baseline
-  - window summaries retain target frequency, phase, output level, tone state, sample count, duration, min/max energy, center level, and variability
-  - Cancellation Lab shows baseline and treatment averages plus standard deviation
-  - live progress shows settling and sample collection count
-  - target/phase/output controls are locked during a measurement window
-  - ordinary start/stop experiment controls are locked during a measurement window
-  - MUTE NOW remains available during measurement
-  - Stop All cancels any active comparison window and stops tone/capture
-  - comparison capture is generation-cancellable so stale async collection cannot overwrite a reset state
-  - tests cover power-domain window averaging, positive reduction, measured increase, target mismatch rejection, and mixed-target sample rejection
+- [x] #18 Add experiment recorder
+  - durable local experiment history
+  - experiment records stored as JSON under Application Support
+  - no raw microphone audio is stored
+  - each saved run records timestamp, target frequency, treatment phase, treatment output level, baseline energy, treatment energy, treatment-minus-baseline dB, measured reduction dB, center levels, baseline/treatment variability, sample counts, window durations, input route, and output route
+  - Save Run button appears after a completed A/B comparison
+  - accidental repeat saving of the same displayed comparison is disabled within the active comparison state
+  - saved runs are displayed newest-first in the Cancellation Lab
+  - history shows phase/output/target, reduction or increase, baseline/treatment values, variability, sample counts, route summaries, and timestamp
+  - per-run Delete Run control
+  - Clear All Saved Runs control
+  - history view shows the 20 most recent runs while preserving all saved records locally
+  - recorder errors are surfaced in the Lab UI instead of silently discarding failures
+  - JSON writes use atomic replacement
+  - history reloads automatically when the recorder model initializes
+  - persistence tests use temporary JSON files and cover save/reload, field capture, delete persistence, and clear-all persistence
+  - fixed an optional-value test compile issue found by CI
   - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Milestone status
@@ -55,7 +50,7 @@
 - [x] #15 Build Lab cancellation control screen
 - [x] #16 Measure target-frequency energy
 - [x] #17 Create before/after measurement
-- [ ] #18 Add experiment recorder
+- [x] #18 Add experiment recorder
 - [ ] #19 Add automatic phase sweep
 - [ ] #20 Refine phase search
 - [ ] #21 Add automatic amplitude search
@@ -63,4 +58,4 @@
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Before/after values are relative digital target-band measurements, not calibrated acoustic SPL. Meaningful physical comparisons still require a real iPhone/car test with stable phone position, route, vehicle volume, and driving conditions.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Saved experiments contain relative digital measurement summaries, not calibrated acoustic SPL and not raw audio. Physical iPhone/car testing remains necessary before interpreting reductions as repeatable acoustic cancellation.
