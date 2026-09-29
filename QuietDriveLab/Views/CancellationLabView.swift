@@ -1449,7 +1449,8 @@ struct CancellationLabView: View {
                 beforeAfterMeasurement.state.isBusy ||
                 phaseSweep.state.isRunning ||
                 phaseRefinement.state.isRunning ||
-                amplitudeSearch.state.isRunning
+                amplitudeSearch.state.isRunning ||
+                adaptiveController.state.isRunning
             )
 
             Button("Stop All") {
