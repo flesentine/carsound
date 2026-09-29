@@ -1051,6 +1051,226 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testExperimentRecordCapturesComparisonAndRoutes() throws {
+        let comparison = try XCTUnwrap(
+            BeforeAfterMeasurementMath.compare(
+                baseline: TargetEnergyWindowSummary(
+                    condition: MeasurementCondition(
+                        targetFrequencyHz: 80,
+                        phaseDegrees: 0,
+                        outputPercent: 50,
+                        toneAudible: false
+                    ),
+                    sampleCount: 20,
+                    durationSeconds: 1.9,
+                    averageBandEnergyDBFS: -25,
+                    minimumBandEnergyDBFS: -26,
+                    maximumBandEnergyDBFS: -24,
+                    averageCenterLevelDBFS: -28,
+                    standardDeviationDB: 0.6
+                ),
+                treatment: TargetEnergyWindowSummary(
+                    condition: MeasurementCondition(
+                        targetFrequencyHz: 80,
+                        phaseDegrees: 180,
+                        outputPercent: 42,
+                        toneAudible: true
+                    ),
+                    sampleCount: 20,
+                    durationSeconds: 1.9,
+                    averageBandEnergyDBFS: -29,
+                    minimumBandEnergyDBFS: -30,
+                    maximumBandEnergyDBFS: -28,
+                    averageCenterLevelDBFS: -32,
+                    standardDeviationDB: 0.4
+                )
+            )
+        )
+
+        let record = ExperimentRecord(
+            id: UUID(
+                uuidString: "00000000-0000-0000-0000-000000000001"
+            )!,
+            recordedAt: Date(timeIntervalSince1970: 1_000),
+            comparison: comparison,
+            inputRoute: "iPhone Microphone",
+            outputRoute: "Car Audio"
+        )
+
+        XCTAssertEqual(record.targetFrequencyHz, 80, accuracy: 0.001)
+        XCTAssertEqual(record.phaseDegrees, 180, accuracy: 0.001)
+        XCTAssertEqual(record.outputPercent, 42, accuracy: 0.001)
+        XCTAssertEqual(record.measuredReductionDB, 4, accuracy: 0.001)
+        XCTAssertEqual(record.baselineStandardDeviationDB, 0.6, accuracy: 0.001)
+        XCTAssertEqual(record.treatmentStandardDeviationDB, 0.4, accuracy: 0.001)
+        XCTAssertEqual(record.inputRoute, "iPhone Microphone")
+        XCTAssertEqual(record.outputRoute, "Car Audio")
+    }
+
+    @MainActor
+    func testExperimentRecorderPersistsAndReloadsHistory() throws {
+        let storageURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "quietdrive-experiment-\(UUID().uuidString).json"
+            )
+        defer {
+            try? FileManager.default.removeItem(at: storageURL)
+        }
+
+        let comparison = try XCTUnwrap(
+            BeforeAfterMeasurementMath.compare(
+                baseline: TargetEnergyWindowSummary(
+                    condition: MeasurementCondition(
+                        targetFrequencyHz: 74,
+                        phaseDegrees: 0,
+                        outputPercent: 50,
+                        toneAudible: false
+                    ),
+                    sampleCount: 20,
+                    durationSeconds: 1.9,
+                    averageBandEnergyDBFS: -24,
+                    minimumBandEnergyDBFS: -25,
+                    maximumBandEnergyDBFS: -23,
+                    averageCenterLevelDBFS: -27,
+                    standardDeviationDB: 0.5
+                ),
+                treatment: TargetEnergyWindowSummary(
+                    condition: MeasurementCondition(
+                        targetFrequencyHz: 74,
+                        phaseDegrees: 135,
+                        outputPercent: 40,
+                        toneAudible: true
+                    ),
+                    sampleCount: 20,
+                    durationSeconds: 1.9,
+                    averageBandEnergyDBFS: -27.5,
+                    minimumBandEnergyDBFS: -28,
+                    maximumBandEnergyDBFS: -27,
+                    averageCenterLevelDBFS: -30,
+                    standardDeviationDB: 0.4
+                )
+            )
+        )
+
+        let recorder = ExperimentRecorderModel(
+            storageURL: storageURL
+        )
+        let saved = recorder.record(
+            comparison: comparison,
+            inputRoute: "Built-in microphone",
+            outputRoute: "Bluetooth A2DP",
+            recordedAt: Date(timeIntervalSince1970: 2_000)
+        )
+
+        XCTAssertEqual(recorder.records.count, 1)
+        XCTAssertNil(recorder.lastError)
+
+        let reloaded = ExperimentRecorderModel(
+            storageURL: storageURL
+        )
+
+        XCTAssertEqual(reloaded.records.count, 1)
+        XCTAssertEqual(reloaded.records.first?.id, saved.id)
+        XCTAssertEqual(
+            reloaded.records.first?.measuredReductionDB,
+            3.5,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            reloaded.records.first?.outputRoute,
+            "Bluetooth A2DP"
+        )
+    }
+
+    @MainActor
+    func testExperimentRecorderDeleteAndClearPersist() throws {
+        let storageURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "quietdrive-experiment-delete-\(UUID().uuidString).json"
+            )
+        defer {
+            try? FileManager.default.removeItem(at: storageURL)
+        }
+
+        func makeComparison(
+            phase: Double,
+            reduction: Double
+        ) throws -> BeforeAfterComparison {
+            try XCTUnwrap(
+                BeforeAfterMeasurementMath.compare(
+                    baseline: TargetEnergyWindowSummary(
+                        condition: MeasurementCondition(
+                            targetFrequencyHz: 80,
+                            phaseDegrees: 0,
+                            outputPercent: 50,
+                            toneAudible: false
+                        ),
+                        sampleCount: 20,
+                        durationSeconds: 1.9,
+                        averageBandEnergyDBFS: -25,
+                        minimumBandEnergyDBFS: -26,
+                        maximumBandEnergyDBFS: -24,
+                        averageCenterLevelDBFS: -28,
+                        standardDeviationDB: 0.5
+                    ),
+                    treatment: TargetEnergyWindowSummary(
+                        condition: MeasurementCondition(
+                            targetFrequencyHz: 80,
+                            phaseDegrees: phase,
+                            outputPercent: 50,
+                            toneAudible: true
+                        ),
+                        sampleCount: 20,
+                        durationSeconds: 1.9,
+                        averageBandEnergyDBFS: -25 - reduction,
+                        minimumBandEnergyDBFS: -26 - reduction,
+                        maximumBandEnergyDBFS: -24 - reduction,
+                        averageCenterLevelDBFS: -28 - reduction,
+                        standardDeviationDB: 0.4
+                    )
+                )
+            )
+        }
+
+        let recorder = ExperimentRecorderModel(
+            storageURL: storageURL
+        )
+        let first = recorder.record(
+            comparison: try makeComparison(
+                phase: 90,
+                reduction: 1
+            ),
+            inputRoute: "Mic",
+            outputRoute: "Car"
+        )
+        _ = recorder.record(
+            comparison: try makeComparison(
+                phase: 180,
+                reduction: 3
+            ),
+            inputRoute: "Mic",
+            outputRoute: "Car"
+        )
+
+        XCTAssertEqual(recorder.records.count, 2)
+
+        recorder.delete(id: first.id)
+        XCTAssertEqual(recorder.records.count, 1)
+
+        let afterDelete = ExperimentRecorderModel(
+            storageURL: storageURL
+        )
+        XCTAssertEqual(afterDelete.records.count, 1)
+
+        recorder.clearAll()
+        XCTAssertTrue(recorder.records.isEmpty)
+
+        let afterClear = ExperimentRecorderModel(
+            storageURL: storageURL
+        )
+        XCTAssertTrue(afterClear.records.isEmpty)
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
