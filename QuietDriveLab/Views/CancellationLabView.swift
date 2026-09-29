@@ -486,7 +486,8 @@ struct CancellationLabView: View {
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(
-                    comparisonKey(comparison) == lastSavedComparisonKey
+                    comparisonKey(comparison) == lastSavedComparisonKey ||
+                    phaseSweep.state.isRunning
                 )
             }
 
@@ -499,7 +500,10 @@ struct CancellationLabView: View {
                     lastSavedComparisonKey = nil
                 }
                 .buttonStyle(.bordered)
-                .disabled(beforeAfterMeasurement.state.isBusy)
+                .disabled(
+                    beforeAfterMeasurement.state.isBusy ||
+                    phaseSweep.state.isRunning
+                )
             }
         }
         .cancellationCard()
@@ -841,7 +845,8 @@ struct CancellationLabView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(
                     audioSession.state != .active ||
-                    beforeAfterMeasurement.state.isBusy
+                    beforeAfterMeasurement.state.isBusy ||
+                    phaseSweep.state.isRunning
                 )
             }
 
