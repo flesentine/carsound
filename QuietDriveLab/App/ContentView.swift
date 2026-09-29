@@ -32,7 +32,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 1.8 • Cancellation experiments can be measured and saved locally")
+                    Text("Lab build 1.9 • Automatic coarse phase sweep is available")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
