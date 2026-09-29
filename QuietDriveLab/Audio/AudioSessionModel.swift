@@ -30,6 +30,8 @@ final class AudioSessionModel {
     private(set) var outputs: [Port] = []
     private(set) var sampleRate: Double = 0
     private(set) var ioBufferDuration: TimeInterval = 0
+    private(set) var inputLatency: TimeInterval = 0
+    private(set) var outputLatency: TimeInterval = 0
     private(set) var lastRouteChangeReason = "None"
 
     @ObservationIgnored
@@ -92,6 +94,8 @@ final class AudioSessionModel {
         outputs = session.currentRoute.outputs.map(Self.makePort)
         sampleRate = session.sampleRate
         ioBufferDuration = session.ioBufferDuration
+        inputLatency = session.inputLatency
+        outputLatency = session.outputLatency
     }
 
     private func installObservers() {
