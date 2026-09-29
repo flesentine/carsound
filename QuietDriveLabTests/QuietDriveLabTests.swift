@@ -1583,6 +1583,216 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testAmplitudeSearchCoarseGridHonorsUserCeiling() {
+        XCTAssertEqual(
+            AmplitudeSearchMath.coarseLevels(
+                ceilingPercent: 50
+            ),
+            [10, 20, 30, 40, 50]
+        )
+
+        XCTAssertEqual(
+            AmplitudeSearchMath.coarseLevels(
+                ceilingPercent: 42
+            ),
+            [10, 20, 30, 40, 42]
+        )
+    }
+
+    func testAmplitudeSearchNeverBuildsLevelsAboveCeiling() {
+        let levels =
+            AmplitudeSearchMath.normalizedUniqueLevels(
+                [5, 25, 55, 120],
+                ceilingPercent: 50
+            )
+
+        XCTAssertEqual(levels, [5, 25, 50])
+        XCTAssertTrue(
+            levels.allSatisfy { $0 <= 50 }
+        )
+    }
+
+    func testAmplitudeSearchRejectsCeilingBelowMinimum() {
+        XCTAssertTrue(
+            AmplitudeSearchMath.coarseLevels(
+                ceilingPercent: 1
+            ).isEmpty
+        )
+    }
+
+    func testAmplitudeSearchFineGridUsesTwoPercentSteps() {
+        XCTAssertEqual(
+            AmplitudeSearchMath.fineLevels(
+                centeredAt: 30,
+                ceilingPercent: 50
+            ),
+            [
+                20, 22, 24, 26, 28, 30,
+                32, 34, 36, 38, 40
+            ]
+        )
+    }
+
+    func testAmplitudeSearchFineGridClampsToUserCeiling() {
+        XCTAssertEqual(
+            AmplitudeSearchMath.fineLevels(
+                centeredAt: 48,
+                ceilingPercent: 50
+            ),
+            [38, 40, 42, 44, 46, 48, 50]
+        )
+    }
+
+    func testAmplitudeSearchBestResultChoosesLowestEnergy() throws {
+        func makeResult(
+            outputPercent: Double,
+            energy: Double,
+            deviation: Double
+        ) throws -> AmplitudeSearchResult {
+            let baseline = TargetEnergyWindowSummary(
+                condition: MeasurementCondition(
+                    targetFrequencyHz: 80,
+                    phaseDegrees: 0,
+                    outputPercent: 50,
+                    toneAudible: false
+                ),
+                sampleCount: 20,
+                durationSeconds: 1.9,
+                averageBandEnergyDBFS: -25,
+                minimumBandEnergyDBFS: -26,
+                maximumBandEnergyDBFS: -24,
+                averageCenterLevelDBFS: -28,
+                standardDeviationDB: 0.5
+            )
+            let treatment = TargetEnergyWindowSummary(
+                condition: MeasurementCondition(
+                    targetFrequencyHz: 80,
+                    phaseDegrees: 140,
+                    outputPercent: outputPercent,
+                    toneAudible: true
+                ),
+                sampleCount: 20,
+                durationSeconds: 1.9,
+                averageBandEnergyDBFS: energy,
+                minimumBandEnergyDBFS: energy - 1,
+                maximumBandEnergyDBFS: energy + 1,
+                averageCenterLevelDBFS: energy - 2,
+                standardDeviationDB: deviation
+            )
+            let comparison = try XCTUnwrap(
+                BeforeAfterMeasurementMath.compare(
+                    baseline: baseline,
+                    treatment: treatment
+                )
+            )
+
+            return AmplitudeSearchResult(
+                outputPercent: outputPercent,
+                phaseDegrees: 140,
+                treatment: treatment,
+                comparison: comparison
+            )
+        }
+
+        let best = try XCTUnwrap(
+            AmplitudeSearchMath.bestResult(
+                from: [
+                    try makeResult(
+                        outputPercent: 20,
+                        energy: -28,
+                        deviation: 0.4
+                    ),
+                    try makeResult(
+                        outputPercent: 30,
+                        energy: -32,
+                        deviation: 0.6
+                    ),
+                    try makeResult(
+                        outputPercent: 40,
+                        energy: -30,
+                        deviation: 0.3
+                    )
+                ]
+            )
+        )
+
+        XCTAssertEqual(
+            best.outputPercent,
+            30,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            best.comparison.measuredReductionDB,
+            7,
+            accuracy: 0.001
+        )
+    }
+
+    func testAmplitudeSearchTiePrefersLowerOutputAfterVariabilityTie() throws {
+        func makeResult(
+            outputPercent: Double
+        ) throws -> AmplitudeSearchResult {
+            let baseline = TargetEnergyWindowSummary(
+                condition: MeasurementCondition(
+                    targetFrequencyHz: 80,
+                    phaseDegrees: 0,
+                    outputPercent: 50,
+                    toneAudible: false
+                ),
+                sampleCount: 20,
+                durationSeconds: 1.9,
+                averageBandEnergyDBFS: -25,
+                minimumBandEnergyDBFS: -26,
+                maximumBandEnergyDBFS: -24,
+                averageCenterLevelDBFS: -28,
+                standardDeviationDB: 0.5
+            )
+            let treatment = TargetEnergyWindowSummary(
+                condition: MeasurementCondition(
+                    targetFrequencyHz: 80,
+                    phaseDegrees: 140,
+                    outputPercent: outputPercent,
+                    toneAudible: true
+                ),
+                sampleCount: 20,
+                durationSeconds: 1.9,
+                averageBandEnergyDBFS: -30,
+                minimumBandEnergyDBFS: -31,
+                maximumBandEnergyDBFS: -29,
+                averageCenterLevelDBFS: -32,
+                standardDeviationDB: 0.4
+            )
+            let comparison = try XCTUnwrap(
+                BeforeAfterMeasurementMath.compare(
+                    baseline: baseline,
+                    treatment: treatment
+                )
+            )
+
+            return AmplitudeSearchResult(
+                outputPercent: outputPercent,
+                phaseDegrees: 140,
+                treatment: treatment,
+                comparison: comparison
+            )
+        }
+
+        let best = try XCTUnwrap(
+            AmplitudeSearchMath.bestResult(
+                from: [
+                    try makeResult(outputPercent: 40),
+                    try makeResult(outputPercent: 20)
+                ]
+            )
+        )
+
+        XCTAssertEqual(
+            best.outputPercent,
+            20,
+            accuracy: 0.001
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
