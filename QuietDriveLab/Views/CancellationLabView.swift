@@ -9,6 +9,7 @@ struct CancellationLabView: View {
     @Environment(PhaseSweepModel.self) private var phaseSweep
     @Environment(PhaseRefinementModel.self) private var phaseRefinement
     @Environment(AmplitudeSearchModel.self) private var amplitudeSearch
+    @Environment(AdaptiveControllerModel.self) private var adaptiveController
 
     @State private var lastSavedComparisonKey: String?
     @State private var phaseRefinementProgressText: String?
@@ -24,6 +25,7 @@ struct CancellationLabView: View {
                 phaseSweepCard
                 phaseRefinementCard
                 amplitudeSearchCard
+                adaptiveControllerCard
                 experimentHistoryCard
                 controlsCard
                 liveStateCard
@@ -221,7 +223,8 @@ struct CancellationLabView: View {
             beforeAfterMeasurement.state.isBusy ||
             phaseSweep.state.isRunning ||
             phaseRefinement.state.isRunning ||
-            amplitudeSearch.state.isRunning
+            amplitudeSearch.state.isRunning ||
+            adaptiveController.state.isRunning
         )
     }
 
@@ -390,7 +393,8 @@ struct CancellationLabView: View {
                     beforeAfterMeasurement.state.isBusy ||
                     phaseSweep.state.isRunning ||
                     phaseRefinement.state.isRunning ||
-                    amplitudeSearch.state.isRunning
+                    amplitudeSearch.state.isRunning ||
+                    adaptiveController.state.isRunning
                 )
 
                 Button("Capture Treatment") {
@@ -407,7 +411,8 @@ struct CancellationLabView: View {
                     beforeAfterMeasurement.state.isBusy ||
                     phaseSweep.state.isRunning ||
                     phaseRefinement.state.isRunning ||
-                    amplitudeSearch.state.isRunning
+                    amplitudeSearch.state.isRunning ||
+                    adaptiveController.state.isRunning
                 )
             }
 
@@ -501,7 +506,8 @@ struct CancellationLabView: View {
                     comparisonKey(comparison) == lastSavedComparisonKey ||
                     phaseSweep.state.isRunning ||
                     phaseRefinement.state.isRunning ||
-                    amplitudeSearch.state.isRunning
+                    amplitudeSearch.state.isRunning ||
+                    adaptiveController.state.isRunning
                 )
             }
 
@@ -518,7 +524,8 @@ struct CancellationLabView: View {
                     beforeAfterMeasurement.state.isBusy ||
                     phaseSweep.state.isRunning ||
                     phaseRefinement.state.isRunning ||
-                    amplitudeSearch.state.isRunning
+                    amplitudeSearch.state.isRunning ||
+                    adaptiveController.state.isRunning
                 )
             }
         }
@@ -683,7 +690,10 @@ struct CancellationLabView: View {
             }
         }
         .cancellationCard()
-        .disabled(amplitudeSearch.state.isRunning)
+        .disabled(
+            amplitudeSearch.state.isRunning ||
+            adaptiveController.state.isRunning
+        )
     }
 
     private var phaseRefinementCard: some View {
@@ -862,7 +872,10 @@ struct CancellationLabView: View {
             }
         }
         .cancellationCard()
-        .disabled(amplitudeSearch.state.isRunning)
+        .disabled(
+            amplitudeSearch.state.isRunning ||
+            adaptiveController.state.isRunning
+        )
     }
 
     private var amplitudeSearchCard: some View {
@@ -1072,6 +1085,161 @@ struct CancellationLabView: View {
             }
         }
         .cancellationCard()
+        .disabled(adaptiveController.state.isRunning)
+    }
+
+    private var adaptiveControllerCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Adaptive Controller", systemImage: "waveform.path.badge.plus")
+                    .font(.headline)
+
+                Spacer()
+
+                if adaptiveController.state.isRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            Text("Starts from the best phase/output found by the search pipeline, then alternates tiny local probes: ±5° phase and ±2% output. A change must improve target-band energy by at least 0.35 dB or it is rolled back.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if let seed = amplitudeSearch.bestResult {
+                LabeledContent(
+                    "Optimized starting point",
+                    value: String(
+                        format: "%.0f° • %.0f%%",
+                        seed.phaseDegrees,
+                        seed.outputPercent
+                    )
+                )
+
+                LabeledContent(
+                    "Adaptive output ceiling",
+                    value: String(
+                        format: "%.0f%%",
+                        amplitudeSearch.searchCeilingPercent
+                    )
+                )
+            }
+
+            if let status = adaptiveControllerStatusText {
+                Text(status)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Button("Start Adaptive Controller") {
+                    startAdaptiveController()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canStartAdaptiveController)
+
+                if adaptiveController.state.isRunning {
+                    Button("Stop + Mute") {
+                        adaptiveController.cancel()
+                        toneGenerator.muteImmediately()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            if amplitudeSearch.bestResult == nil {
+                Text("Complete automatic amplitude search first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if toneGenerator.state == .playing &&
+                toneGenerator.isMuted
+            {
+                Text("Resume the tone before starting adaptive control.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if case let .failed(message) = adaptiveController.state {
+                Text("FAIL-SAFE: \(message)")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(.red)
+            }
+
+            if let settings = adaptiveController.acceptedSettings {
+                Divider()
+
+                LabeledContent(
+                    "Accepted phase",
+                    value: String(
+                        format: "%.0f°",
+                        settings.phaseDegrees
+                    )
+                )
+
+                LabeledContent(
+                    "Accepted output",
+                    value: String(
+                        format: "%.0f%%",
+                        settings.outputPercent
+                    )
+                )
+            }
+
+            if let observation = adaptiveController.lastObservation {
+                LabeledContent(
+                    "Last target energy",
+                    value: String(
+                        format: "%.2f dBFS",
+                        observation.treatment.averageBandEnergyDBFS
+                    )
+                )
+
+                LabeledContent(
+                    "Last reduction",
+                    value: String(
+                        format: "%.2f dB",
+                        observation.comparison.measuredReductionDB
+                    )
+                )
+
+                LabeledContent(
+                    "Measurement variability",
+                    value: String(
+                        format: "σ %.2f dB",
+                        observation.treatment.standardDeviationDB
+                    )
+                )
+            }
+
+            LabeledContent(
+                "Iterations",
+                value: "\(adaptiveController.iterationCount)"
+            )
+
+            LabeledContent(
+                "Accepted adjustments",
+                value: "\(adaptiveController.acceptedAdjustmentCount)"
+            )
+
+            LabeledContent(
+                "Rollbacks",
+                value: "\(adaptiveController.rollbackCount)"
+            )
+
+            LabeledContent(
+                "Last action",
+                value: adaptiveController.lastAction
+            )
+
+            Text("Fail-safe mute triggers on route/session loss, missing target measurement, repeated unstable windows, or measured target amplification of 3 dB or more above baseline.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("Experimental lab control only. Do not operate these controls while driving; use a passenger or a controlled stationary/test setting.")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
     }
 
     private var experimentHistoryCard: some View {
@@ -1237,7 +1405,8 @@ struct CancellationLabView: View {
                     beforeAfterMeasurement.state.isBusy ||
                     phaseSweep.state.isRunning ||
                     phaseRefinement.state.isRunning ||
-                    amplitudeSearch.state.isRunning
+                    amplitudeSearch.state.isRunning ||
+                    adaptiveController.state.isRunning
                 )
 
                 Button(
@@ -1259,7 +1428,8 @@ struct CancellationLabView: View {
                     beforeAfterMeasurement.state.isBusy ||
                     phaseSweep.state.isRunning ||
                     phaseRefinement.state.isRunning ||
-                    amplitudeSearch.state.isRunning
+                    amplitudeSearch.state.isRunning ||
+                    adaptiveController.state.isRunning
                 )
             }
 
@@ -1289,12 +1459,13 @@ struct CancellationLabView: View {
                 phaseRefinementProgressText = nil
                 amplitudeSearch.cancel()
                 amplitudeSearchProgressText = nil
+                adaptiveController.cancel()
                 toneGenerator.stopImmediately()
                 microphoneCapture.stopCapture()
             }
             .buttonStyle(.bordered)
 
-            Text("Use coarse phase, fine phase, then amplitude search in order. #22 combines these measurements into an adaptive controller.")
+            Text("The full manual-search pipeline now feeds the adaptive controller. Stop All remains the hard stop for every measurement/search/control loop.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -1379,6 +1550,7 @@ struct CancellationLabView: View {
                     phaseRefinementProgressText = nil
                     amplitudeSearch.cancel()
                     amplitudeSearchProgressText = nil
+                    adaptiveController.cancel()
                     toneGenerator.muteImmediately()
                 }
             }
@@ -1400,6 +1572,148 @@ struct CancellationLabView: View {
         .cancellationCard()
     }
 
+    private var adaptiveControllerStatusText: String? {
+        switch adaptiveController.state {
+        case .idle:
+            nil
+        case .starting:
+            "Starting • verifying optimized settings"
+        case let .monitoring(iteration):
+            "Iteration \(iteration) • monitoring accepted settings"
+        case let .probing(
+            dimension,
+            value,
+            candidate,
+            total
+        ):
+            if dimension == .phase {
+                return String(
+                    format:
+                        "%@ probe %d/%d • %.0f°",
+                    dimension.rawValue,
+                    candidate,
+                    total,
+                    value
+                )
+            }
+
+            return String(
+                format:
+                    "%@ probe %d/%d • %.0f%%",
+                dimension.rawValue,
+                candidate,
+                total,
+                value
+            )
+        case .running:
+            "Running • accepted settings active"
+        case .failed:
+            nil
+        }
+    }
+
+    private var canStartAdaptiveController: Bool {
+        amplitudeSearch.bestResult != nil &&
+        beforeAfterMeasurement.baseline != nil &&
+        baselineMatchesCurrentTarget &&
+        microphoneCapture.state == .capturing &&
+        microphoneCapture.analysisMode == .ancFocus &&
+        audioSession.state == .active &&
+        toneGenerator.state == .playing &&
+        !toneGenerator.isMuted &&
+        targetEnergyMeasurement != nil &&
+        !beforeAfterMeasurement.state.isBusy &&
+        !phaseSweep.state.isRunning &&
+        !phaseRefinement.state.isRunning &&
+        !amplitudeSearch.state.isRunning &&
+        !adaptiveController.state.isRunning
+    }
+
+    private func startAdaptiveController() {
+        guard
+            let optimized = amplitudeSearch.bestResult,
+            let baseline = beforeAfterMeasurement.baseline
+        else {
+            return
+        }
+
+        let target = baseline.condition.targetFrequencyHz
+        let inputRoute = inputRouteSummary
+        let outputRoute = outputRouteSummary
+        let ceiling = amplitudeSearch.searchCeilingPercent
+        let seed = AdaptiveControllerSettings(
+            phaseDegrees: optimized.phaseDegrees,
+            outputPercent: optimized.outputPercent
+        )
+
+        Task { @MainActor in
+            await adaptiveController.run(
+                seedSettings: seed,
+                ceilingPercent: ceiling,
+                baseline: baseline,
+                applySettings: { settings in
+                    toneGenerator.setPhaseDegrees(
+                        settings.phaseDegrees
+                    )
+                    toneGenerator.setOutputPercent(
+                        settings.outputPercent
+                    )
+                },
+                measurementProvider: {
+                    measurementForTarget(target)
+                },
+                safetyCheck: {
+                    if audioSession.state != .active {
+                        return "Audio session became inactive."
+                    }
+
+                    if microphoneCapture.state != .capturing {
+                        return "Microphone capture stopped."
+                    }
+
+                    if microphoneCapture.analysisMode != .ancFocus {
+                        return "ANC Focus mode is no longer active."
+                    }
+
+                    if toneGenerator.state != .playing {
+                        return "Tone generator stopped."
+                    }
+
+                    if toneGenerator.isMuted {
+                        return "Tone output was muted."
+                    }
+
+                    if abs(
+                        toneGenerator.frequencyHz -
+                        target
+                    ) > 0.5 {
+                        return "Target frequency changed."
+                    }
+
+                    if inputRouteSummary != inputRoute {
+                        return "Audio input route changed."
+                    }
+
+                    if outputRouteSummary != outputRoute {
+                        return "Audio output route changed."
+                    }
+
+                    return nil
+                },
+                onAcceptedComparison: { comparison in
+                    _ = experimentRecorder.record(
+                        comparison: comparison,
+                        inputRoute: inputRoute,
+                        outputRoute: outputRoute
+                    )
+                },
+                onFailSafe: { _ in
+                    toneGenerator.muteImmediately()
+                }
+            )
+        }
+    }
+
     private var canStartAmplitudeSearch: Bool {
         phaseRefinement.bestResult != nil &&
         beforeAfterMeasurement.baseline != nil &&
@@ -1413,10 +1727,13 @@ struct CancellationLabView: View {
         !beforeAfterMeasurement.state.isBusy &&
         !phaseSweep.state.isRunning &&
         !phaseRefinement.state.isRunning &&
-        !amplitudeSearch.state.isRunning
+        !amplitudeSearch.state.isRunning &&
+        !adaptiveController.state.isRunning
     }
 
     private func startAmplitudeSearch() {
+        adaptiveController.reset()
+
         guard
             let refinedBest = phaseRefinement.bestResult,
             let baseline = beforeAfterMeasurement.baseline
@@ -1509,10 +1826,12 @@ struct CancellationLabView: View {
         !beforeAfterMeasurement.state.isBusy &&
         !phaseSweep.state.isRunning &&
         !phaseRefinement.state.isRunning &&
-        !amplitudeSearch.state.isRunning
+        !amplitudeSearch.state.isRunning &&
+        !adaptiveController.state.isRunning
     }
 
     private func startPhaseRefinement() {
+        adaptiveController.reset()
         amplitudeSearch.reset()
         amplitudeSearchProgressText = nil
 
@@ -1638,10 +1957,12 @@ struct CancellationLabView: View {
         !beforeAfterMeasurement.state.isBusy &&
         !phaseSweep.state.isRunning &&
         !phaseRefinement.state.isRunning &&
-        !amplitudeSearch.state.isRunning
+        !amplitudeSearch.state.isRunning &&
+        !adaptiveController.state.isRunning
     }
 
     private func startPhaseSweep() {
+        adaptiveController.reset()
         phaseRefinement.reset()
         phaseRefinementProgressText = nil
         amplitudeSearch.reset()
