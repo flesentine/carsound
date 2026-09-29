@@ -8,9 +8,11 @@ struct CancellationLabView: View {
     @Environment(ExperimentRecorderModel.self) private var experimentRecorder
     @Environment(PhaseSweepModel.self) private var phaseSweep
     @Environment(PhaseRefinementModel.self) private var phaseRefinement
+    @Environment(AmplitudeSearchModel.self) private var amplitudeSearch
 
     @State private var lastSavedComparisonKey: String?
     @State private var phaseRefinementProgressText: String?
+    @State private var amplitudeSearchProgressText: String?
 
     var body: some View {
         ScrollView {
@@ -21,6 +23,7 @@ struct CancellationLabView: View {
                 beforeAfterCard
                 phaseSweepCard
                 phaseRefinementCard
+                amplitudeSearchCard
                 experimentHistoryCard
                 controlsCard
                 liveStateCard
@@ -217,7 +220,8 @@ struct CancellationLabView: View {
         .disabled(
             beforeAfterMeasurement.state.isBusy ||
             phaseSweep.state.isRunning ||
-            phaseRefinement.state.isRunning
+            phaseRefinement.state.isRunning ||
+            amplitudeSearch.state.isRunning
         )
     }
 
@@ -384,7 +388,9 @@ struct CancellationLabView: View {
                     microphoneCapture.state != .capturing ||
                     targetEnergyMeasurement == nil ||
                     beforeAfterMeasurement.state.isBusy ||
-                    phaseSweep.state.isRunning
+                    phaseSweep.state.isRunning ||
+                    phaseRefinement.state.isRunning ||
+                    amplitudeSearch.state.isRunning
                 )
 
                 Button("Capture Treatment") {
@@ -399,7 +405,9 @@ struct CancellationLabView: View {
                     targetEnergyMeasurement == nil ||
                     !baselineMatchesCurrentTarget ||
                     beforeAfterMeasurement.state.isBusy ||
-                    phaseSweep.state.isRunning
+                    phaseSweep.state.isRunning ||
+                    phaseRefinement.state.isRunning ||
+                    amplitudeSearch.state.isRunning
                 )
             }
 
@@ -491,7 +499,9 @@ struct CancellationLabView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(
                     comparisonKey(comparison) == lastSavedComparisonKey ||
-                    phaseSweep.state.isRunning
+                    phaseSweep.state.isRunning ||
+                    phaseRefinement.state.isRunning ||
+                    amplitudeSearch.state.isRunning
                 )
             }
 
@@ -506,7 +516,9 @@ struct CancellationLabView: View {
                 .buttonStyle(.bordered)
                 .disabled(
                     beforeAfterMeasurement.state.isBusy ||
-                    phaseSweep.state.isRunning
+                    phaseSweep.state.isRunning ||
+                    phaseRefinement.state.isRunning ||
+                    amplitudeSearch.state.isRunning
                 )
             }
         }
@@ -840,6 +852,217 @@ struct CancellationLabView: View {
                 Button("Reset Fine Search") {
                     phaseRefinement.reset()
                     phaseRefinementProgressText = nil
+                    amplitudeSearch.reset()
+                    amplitudeSearchProgressText = nil
+                }
+                .buttonStyle(.bordered)
+            }
+        }
+        .cancellationCard()
+    }
+
+    private var amplitudeSearchCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Automatic Amplitude Search", systemImage: "speaker.wave.2")
+                    .font(.headline)
+
+                Spacer()
+
+                if amplitudeSearch.state.isRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            Text("Holds the best refined phase fixed. Stage 1 searches in 10% output steps up to your current selected level; Stage 2 refines around the best result in 2% steps. The current selected output is the search ceiling.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if let bestPhase = phaseRefinement.bestResult {
+                LabeledContent(
+                    "Fixed refined phase",
+                    value: String(
+                        format: "%.0f°",
+                        bestPhase.phaseDegrees
+                    )
+                )
+            }
+
+            LabeledContent(
+                "Current search ceiling",
+                value: String(
+                    format: "%.0f%%",
+                    toneGenerator.outputPercent
+                )
+            )
+
+            if let progress = amplitudeSearchProgressText {
+                Text(progress)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Button("Start Amplitude Search") {
+                    startAmplitudeSearch()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canStartAmplitudeSearch)
+
+                if amplitudeSearch.state.isRunning {
+                    Button("Cancel Amplitude Search") {
+                        amplitudeSearch.cancel()
+                        amplitudeSearchProgressText = nil
+                        toneGenerator.muteImmediately()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            if phaseRefinement.bestResult == nil {
+                Text("Complete fine phase refinement first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if toneGenerator.outputPercent <
+                AmplitudeSearchMath.minimumSearchPercent
+            {
+                Text("Set the output ceiling to at least 2%.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if toneGenerator.state == .playing &&
+                toneGenerator.isMuted
+            {
+                Text("Resume the tone before starting amplitude search. QuietDrive will mute it again when the search finishes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if case let .failed(message) = amplitudeSearch.state {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            ForEach(amplitudeSearch.stages, id: \.stage) { stage in
+                Divider()
+
+                HStack {
+                    Text(
+                        stage.stage == 1
+                            ? "Stage 1 • coarse output"
+                            : "Stage 2 • fine output"
+                    )
+                    .font(.subheadline.weight(.semibold))
+
+                    Spacer()
+
+                    if let best = stage.bestResult {
+                        Text(
+                            String(
+                                format: "best %.0f%%",
+                                best.outputPercent
+                            )
+                        )
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                    }
+                }
+
+                ForEach(stage.results) { result in
+                    HStack {
+                        Text(
+                            String(
+                                format: "%.0f%%",
+                                result.outputPercent
+                            )
+                        )
+                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .frame(width: 52, alignment: .leading)
+
+                        Text(
+                            String(
+                                format: "%.2f dBFS",
+                                result.treatment.averageBandEnergyDBFS
+                            )
+                        )
+                        .font(.subheadline.monospacedDigit())
+
+                        Spacer()
+
+                        Text(
+                            result.comparison.measuredReductionDB >= 0
+                                ? String(
+                                    format: "−%.2f dB",
+                                    result.comparison.measuredReductionDB
+                                )
+                                : String(
+                                    format: "+%.2f dB",
+                                    abs(result.comparison.measuredReductionDB)
+                                )
+                        )
+                        .font(.subheadline.monospacedDigit())
+                    }
+                }
+            }
+
+            if let best = amplitudeSearch.bestResult {
+                Divider()
+
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Best output level")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text(
+                            String(
+                                format: "%.0f%% • %.2f dBFS",
+                                best.outputPercent,
+                                best.treatment.averageBandEnergyDBFS
+                            )
+                        )
+                        .font(.title3.monospacedDigit().weight(.semibold))
+                    }
+
+                    Spacer()
+
+                    Text(
+                        String(
+                            format: "%.2f dB reduction",
+                            best.comparison.measuredReductionDB
+                        )
+                    )
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                }
+
+                Button("Apply Best Output Level") {
+                    toneGenerator.setOutputPercent(
+                        best.outputPercent
+                    )
+                    toneGenerator.setPhaseDegrees(
+                        best.phaseDegrees
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+
+                Text(
+                    String(
+                        format: "Search ceiling was %.0f%%. The search never exceeded that user-selected level or the app's hard digital ceiling.",
+                        amplitudeSearch.searchCeilingPercent
+                    )
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            if !amplitudeSearch.stages.isEmpty &&
+                !amplitudeSearch.state.isRunning
+            {
+                Button("Reset Amplitude Search") {
+                    amplitudeSearch.reset()
+                    amplitudeSearchProgressText = nil
                 }
                 .buttonStyle(.bordered)
             }
@@ -1008,7 +1231,9 @@ struct CancellationLabView: View {
                 .disabled(
                     audioSession.state != .active ||
                     beforeAfterMeasurement.state.isBusy ||
-                    phaseSweep.state.isRunning
+                    phaseSweep.state.isRunning ||
+                    phaseRefinement.state.isRunning ||
+                    amplitudeSearch.state.isRunning
                 )
 
                 Button(
@@ -1028,7 +1253,9 @@ struct CancellationLabView: View {
                 .disabled(
                     audioSession.state != .active ||
                     beforeAfterMeasurement.state.isBusy ||
-                    phaseSweep.state.isRunning
+                    phaseSweep.state.isRunning ||
+                    phaseRefinement.state.isRunning ||
+                    amplitudeSearch.state.isRunning
                 )
             }
 
@@ -1054,12 +1281,14 @@ struct CancellationLabView: View {
                 phaseSweep.cancel()
                 phaseRefinement.cancel()
                 phaseRefinementProgressText = nil
+                amplitudeSearch.cancel()
+                amplitudeSearchProgressText = nil
                 toneGenerator.stopImmediately()
                 microphoneCapture.stopCapture()
             }
             .buttonStyle(.bordered)
 
-            Text("Use the coarse phase sweep after capturing a baseline. Fine phase refinement begins in #20.")
+            Text("Use coarse phase, fine phase, then amplitude search in order. #22 combines these measurements into an adaptive controller.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -1142,6 +1371,8 @@ struct CancellationLabView: View {
                     phaseSweep.cancel()
                     phaseRefinement.cancel()
                     phaseRefinementProgressText = nil
+                    amplitudeSearch.cancel()
+                    amplitudeSearchProgressText = nil
                     toneGenerator.muteImmediately()
                 }
             }
@@ -1163,6 +1394,103 @@ struct CancellationLabView: View {
         .cancellationCard()
     }
 
+    private var canStartAmplitudeSearch: Bool {
+        phaseRefinement.bestResult != nil &&
+        beforeAfterMeasurement.baseline != nil &&
+        baselineMatchesCurrentTarget &&
+        microphoneCapture.state == .capturing &&
+        toneGenerator.state == .playing &&
+        !toneGenerator.isMuted &&
+        toneGenerator.outputPercent >=
+            AmplitudeSearchMath.minimumSearchPercent &&
+        targetEnergyMeasurement != nil &&
+        !beforeAfterMeasurement.state.isBusy &&
+        !phaseSweep.state.isRunning &&
+        !phaseRefinement.state.isRunning &&
+        !amplitudeSearch.state.isRunning
+    }
+
+    private func startAmplitudeSearch() {
+        guard
+            let refinedBest = phaseRefinement.bestResult,
+            let baseline = beforeAfterMeasurement.baseline
+        else {
+            return
+        }
+
+        let target = baseline.condition.targetFrequencyHz
+        let fixedPhase = refinedBest.phaseDegrees
+        let ceiling = toneGenerator.outputPercent
+        let inputRoute = inputRouteSummary
+        let outputRoute = outputRouteSummary
+
+        toneGenerator.setPhaseDegrees(fixedPhase)
+        amplitudeSearchProgressText =
+            "Preparing amplitude search..."
+
+        Task { @MainActor in
+            await amplitudeSearch.run(
+                refinedPhaseDegrees: fixedPhase,
+                ceilingPercent: ceiling,
+                baseline: baseline,
+                applyOutputPercent: { percent in
+                    toneGenerator.setOutputPercent(percent)
+                },
+                measurementProvider: {
+                    measurementForTarget(target)
+                },
+                onComparison: { comparison in
+                    _ = experimentRecorder.record(
+                        comparison: comparison,
+                        inputRoute: inputRoute,
+                        outputRoute: outputRoute
+                    )
+                },
+                onProgress: {
+                    stage,
+                    percent,
+                    index,
+                    total,
+                    collected,
+                    required in
+
+                    if
+                        let collected,
+                        let required
+                    {
+                        amplitudeSearchProgressText =
+                            String(
+                                format:
+                                    "Stage %d • %d/%d • %.0f%% • %d/%d samples",
+                                stage,
+                                index,
+                                total,
+                                percent,
+                                collected,
+                                required
+                            )
+                    } else {
+                        amplitudeSearchProgressText =
+                            String(
+                                format:
+                                    "Stage %d • %d/%d • %.0f%% • settling...",
+                                stage,
+                                index,
+                                total,
+                                percent
+                            )
+                    }
+                }
+            )
+
+            if amplitudeSearch.state == .completed {
+                amplitudeSearchProgressText =
+                    "Amplitude search complete"
+                toneGenerator.muteImmediately()
+            }
+        }
+    }
+
     private var canStartPhaseRefinement: Bool {
         phaseSweep.bestResult != nil &&
         beforeAfterMeasurement.baseline != nil &&
@@ -1174,10 +1502,14 @@ struct CancellationLabView: View {
         targetEnergyMeasurement != nil &&
         !beforeAfterMeasurement.state.isBusy &&
         !phaseSweep.state.isRunning &&
-        !phaseRefinement.state.isRunning
+        !phaseRefinement.state.isRunning &&
+        !amplitudeSearch.state.isRunning
     }
 
     private func startPhaseRefinement() {
+        amplitudeSearch.reset()
+        amplitudeSearchProgressText = nil
+
         guard
             let coarseBest = phaseSweep.bestResult,
             let baseline = beforeAfterMeasurement.baseline
@@ -1305,6 +1637,8 @@ struct CancellationLabView: View {
     private func startPhaseSweep() {
         phaseRefinement.reset()
         phaseRefinementProgressText = nil
+        amplitudeSearch.reset()
+        amplitudeSearchProgressText = nil
 
         guard
             let baseline = beforeAfterMeasurement.baseline
