@@ -1172,7 +1172,9 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(reloaded.records.count, 1)
         XCTAssertEqual(reloaded.records.first?.id, saved.id)
         XCTAssertEqual(
-            reloaded.records.first?.measuredReductionDB,
+            try XCTUnwrap(
+                reloaded.records.first?.measuredReductionDB
+            ),
             3.5,
             accuracy: 0.001
         )
