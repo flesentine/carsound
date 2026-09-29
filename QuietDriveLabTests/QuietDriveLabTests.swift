@@ -1273,6 +1273,174 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertTrue(afterClear.records.isEmpty)
     }
 
+    func testPhaseSweepDefaultGridCoversEightCoarsePhases() {
+        XCTAssertEqual(
+            PhaseSweepMath.defaultPhases,
+            [0, 45, 90, 135, 180, 225, 270, 315]
+        )
+    }
+
+    func testPhaseSweepNormalizesAndDeduplicatesPhases() {
+        XCTAssertEqual(
+            PhaseSweepMath.normalizedUniquePhases(
+                [0, 360, -45, 315, 450]
+            ),
+            [0, 315, 90]
+        )
+    }
+
+    func testPhaseSweepBestResultChoosesLowestTreatmentEnergy() throws {
+        func makeResult(
+            phase: Double,
+            treatmentEnergy: Double,
+            standardDeviation: Double
+        ) throws -> PhaseSweepResult {
+            let baseline = TargetEnergyWindowSummary(
+                condition: MeasurementCondition(
+                    targetFrequencyHz: 80,
+                    phaseDegrees: 0,
+                    outputPercent: 50,
+                    toneAudible: false
+                ),
+                sampleCount: 20,
+                durationSeconds: 1.9,
+                averageBandEnergyDBFS: -25,
+                minimumBandEnergyDBFS: -26,
+                maximumBandEnergyDBFS: -24,
+                averageCenterLevelDBFS: -28,
+                standardDeviationDB: 0.5
+            )
+            let treatment = TargetEnergyWindowSummary(
+                condition: MeasurementCondition(
+                    targetFrequencyHz: 80,
+                    phaseDegrees: phase,
+                    outputPercent: 50,
+                    toneAudible: true
+                ),
+                sampleCount: 20,
+                durationSeconds: 1.9,
+                averageBandEnergyDBFS: treatmentEnergy,
+                minimumBandEnergyDBFS: treatmentEnergy - 1,
+                maximumBandEnergyDBFS: treatmentEnergy + 1,
+                averageCenterLevelDBFS: treatmentEnergy - 2,
+                standardDeviationDB: standardDeviation
+            )
+            let comparison = try XCTUnwrap(
+                BeforeAfterMeasurementMath.compare(
+                    baseline: baseline,
+                    treatment: treatment
+                )
+            )
+
+            return PhaseSweepResult(
+                phaseDegrees: phase,
+                treatment: treatment,
+                comparison: comparison
+            )
+        }
+
+        let results = [
+            try makeResult(
+                phase: 0,
+                treatmentEnergy: -27,
+                standardDeviation: 0.4
+            ),
+            try makeResult(
+                phase: 90,
+                treatmentEnergy: -31,
+                standardDeviation: 0.8
+            ),
+            try makeResult(
+                phase: 180,
+                treatmentEnergy: -29,
+                standardDeviation: 0.3
+            )
+        ]
+
+        let best = try XCTUnwrap(
+            PhaseSweepMath.bestResult(from: results)
+        )
+
+        XCTAssertEqual(best.phaseDegrees, 90, accuracy: 0.001)
+        XCTAssertEqual(
+            best.treatment.averageBandEnergyDBFS,
+            -31,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            best.comparison.measuredReductionDB,
+            6,
+            accuracy: 0.001
+        )
+    }
+
+    func testPhaseSweepBestResultUsesVariabilityAsTieBreaker() throws {
+        func makeResult(
+            phase: Double,
+            standardDeviation: Double
+        ) throws -> PhaseSweepResult {
+            let baseline = TargetEnergyWindowSummary(
+                condition: MeasurementCondition(
+                    targetFrequencyHz: 80,
+                    phaseDegrees: 0,
+                    outputPercent: 50,
+                    toneAudible: false
+                ),
+                sampleCount: 20,
+                durationSeconds: 1.9,
+                averageBandEnergyDBFS: -25,
+                minimumBandEnergyDBFS: -26,
+                maximumBandEnergyDBFS: -24,
+                averageCenterLevelDBFS: -28,
+                standardDeviationDB: 0.5
+            )
+            let treatment = TargetEnergyWindowSummary(
+                condition: MeasurementCondition(
+                    targetFrequencyHz: 80,
+                    phaseDegrees: phase,
+                    outputPercent: 50,
+                    toneAudible: true
+                ),
+                sampleCount: 20,
+                durationSeconds: 1.9,
+                averageBandEnergyDBFS: -30,
+                minimumBandEnergyDBFS: -31,
+                maximumBandEnergyDBFS: -29,
+                averageCenterLevelDBFS: -32,
+                standardDeviationDB: standardDeviation
+            )
+            let comparison = try XCTUnwrap(
+                BeforeAfterMeasurementMath.compare(
+                    baseline: baseline,
+                    treatment: treatment
+                )
+            )
+
+            return PhaseSweepResult(
+                phaseDegrees: phase,
+                treatment: treatment,
+                comparison: comparison
+            )
+        }
+
+        let best = try XCTUnwrap(
+            PhaseSweepMath.bestResult(
+                from: [
+                    try makeResult(
+                        phase: 45,
+                        standardDeviation: 0.8
+                    ),
+                    try makeResult(
+                        phase: 90,
+                        standardDeviation: 0.3
+                    )
+                ]
+            )
+        )
+
+        XCTAssertEqual(best.phaseDegrees, 90, accuracy: 0.001)
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
