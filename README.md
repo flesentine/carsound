@@ -4,41 +4,49 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#23 — stability protection** is implemented.
+Development effort **#24 — processing latency** is implemented.
 
-The adaptive controller from #22 is now wrapped in a conservative stability layer designed to prevent it from chasing measurement noise or drifting far away from the phase/output settings established by the controlled search pipeline.
+QuietDrive now measures the timing of its own microphone/analysis path instead of treating latency as one opaque number.
 
-The controller is confined to a **trusted envelope** around its optimized starting point:
+The live Processing Latency panel reports:
 
-- phase: no more than **±20°**
-- output: no more than **±8 percentage points**
-- output also remains below the user-selected amplitude-search ceiling and the existing hard PCM ceiling
+- microphone buffer duration
+- latest microphone callback interval
+- rolling average callback interval
+- callback jitter (standard deviation)
+- minimum/maximum callback interval
+- latest analysis/DSP processing time
+- rolling average processing time
+- maximum observed processing time
+- FFT analysis-window duration
+- age of the latest analyzed snapshot when it is published
+- estimated age of the **center of the FFT time window** at publication
 
-The phase limit uses circular distance, so a seed near 360° behaves correctly across the 0° boundary.
+For the current 4096-sample FFT at 48 kHz, the analysis window itself spans about **85.33 ms**. QuietDrive therefore reports that time support explicitly instead of implying the spectrum is instantaneous.
 
-After an adaptive adjustment is accepted, QuietDrive forces a full monitoring iteration before probing again. If four probe cycles in a row are rejected, the controller enters a three-iteration **stability hold** rather than continuously hunting around a stable optimum.
+The app also now exposes iOS's route-reported:
 
-QuietDrive also watches for accepted-control oscillation. If phase or amplitude repeatedly reverses direction three accepted times in succession, the controller treats that behavior as instability and triggers the existing fail-safe mute path.
+- I/O buffer duration
+- input latency
+- output latency
 
-Adaptive measurement windows now accept only **fresh FFT transforms**. The controller tracks the FFT transform sequence and will not count the same published spectrum snapshot multiple times as independent samples. If fresh measurements stop arriving, the bounded collection window eventually triggers the existing missing-measurement fail-safe.
+Those values are shown separately from measured app/DSP timing. They are useful diagnostics, but they are **not yet a measured Bluetooth or acoustic round-trip delay**. Route-specific and Bluetooth timing work remains in #25–#27.
 
-Microphone clipping is now an explicit adaptive fail-safe as well.
-
-The Cancellation Lab reports phase/output drift from the seed, stability-hold count, remaining hold iterations, and phase/amplitude reversal streaks.
+The latency instrumentation uses monotonic uptime timestamps inside the microphone callback path and rolling statistics, so it can reveal whether timing instability comes from callback cadence, DSP work, or snapshot-publication age.
 
 ## Verification status
 
-The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so the tests compile but are not executed there.
+The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so tests compile but are not executed there.
 
-These protections reduce software-side instability risk, but they do **not** prove physical acoustic-loop stability. Real iPhone/car testing is still required, particularly for route latency, Bluetooth jitter, amplifier/speaker behavior, and physical feedback.
+Simulator timing does not represent a real iPhone/car audio route. The useful numbers from #24 must be collected on physical hardware before drawing conclusions about cancellation feasibility.
 
 ## What comes next
 
-**#24 — processing latency** is next in Milestone 3. After that come audio-route testing, Bluetooth characterization and jitter diagnostics, vibration sensing, sound/vibration correlation, music-interference detection, and overall confidence scoring.
+**#25 — audio-route testing** is next. That will make route identity/configuration a first-class experiment dimension so built-in speaker, wired/USB/CarPlay, Bluetooth, and car-audio paths can be characterized separately.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, comparison summaries, search/controller results, stability diagnostics, and saved experiment metadata.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, persistence, target-band energy, search/controller state, stability diagnostics, latency diagnostics, and saved experiment metadata.
 
 ## Generate the Xcode project
 
