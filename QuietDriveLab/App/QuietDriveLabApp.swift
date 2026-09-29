@@ -9,6 +9,7 @@ struct QuietDriveLabApp: App {
     @State private var beforeAfterMeasurement = BeforeAfterMeasurementModel()
     @State private var experimentRecorder = ExperimentRecorderModel()
     @State private var phaseSweep = PhaseSweepModel()
+    @State private var phaseRefinement = PhaseRefinementModel()
 
     var body: some Scene {
         WindowGroup {
@@ -20,6 +21,7 @@ struct QuietDriveLabApp: App {
                 .environment(beforeAfterMeasurement)
                 .environment(experimentRecorder)
                 .environment(phaseSweep)
+                .environment(phaseRefinement)
                 .task {
                     microphonePermission.refresh()
                     audioSession.refreshRoute()
