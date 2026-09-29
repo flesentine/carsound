@@ -1793,6 +1793,285 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testAdaptivePhaseCandidatesWrapAroundCycle() {
+        XCTAssertEqual(
+            AdaptiveControllerMath.phaseCandidates(
+                around: 358
+            ),
+            [3, 353]
+        )
+    }
+
+    func testAdaptiveAmplitudeCandidatesStayInsideCeiling() {
+        XCTAssertEqual(
+            AdaptiveControllerMath.amplitudeCandidates(
+                around: 30,
+                ceilingPercent: 50
+            ),
+            [28, 32]
+        )
+
+        XCTAssertEqual(
+            AdaptiveControllerMath.amplitudeCandidates(
+                around: 50,
+                ceilingPercent: 50
+            ),
+            [48]
+        )
+
+        XCTAssertEqual(
+            AdaptiveControllerMath.amplitudeCandidates(
+                around: 2,
+                ceilingPercent: 50
+            ),
+            [4]
+        )
+    }
+
+    func testAdaptiveControllerRequiresMinimumImprovement() throws {
+        let current = try makeAdaptiveObservation(
+            phase: 140,
+            output: 30,
+            baselineEnergy: -25,
+            treatmentEnergy: -30,
+            deviation: 0.4
+        )
+        let tooSmall = try makeAdaptiveObservation(
+            phase: 145,
+            output: 30,
+            baselineEnergy: -25,
+            treatmentEnergy: -30.2,
+            deviation: 0.4
+        )
+        let enough = try makeAdaptiveObservation(
+            phase: 145,
+            output: 30,
+            baselineEnergy: -25,
+            treatmentEnergy: -30.5,
+            deviation: 0.4
+        )
+
+        XCTAssertFalse(
+            AdaptiveControllerMath.shouldAccept(
+                current: current,
+                candidate: tooSmall
+            )
+        )
+        XCTAssertTrue(
+            AdaptiveControllerMath.shouldAccept(
+                current: current,
+                candidate: enough
+            )
+        )
+    }
+
+    func testAdaptiveControllerRejectsUnstableCandidate() throws {
+        let current = try makeAdaptiveObservation(
+            phase: 140,
+            output: 30,
+            baselineEnergy: -25,
+            treatmentEnergy: -30,
+            deviation: 0.4
+        )
+        let unstable = try makeAdaptiveObservation(
+            phase: 145,
+            output: 30,
+            baselineEnergy: -25,
+            treatmentEnergy: -31,
+            deviation: 3.0
+        )
+
+        XCTAssertFalse(
+            AdaptiveControllerMath.shouldAccept(
+                current: current,
+                candidate: unstable
+            )
+        )
+        XCTAssertFalse(
+            AdaptiveControllerMath.isStable(unstable)
+        )
+    }
+
+    func testAdaptiveControllerDetectsThreeDBAmplification() throws {
+        let unsafe = try makeAdaptiveObservation(
+            phase: 140,
+            output: 30,
+            baselineEnergy: -30,
+            treatmentEnergy: -27,
+            deviation: 0.4
+        )
+
+        XCTAssertTrue(
+            AdaptiveControllerMath.isUnsafeAmplification(
+                unsafe
+            )
+        )
+    }
+
+    func testAdaptiveBestObservationPrefersLowerEnergyThenLowerOutput() throws {
+        let lowerEnergy = try makeAdaptiveObservation(
+            phase: 140,
+            output: 30,
+            baselineEnergy: -25,
+            treatmentEnergy: -32,
+            deviation: 0.8
+        )
+        let higherEnergy = try makeAdaptiveObservation(
+            phase: 135,
+            output: 28,
+            baselineEnergy: -25,
+            treatmentEnergy: -31,
+            deviation: 0.2
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(
+                AdaptiveControllerMath.bestObservation(
+                    from: [higherEnergy, lowerEnergy]
+                )
+            ).settings.outputPercent,
+            30,
+            accuracy: 0.001
+        )
+
+        let sameEnergyHighOutput =
+            try makeAdaptiveObservation(
+                phase: 140,
+                output: 34,
+                baselineEnergy: -25,
+                treatmentEnergy: -32,
+                deviation: 0.4
+            )
+        let sameEnergyLowOutput =
+            try makeAdaptiveObservation(
+                phase: 140,
+                output: 30,
+                baselineEnergy: -25,
+                treatmentEnergy: -32,
+                deviation: 0.4
+            )
+
+        XCTAssertEqual(
+            try XCTUnwrap(
+                AdaptiveControllerMath.bestObservation(
+                    from: [
+                        sameEnergyHighOutput,
+                        sameEnergyLowOutput
+                    ]
+                )
+            ).settings.outputPercent,
+            30,
+            accuracy: 0.001
+        )
+    }
+
+    @MainActor
+    func testAdaptiveControllerImmediateSafetyFailureMutesPath() async {
+        let baseline = TargetEnergyWindowSummary(
+            condition: MeasurementCondition(
+                targetFrequencyHz: 80,
+                phaseDegrees: 0,
+                outputPercent: 30,
+                toneAudible: false
+            ),
+            sampleCount: 20,
+            durationSeconds: 1.9,
+            averageBandEnergyDBFS: -25,
+            minimumBandEnergyDBFS: -26,
+            maximumBandEnergyDBFS: -24,
+            averageCenterLevelDBFS: -28,
+            standardDeviationDB: 0.4
+        )
+        let controller = AdaptiveControllerModel()
+        var failSafeReason: String?
+
+        await controller.run(
+            seedSettings: AdaptiveControllerSettings(
+                phaseDegrees: 140,
+                outputPercent: 30
+            ),
+            ceilingPercent: 50,
+            baseline: baseline,
+            applySettings: { _ in },
+            measurementProvider: { nil },
+            safetyCheck: {
+                "Audio output route changed."
+            },
+            onAcceptedComparison: { _ in },
+            onFailSafe: { reason in
+                failSafeReason = reason
+            }
+        )
+
+        XCTAssertEqual(
+            failSafeReason,
+            "Audio output route changed."
+        )
+
+        if case let .failed(message) = controller.state {
+            XCTAssertEqual(
+                message,
+                "Audio output route changed."
+            )
+        } else {
+            XCTFail("Expected adaptive controller fail-safe state.")
+        }
+    }
+
+    private func makeAdaptiveObservation(
+        phase: Double,
+        output: Double,
+        baselineEnergy: Double,
+        treatmentEnergy: Double,
+        deviation: Double
+    ) throws -> AdaptiveControllerObservation {
+        let baseline = TargetEnergyWindowSummary(
+            condition: MeasurementCondition(
+                targetFrequencyHz: 80,
+                phaseDegrees: 0,
+                outputPercent: output,
+                toneAudible: false
+            ),
+            sampleCount: 20,
+            durationSeconds: 1.9,
+            averageBandEnergyDBFS: baselineEnergy,
+            minimumBandEnergyDBFS: baselineEnergy - 1,
+            maximumBandEnergyDBFS: baselineEnergy + 1,
+            averageCenterLevelDBFS: baselineEnergy - 2,
+            standardDeviationDB: 0.4
+        )
+        let treatment = TargetEnergyWindowSummary(
+            condition: MeasurementCondition(
+                targetFrequencyHz: 80,
+                phaseDegrees: phase,
+                outputPercent: output,
+                toneAudible: true
+            ),
+            sampleCount: 10,
+            durationSeconds: 0.9,
+            averageBandEnergyDBFS: treatmentEnergy,
+            minimumBandEnergyDBFS: treatmentEnergy - 1,
+            maximumBandEnergyDBFS: treatmentEnergy + 1,
+            averageCenterLevelDBFS: treatmentEnergy - 2,
+            standardDeviationDB: deviation
+        )
+        let comparison = try XCTUnwrap(
+            BeforeAfterMeasurementMath.compare(
+                baseline: baseline,
+                treatment: treatment
+            )
+        )
+
+        return AdaptiveControllerObservation(
+            settings: AdaptiveControllerSettings(
+                phaseDegrees: phase,
+                outputPercent: output
+            ),
+            treatment: treatment,
+            comparison: comparison
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
