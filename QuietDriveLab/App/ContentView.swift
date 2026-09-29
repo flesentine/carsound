@@ -1186,4 +1186,5 @@ private extension View {
         .environment(ToneGeneratorModel())
         .environment(BeforeAfterMeasurementModel())
         .environment(ExperimentRecorderModel(storageURL: nil))
+        .environment(PhaseSweepModel())
 }
