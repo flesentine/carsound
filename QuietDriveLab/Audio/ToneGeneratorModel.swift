@@ -7,6 +7,10 @@ enum ToneGeneratorMath {
     static let maximumFrequencyHz = 200.0
     static let defaultFrequencyHz = 80.0
 
+    static let minimumPhaseDegrees = 0.0
+    static let maximumPhaseDegrees = 360.0
+    static let defaultPhaseDegrees = 0.0
+
     // Hard digital ceiling for the generated PCM samples.
     // This limits digital amplitude, not acoustic SPL at the car speakers.
     static let maximumAmplitude: Float = 0.02
@@ -14,6 +18,8 @@ enum ToneGeneratorMath {
 
     static let startStopRampDurationSeconds = 0.12
     static let liveLevelRampDurationSeconds = 0.06
+    static let phaseChangeRampDurationSeconds = 0.035
+    static let phaseChangeDebounceSeconds = 0.05
 
     static func sanitizedFrequency(_ frequencyHz: Double) -> Double {
         min(
@@ -23,6 +29,22 @@ enum ToneGeneratorMath {
                 frequencyHz.rounded()
             )
         )
+    }
+
+    static func normalizedPhaseDegrees(_ degrees: Double) -> Double {
+        guard degrees.isFinite else { return defaultPhaseDegrees }
+
+        var normalized = degrees.truncatingRemainder(dividingBy: 360)
+
+        if normalized < 0 {
+            normalized += 360
+        }
+
+        return normalized
+    }
+
+    static func invertedPhaseDegrees(_ degrees: Double) -> Double {
+        normalizedPhaseDegrees(degrees + 180)
     }
 
     static func sanitizedOutputPercent(_ percent: Double) -> Double {
@@ -62,11 +84,16 @@ enum ToneGeneratorMath {
 
     static func makeOneSecondLoop(
         frequencyHz: Double,
-        sampleRate: Double
+        sampleRate: Double,
+        phaseDegrees: Double = defaultPhaseDegrees
     ) -> [Float] {
         guard sampleRate > 0 else { return [] }
 
         let frequency = sanitizedFrequency(frequencyHz)
+        let phaseRadians =
+            normalizedPhaseDegrees(phaseDegrees) *
+            Double.pi /
+            180.0
         let frameCount = max(1, Int(sampleRate.rounded()))
 
         return (0..<frameCount).map { frame in
@@ -75,7 +102,8 @@ enum ToneGeneratorMath {
                 Double.pi *
                 frequency *
                 Double(frame) /
-                sampleRate
+                sampleRate +
+                phaseRadians
 
             return maximumAmplitude * Float(sin(phase))
         }
@@ -105,6 +133,8 @@ final class ToneGeneratorModel {
     private(set) var state: State = .stopped
     private(set) var frequencyHz =
         ToneGeneratorMath.defaultFrequencyHz
+    private(set) var phaseDegrees =
+        ToneGeneratorMath.defaultPhaseDegrees
     private(set) var outputPercent =
         ToneGeneratorMath.defaultOutputPercent
     private(set) var isMuted = false
@@ -116,6 +146,8 @@ final class ToneGeneratorModel {
         ToneGeneratorMath.startStopRampDurationSeconds
     let liveLevelRampDurationSeconds =
         ToneGeneratorMath.liveLevelRampDurationSeconds
+    let phaseChangeRampDurationSeconds =
+        ToneGeneratorMath.phaseChangeRampDurationSeconds
 
     @ObservationIgnored
     private let engine = AVAudioEngine()
@@ -125,6 +157,9 @@ final class ToneGeneratorModel {
 
     @ObservationIgnored
     private var rampTask: Task<Void, Never>?
+
+    @ObservationIgnored
+    private var phaseChangeTask: Task<Void, Never>?
 
     init() {
         engine.attach(player)
@@ -161,6 +196,25 @@ final class ToneGeneratorModel {
             )
     }
 
+    func setPhaseDegrees(_ degrees: Double) {
+        phaseDegrees =
+            ToneGeneratorMath.normalizedPhaseDegrees(
+                degrees
+            )
+
+        guard state == .playing else { return }
+
+        scheduleLivePhaseChange()
+    }
+
+    func invertPhase() {
+        setPhaseDegrees(
+            ToneGeneratorMath.invertedPhaseDegrees(
+                phaseDegrees
+            )
+        )
+    }
+
     func setOutputPercent(_ percent: Double) {
         outputPercent =
             ToneGeneratorMath.sanitizedOutputPercent(
@@ -183,6 +237,8 @@ final class ToneGeneratorModel {
 
         rampTask?.cancel()
         rampTask = nil
+        phaseChangeTask?.cancel()
+        phaseChangeTask = nil
 
         player.stop()
         engine.stop()
@@ -208,40 +264,16 @@ final class ToneGeneratorModel {
                 standardFormatWithSampleRate:
                     renderSampleRate,
                 channels: 1
-            )
-        else {
-            state = .failed(
-                "Could not create the tone output format."
-            )
-            return
-        }
-
-        let samples = ToneGeneratorMath.makeOneSecondLoop(
-            frequencyHz: frequencyHz,
-            sampleRate: renderSampleRate
-        )
-
-        guard
-            !samples.isEmpty,
-            let buffer = AVAudioPCMBuffer(
-                pcmFormat: monoFormat,
-                frameCapacity:
-                    AVAudioFrameCount(samples.count)
             ),
-            let channel =
-                buffer.floatChannelData?[0]
+            let buffer = makeToneBuffer(
+                format: monoFormat,
+                phaseDegrees: phaseDegrees
+            )
         else {
             state = .failed(
-                "Could not allocate the tone buffer."
+                "Could not create the tone output buffer."
             )
             return
-        }
-
-        buffer.frameLength =
-            AVAudioFrameCount(samples.count)
-
-        for index in samples.indices {
-            channel[index] = samples[index]
         }
 
         engine.connect(
@@ -264,7 +296,7 @@ final class ToneGeneratorModel {
             player.play()
 
             sampleRate = renderSampleRate
-            generatedFrames = samples.count
+            generatedFrames = Int(buffer.frameLength)
             state = .playing
             isMuted = false
 
@@ -288,6 +320,8 @@ final class ToneGeneratorModel {
 
         rampTask?.cancel()
         rampTask = nil
+        phaseChangeTask?.cancel()
+        phaseChangeTask = nil
         player.volume = 0
         isMuted = true
     }
@@ -312,6 +346,8 @@ final class ToneGeneratorModel {
             return
         }
 
+        phaseChangeTask?.cancel()
+        phaseChangeTask = nil
         rampTask?.cancel()
         rampTask = nil
 
@@ -326,10 +362,118 @@ final class ToneGeneratorModel {
     }
 
     func stopImmediately() {
+        phaseChangeTask?.cancel()
+        phaseChangeTask = nil
         rampTask?.cancel()
         rampTask = nil
         player.volume = 0
         finishStop()
+    }
+
+    private func scheduleLivePhaseChange() {
+        phaseChangeTask?.cancel()
+
+        phaseChangeTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+
+            try? await Task.sleep(
+                nanoseconds: UInt64(
+                    ToneGeneratorMath
+                        .phaseChangeDebounceSeconds *
+                    1_000_000_000
+                )
+            )
+
+            guard !Task.isCancelled else { return }
+
+            await self.applyLivePhaseChange()
+        }
+    }
+
+    private func applyLivePhaseChange() async {
+        guard
+            state == .playing,
+            sampleRate > 0,
+            let monoFormat = AVAudioFormat(
+                standardFormatWithSampleRate: sampleRate,
+                channels: 1
+            ),
+            let buffer = makeToneBuffer(
+                format: monoFormat,
+                phaseDegrees: phaseDegrees
+            )
+        else {
+            return
+        }
+
+        let shouldRestoreAudibleLevel = !isMuted
+
+        rampTask?.cancel()
+        rampTask = nil
+
+        if shouldRestoreAudibleLevel {
+            await rampVolume(
+                to: 0,
+                duration:
+                    ToneGeneratorMath
+                        .phaseChangeRampDurationSeconds
+            )
+        }
+
+        guard !Task.isCancelled else { return }
+
+        player.stop()
+        player.scheduleBuffer(
+            buffer,
+            at: nil,
+            options: [.loops]
+        )
+        player.volume = 0
+        player.play()
+
+        generatedFrames = Int(buffer.frameLength)
+
+        if shouldRestoreAudibleLevel {
+            await rampVolume(
+                to: outputGain,
+                duration:
+                    ToneGeneratorMath
+                        .phaseChangeRampDurationSeconds
+            )
+        }
+    }
+
+    private func makeToneBuffer(
+        format: AVAudioFormat,
+        phaseDegrees: Double
+    ) -> AVAudioPCMBuffer? {
+        let samples = ToneGeneratorMath.makeOneSecondLoop(
+            frequencyHz: frequencyHz,
+            sampleRate: format.sampleRate,
+            phaseDegrees: phaseDegrees
+        )
+
+        guard
+            !samples.isEmpty,
+            let buffer = AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity:
+                    AVAudioFrameCount(samples.count)
+            ),
+            let channel =
+                buffer.floatChannelData?[0]
+        else {
+            return nil
+        }
+
+        buffer.frameLength =
+            AVAudioFrameCount(samples.count)
+
+        for index in samples.indices {
+            channel[index] = samples[index]
+        }
+
+        return buffer
     }
 
     private func beginRamp(
