@@ -810,6 +810,247 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(interpolated, -22.9671, accuracy: 0.001)
     }
 
+    func testBeforeAfterWindowAveragesInLinearPower() throws {
+        let condition = MeasurementCondition(
+            targetFrequencyHz: 80,
+            phaseDegrees: 0,
+            outputPercent: 50,
+            toneAudible: false
+        )
+        let measurements = [
+            TargetFrequencyEnergyMeasurement(
+                targetFrequencyHz: 80,
+                nearestBinFrequencyHz: 82,
+                centerLevelDBFS: -40,
+                bandEnergyDBFS: -40,
+                floorBandEnergyDBFS: nil,
+                excessDB: nil,
+                lowerFrequencyHz: 70,
+                upperFrequencyHz: 90,
+                binCount: 3,
+                frequencyResolutionHz: 10
+            ),
+            TargetFrequencyEnergyMeasurement(
+                targetFrequencyHz: 80,
+                nearestBinFrequencyHz: 82,
+                centerLevelDBFS: -20,
+                bandEnergyDBFS: -20,
+                floorBandEnergyDBFS: nil,
+                excessDB: nil,
+                lowerFrequencyHz: 70,
+                upperFrequencyHz: 90,
+                binCount: 3,
+                frequencyResolutionHz: 10
+            )
+        ]
+
+        let summary = try XCTUnwrap(
+            BeforeAfterMeasurementMath.summarize(
+                measurements,
+                condition: condition,
+                sampleIntervalSeconds: 0.1
+            )
+        )
+
+        XCTAssertEqual(
+            summary.averageBandEnergyDBFS,
+            -22.9671,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(summary.sampleCount, 2)
+        XCTAssertEqual(
+            summary.durationSeconds,
+            0.1,
+            accuracy: 0.0001
+        )
+    }
+
+    func testBeforeAfterComparisonReportsPositiveReduction() throws {
+        let baselineCondition = MeasurementCondition(
+            targetFrequencyHz: 80,
+            phaseDegrees: 0,
+            outputPercent: 50,
+            toneAudible: false
+        )
+        let treatmentCondition = MeasurementCondition(
+            targetFrequencyHz: 80,
+            phaseDegrees: 180,
+            outputPercent: 50,
+            toneAudible: true
+        )
+
+        let baseline = TargetEnergyWindowSummary(
+            condition: baselineCondition,
+            sampleCount: 20,
+            durationSeconds: 1.9,
+            averageBandEnergyDBFS: -25,
+            minimumBandEnergyDBFS: -26,
+            maximumBandEnergyDBFS: -24,
+            averageCenterLevelDBFS: -28,
+            standardDeviationDB: 0.6
+        )
+        let treatment = TargetEnergyWindowSummary(
+            condition: treatmentCondition,
+            sampleCount: 20,
+            durationSeconds: 1.9,
+            averageBandEnergyDBFS: -29,
+            minimumBandEnergyDBFS: -30,
+            maximumBandEnergyDBFS: -28,
+            averageCenterLevelDBFS: -32,
+            standardDeviationDB: 0.5
+        )
+
+        let comparison = try XCTUnwrap(
+            BeforeAfterMeasurementMath.compare(
+                baseline: baseline,
+                treatment: treatment
+            )
+        )
+
+        XCTAssertEqual(
+            comparison.treatmentMinusBaselineDB,
+            -4,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            comparison.measuredReductionDB,
+            4,
+            accuracy: 0.001
+        )
+        XCTAssertTrue(comparison.improved)
+    }
+
+    func testBeforeAfterComparisonReportsIncrease() throws {
+        let condition = MeasurementCondition(
+            targetFrequencyHz: 80,
+            phaseDegrees: 0,
+            outputPercent: 50,
+            toneAudible: false
+        )
+        let baseline = TargetEnergyWindowSummary(
+            condition: condition,
+            sampleCount: 20,
+            durationSeconds: 1.9,
+            averageBandEnergyDBFS: -30,
+            minimumBandEnergyDBFS: -31,
+            maximumBandEnergyDBFS: -29,
+            averageCenterLevelDBFS: -32,
+            standardDeviationDB: 0.5
+        )
+        let treatment = TargetEnergyWindowSummary(
+            condition: MeasurementCondition(
+                targetFrequencyHz: 80,
+                phaseDegrees: 90,
+                outputPercent: 50,
+                toneAudible: true
+            ),
+            sampleCount: 20,
+            durationSeconds: 1.9,
+            averageBandEnergyDBFS: -27,
+            minimumBandEnergyDBFS: -28,
+            maximumBandEnergyDBFS: -26,
+            averageCenterLevelDBFS: -29,
+            standardDeviationDB: 0.6
+        )
+
+        let comparison = try XCTUnwrap(
+            BeforeAfterMeasurementMath.compare(
+                baseline: baseline,
+                treatment: treatment
+            )
+        )
+
+        XCTAssertEqual(
+            comparison.measuredReductionDB,
+            -3,
+            accuracy: 0.001
+        )
+        XCTAssertFalse(comparison.improved)
+    }
+
+    func testBeforeAfterComparisonRejectsChangedTarget() {
+        let baseline = TargetEnergyWindowSummary(
+            condition: MeasurementCondition(
+                targetFrequencyHz: 80,
+                phaseDegrees: 0,
+                outputPercent: 50,
+                toneAudible: false
+            ),
+            sampleCount: 20,
+            durationSeconds: 1.9,
+            averageBandEnergyDBFS: -30,
+            minimumBandEnergyDBFS: -31,
+            maximumBandEnergyDBFS: -29,
+            averageCenterLevelDBFS: -32,
+            standardDeviationDB: 0.5
+        )
+        let treatment = TargetEnergyWindowSummary(
+            condition: MeasurementCondition(
+                targetFrequencyHz: 90,
+                phaseDegrees: 180,
+                outputPercent: 50,
+                toneAudible: true
+            ),
+            sampleCount: 20,
+            durationSeconds: 1.9,
+            averageBandEnergyDBFS: -35,
+            minimumBandEnergyDBFS: -36,
+            maximumBandEnergyDBFS: -34,
+            averageCenterLevelDBFS: -37,
+            standardDeviationDB: 0.4
+        )
+
+        XCTAssertNil(
+            BeforeAfterMeasurementMath.compare(
+                baseline: baseline,
+                treatment: treatment
+            )
+        )
+    }
+
+    func testBeforeAfterSummaryRejectsMixedTargetSamples() {
+        let condition = MeasurementCondition(
+            targetFrequencyHz: 80,
+            phaseDegrees: 0,
+            outputPercent: 50,
+            toneAudible: false
+        )
+        let measurements = [
+            TargetFrequencyEnergyMeasurement(
+                targetFrequencyHz: 80,
+                nearestBinFrequencyHz: 82,
+                centerLevelDBFS: -30,
+                bandEnergyDBFS: -28,
+                floorBandEnergyDBFS: nil,
+                excessDB: nil,
+                lowerFrequencyHz: 70,
+                upperFrequencyHz: 90,
+                binCount: 3,
+                frequencyResolutionHz: 10
+            ),
+            TargetFrequencyEnergyMeasurement(
+                targetFrequencyHz: 90,
+                nearestBinFrequencyHz: 94,
+                centerLevelDBFS: -30,
+                bandEnergyDBFS: -28,
+                floorBandEnergyDBFS: nil,
+                excessDB: nil,
+                lowerFrequencyHz: 80,
+                upperFrequencyHz: 100,
+                binCount: 3,
+                frequencyResolutionHz: 10
+            )
+        ]
+
+        XCTAssertNil(
+            BeforeAfterMeasurementMath.summarize(
+                measurements,
+                condition: condition,
+                sampleIntervalSeconds: 0.1
+            )
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
