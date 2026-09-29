@@ -6,6 +6,7 @@ struct QuietDriveLabApp: App {
     @State private var audioSession = AudioSessionModel()
     @State private var microphoneCapture = MicrophoneCaptureModel()
     @State private var toneGenerator = ToneGeneratorModel()
+    @State private var beforeAfterMeasurement = BeforeAfterMeasurementModel()
 
     var body: some Scene {
         WindowGroup {
@@ -14,6 +15,7 @@ struct QuietDriveLabApp: App {
                 .environment(audioSession)
                 .environment(microphoneCapture)
                 .environment(toneGenerator)
+                .environment(beforeAfterMeasurement)
                 .task {
                     microphonePermission.refresh()
                     audioSession.refreshRoute()
