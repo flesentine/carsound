@@ -93,8 +93,56 @@
   - starting a new coarse/fine phase search clears stale amplitude-search state
   - tests cover coarse grid generation, non-round ceilings, ceiling enforcement, minimum level, fine 2% grid, ceiling clamping, best-energy selection, and lower-output tie-breaking
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #22 Build adaptive controller
+- [x] #22 Build adaptive controller
+  - new reusable AdaptiveControllerModel
+  - controller seeds from the best phase/output discovered by the completed search pipeline
+  - amplitude-search ceiling is retained as the adaptive output ceiling
+  - existing 0.02 PCM hard digital ceiling remains enforced underneath that ceiling
+  - accepted output cannot fall below the 2% automatic-control minimum
+  - adaptive loop uses 10 target-energy samples per monitoring/probe window at 10 Hz
+  - 250 ms settling interval before each adaptive measurement window
+  - 400 ms pause between completed adaptive iterations
+  - controller alternates local coordinate probes between phase and amplitude
+  - phase probes are bounded to ±5° around the current accepted phase
+  - amplitude probes are bounded to ±2% around the current accepted output
+  - amplitude probes never exceed the user-selected amplitude-search ceiling
+  - candidates are compared using measured treatment-band energy
+  - candidate must improve target-band energy by at least 0.35 dB before it can be accepted
+  - non-improving candidate probes are rolled back to the prior accepted setting
+  - accepted adjustments are automatically stored in durable experiment history
+  - treatment variability above σ 2.5 dB is considered unstable
+  - two consecutive unstable accepted-setting windows trigger fail-safe shutdown
+  - measured target amplification of 3 dB or more above baseline triggers immediate fail-safe shutdown
+  - loss of target-energy measurement triggers fail-safe shutdown
+  - audio-session deactivation triggers fail-safe shutdown
+  - microphone-capture loss triggers fail-safe shutdown
+  - leaving ANC Focus mode triggers fail-safe shutdown
+  - unexpected tone stop/mute triggers fail-safe shutdown
+  - target-frequency change triggers fail-safe shutdown
+  - input-route or output-route change triggers fail-safe shutdown
+  - fail-safe callback immediately mutes generated output
+  - Stop + Mute control stops the adaptive controller explicitly
+  - MUTE NOW cancels adaptive control before muting
+  - Stop All cancels A/B measurement, phase search, amplitude search, and adaptive control before stopping capture/output
+  - manual/search controls are locked while adaptive control is running
+  - UI reports accepted phase/output, latest target energy, latest reduction, variability, iteration count, accepted adjustments, rollbacks, and last controller action
+  - UI explicitly warns not to operate experiment controls while driving
+  - tests cover wrap-around phase probes, bounded amplitude probes, minimum-improvement acceptance, instability rejection, 3 dB amplification fail-safe detection, best-candidate tie-breaking, and immediate route-change fail-safe behavior
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. The refined phase and amplitude result are experimentally selected digital settings, not proof of exact acoustic phase or calibrated acoustic SPL at the phone microphone. The automatic amplitude search stays below both the user's selected search ceiling and the app's hard digital ceiling. Physical iPhone/car testing remains required to establish repeatability and real cancellation performance.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use.
+
+
+### Milestone 3 — Reality
+- [ ] #23 Add stability protection
+- [ ] #24 Measure processing latency
+- [ ] #25 Add audio-route testing
+- [ ] #26 Characterize Bluetooth behavior
+- [ ] #27 Add Bluetooth jitter diagnostics
+- [ ] #28 Capture accelerometer data
+- [ ] #29 Build vibration-spectrum analysis
+- [ ] #30 Correlate vibration and sound
+- [ ] #31 Detect music interference
+- [ ] #32 Build overall confidence scoring
