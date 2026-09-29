@@ -2072,6 +2072,208 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testAdaptiveStabilityGuardLimitsTrustedEnvelope() {
+        let guardState = AdaptiveStabilityGuard(
+            seed: AdaptiveControllerSettings(
+                phaseDegrees: 350,
+                outputPercent: 30
+            )
+        )
+
+        XCTAssertTrue(
+            guardState.allows(
+                AdaptiveControllerSettings(
+                    phaseDegrees: 10,
+                    outputPercent: 38
+                ),
+                ceilingPercent: 50
+            )
+        )
+
+        XCTAssertFalse(
+            guardState.allows(
+                AdaptiveControllerSettings(
+                    phaseDegrees: 15,
+                    outputPercent: 30
+                ),
+                ceilingPercent: 50
+            )
+        )
+
+        XCTAssertFalse(
+            guardState.allows(
+                AdaptiveControllerSettings(
+                    phaseDegrees: 350,
+                    outputPercent: 39
+                ),
+                ceilingPercent: 50
+            )
+        )
+    }
+
+    func testAdaptiveStabilityGuardUsesShortestPhaseExcursion() {
+        let guardState = AdaptiveStabilityGuard(
+            seed: AdaptiveControllerSettings(
+                phaseDegrees: 355,
+                outputPercent: 30
+            )
+        )
+
+        XCTAssertEqual(
+            guardState.phaseExcursionDegrees(
+                for: AdaptiveControllerSettings(
+                    phaseDegrees: 5,
+                    outputPercent: 30
+                )
+            ),
+            10,
+            accuracy: 0.001
+        )
+
+        XCTAssertEqual(
+            AdaptiveStabilityGuard
+                .signedPhaseDeltaDegrees(
+                    from: 5,
+                    to: 355
+                ),
+            -10,
+            accuracy: 0.001
+        )
+    }
+
+    func testAdaptiveStabilityGuardAddsCooldownAfterAcceptance() {
+        var guardState = AdaptiveStabilityGuard(
+            seed: AdaptiveControllerSettings(
+                phaseDegrees: 140,
+                outputPercent: 30
+            )
+        )
+
+        let reason = guardState.recordAcceptance(
+            from: AdaptiveControllerSettings(
+                phaseDegrees: 140,
+                outputPercent: 30
+            ),
+            to: AdaptiveControllerSettings(
+                phaseDegrees: 145,
+                outputPercent: 30
+            ),
+            dimension: .phase
+        )
+
+        XCTAssertNil(reason)
+        XCTAssertEqual(
+            guardState.holdIterationsRemaining,
+            AdaptiveStabilityGuard
+                .cooldownIterationsAfterAcceptance
+        )
+        XCTAssertTrue(
+            guardState.consumeHoldIteration()
+        )
+        XCTAssertFalse(
+            guardState.consumeHoldIteration()
+        )
+    }
+
+    func testAdaptiveStabilityGuardBacksOffAfterRollbackStreak() {
+        var guardState = AdaptiveStabilityGuard(
+            seed: AdaptiveControllerSettings(
+                phaseDegrees: 140,
+                outputPercent: 30
+            )
+        )
+
+        for _ in 0..<
+            AdaptiveStabilityGuard
+                .rollbackStreakBeforeHold
+        {
+            guardState.recordRollback()
+        }
+
+        XCTAssertEqual(guardState.holdCount, 1)
+        XCTAssertEqual(
+            guardState.holdIterationsRemaining,
+            AdaptiveStabilityGuard
+                .holdIterationsAfterRollbackStreak
+        )
+        XCTAssertEqual(guardState.rollbackStreak, 0)
+    }
+
+    func testAdaptiveStabilityGuardDetectsRepeatedPhaseOscillation() {
+        var guardState = AdaptiveStabilityGuard(
+            seed: AdaptiveControllerSettings(
+                phaseDegrees: 140,
+                outputPercent: 30
+            )
+        )
+
+        var previous = AdaptiveControllerSettings(
+            phaseDegrees: 140,
+            outputPercent: 30
+        )
+
+        let sequence = [145.0, 140.0, 145.0, 140.0]
+        var reason: String?
+
+        for phase in sequence {
+            let next = AdaptiveControllerSettings(
+                phaseDegrees: phase,
+                outputPercent: 30
+            )
+            reason = guardState.recordAcceptance(
+                from: previous,
+                to: next,
+                dimension: .phase
+            )
+            previous = next
+        }
+
+        XCTAssertEqual(
+            reason,
+            "Adaptive phase adjustments oscillated direction repeatedly."
+        )
+        XCTAssertGreaterThanOrEqual(
+            guardState.phaseReversalStreak,
+            AdaptiveStabilityGuard
+                .maximumConsecutiveDirectionReversals
+        )
+    }
+
+    func testAdaptiveStabilityGuardDetectsRepeatedAmplitudeOscillation() {
+        var guardState = AdaptiveStabilityGuard(
+            seed: AdaptiveControllerSettings(
+                phaseDegrees: 140,
+                outputPercent: 30
+            )
+        )
+
+        var previous = AdaptiveControllerSettings(
+            phaseDegrees: 140,
+            outputPercent: 30
+        )
+
+        let sequence = [32.0, 30.0, 32.0, 30.0]
+        var reason: String?
+
+        for output in sequence {
+            let next = AdaptiveControllerSettings(
+                phaseDegrees: 140,
+                outputPercent: output
+            )
+            reason = guardState.recordAcceptance(
+                from: previous,
+                to: next,
+                dimension: .amplitude
+            )
+            previous = next
+        }
+
+        XCTAssertEqual(
+            reason,
+            "Adaptive amplitude adjustments oscillated direction repeatedly."
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
