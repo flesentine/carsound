@@ -32,6 +32,8 @@ final class AudioSessionModel {
     private(set) var ioBufferDuration: TimeInterval = 0
     private(set) var inputLatency: TimeInterval = 0
     private(set) var outputLatency: TimeInterval = 0
+    private(set) var routeRevision: UInt64 = 0
+    private(set) var routeSignature = "None"
     private(set) var lastRouteChangeReason = "None"
 
     @ObservationIgnored
@@ -90,8 +92,33 @@ final class AudioSessionModel {
     }
 
     func refreshRoute() {
-        inputs = session.currentRoute.inputs.map(Self.makePort)
-        outputs = session.currentRoute.outputs.map(Self.makePort)
+        let refreshedInputs =
+            session.currentRoute.inputs.map(Self.makePort)
+        let refreshedOutputs =
+            session.currentRoute.outputs.map(Self.makePort)
+
+        let signature =
+            AudioRouteTestingMath.signature(
+                inputs:
+                    AudioRouteTestingMath.records(
+                        from: refreshedInputs
+                    ),
+                outputs:
+                    AudioRouteTestingMath.records(
+                        from: refreshedOutputs
+                    )
+            )
+
+        if signature != routeSignature {
+            routeRevision &+= 1
+            routeSignature =
+                signature.isEmpty
+                    ? "None"
+                    : signature
+        }
+
+        inputs = refreshedInputs
+        outputs = refreshedOutputs
         sampleRate = session.sampleRate
         ioBufferDuration = session.ioBufferDuration
         inputLatency = session.inputLatency
