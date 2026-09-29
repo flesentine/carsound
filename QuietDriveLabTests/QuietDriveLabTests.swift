@@ -2428,6 +2428,291 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testAudioRouteClassificationBuiltIn() {
+        let inputs = [
+            AudioRoutePortRecord(
+                name: "iPhone Microphone",
+                type: "Built-in microphone",
+                isBluetooth: false
+            )
+        ]
+        let outputs = [
+            AudioRoutePortRecord(
+                name: "iPhone Speaker",
+                type: "Built-in speaker",
+                isBluetooth: false
+            )
+        ]
+
+        XCTAssertEqual(
+            AudioRouteTestingMath.classify(
+                inputs: inputs,
+                outputs: outputs
+            ),
+            .builtIn
+        )
+    }
+
+    func testAudioRouteClassificationDistinguishesBluetoothProfiles() {
+        XCTAssertEqual(
+            AudioRouteTestingMath.classify(
+                inputs: [],
+                outputs: [
+                    AudioRoutePortRecord(
+                        name: "Car",
+                        type: "Bluetooth A2DP",
+                        isBluetooth: true
+                    )
+                ]
+            ),
+            .bluetoothA2DP
+        )
+
+        XCTAssertEqual(
+            AudioRouteTestingMath.classify(
+                inputs: [
+                    AudioRoutePortRecord(
+                        name: "Car Mic",
+                        type: "Bluetooth HFP",
+                        isBluetooth: true
+                    )
+                ],
+                outputs: [
+                    AudioRoutePortRecord(
+                        name: "Car",
+                        type: "Bluetooth HFP",
+                        isBluetooth: true
+                    )
+                ]
+            ),
+            .bluetoothHFP
+        )
+
+        XCTAssertEqual(
+            AudioRouteTestingMath.classify(
+                inputs: [],
+                outputs: [
+                    AudioRoutePortRecord(
+                        name: "LE Device",
+                        type: "Bluetooth LE",
+                        isBluetooth: true
+                    )
+                ]
+            ),
+            .bluetoothLE
+        )
+    }
+
+    func testAudioRouteClassificationCarUSBAndWired() {
+        XCTAssertEqual(
+            AudioRouteTestingMath.classify(
+                inputs: [],
+                outputs: [
+                    AudioRoutePortRecord(
+                        name: "CarPlay",
+                        type: "Car audio",
+                        isBluetooth: false
+                    )
+                ]
+            ),
+            .carAudio
+        )
+
+        XCTAssertEqual(
+            AudioRouteTestingMath.classify(
+                inputs: [],
+                outputs: [
+                    AudioRoutePortRecord(
+                        name: "USB DAC",
+                        type: "USB audio",
+                        isBluetooth: false
+                    )
+                ]
+            ),
+            .usb
+        )
+
+        XCTAssertEqual(
+            AudioRouteTestingMath.classify(
+                inputs: [],
+                outputs: [
+                    AudioRoutePortRecord(
+                        name: "Headphones",
+                        type: "Headphones",
+                        isBluetooth: false
+                    )
+                ]
+            ),
+            .wired
+        )
+    }
+
+    func testAudioRouteSignatureIsStableAcrossPortOrdering() {
+        let firstInputs = [
+            AudioRoutePortRecord(
+                name: "Mic B",
+                type: "USB audio",
+                isBluetooth: false
+            ),
+            AudioRoutePortRecord(
+                name: "Mic A",
+                type: "USB audio",
+                isBluetooth: false
+            )
+        ]
+        let secondInputs = firstInputs.reversed()
+        let outputs = [
+            AudioRoutePortRecord(
+                name: "DAC",
+                type: "USB audio",
+                isBluetooth: false
+            )
+        ]
+
+        XCTAssertEqual(
+            AudioRouteTestingMath.signature(
+                inputs: firstInputs,
+                outputs: outputs
+            ),
+            AudioRouteTestingMath.signature(
+                inputs: Array(secondInputs),
+                outputs: outputs
+            )
+        )
+    }
+
+    @MainActor
+    func testAudioRouteTestingPersistsAndReloadsRecords() throws {
+        let storageURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(
+                "quietdrive-route-test-\(UUID().uuidString).json"
+            )
+        defer {
+            try? FileManager.default.removeItem(at: storageURL)
+        }
+
+        let record = AudioRouteTestRecord(
+            id: UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000025"
+            )!,
+            capturedAt: Date(timeIntervalSince1970: 2_500),
+            family: .usb,
+            routeSignature:
+                "IN:USB audio:Mic|OUT:USB audio:DAC",
+            routeRevision: 4,
+            inputs: [
+                AudioRoutePortRecord(
+                    name: "Mic",
+                    type: "USB audio",
+                    isBluetooth: false
+                )
+            ],
+            outputs: [
+                AudioRoutePortRecord(
+                    name: "DAC",
+                    type: "USB audio",
+                    isBluetooth: false
+                )
+            ],
+            sampleRate: 48_000,
+            ioBufferMilliseconds: 5,
+            inputLatencyMilliseconds: 2,
+            outputLatencyMilliseconds: 3,
+            microphoneBufferMilliseconds: 21.33,
+            callbackAverageMilliseconds: 21.4,
+            callbackJitterMilliseconds: 0.2,
+            analysisAverageMilliseconds: 2.1,
+            analysisMaximumMilliseconds: 3.2,
+            fftWindowMilliseconds: 85.33,
+            snapshotAgeMilliseconds: 8,
+            estimatedSpectrumCenterAgeMilliseconds: 52.77,
+            microphoneBufferCount: 100,
+            fftTransformCount: 96
+        )
+
+        let recorder = AudioRouteTestingModel(
+            storageURL: storageURL
+        )
+        recorder.save(record)
+
+        XCTAssertEqual(recorder.records.count, 1)
+        XCTAssertEqual(recorder.distinctRouteCount, 1)
+        XCTAssertNil(recorder.lastError)
+
+        let reloaded = AudioRouteTestingModel(
+            storageURL: storageURL
+        )
+
+        XCTAssertEqual(reloaded.records, [record])
+        XCTAssertEqual(reloaded.distinctRouteCount, 1)
+
+        reloaded.delete(id: record.id)
+
+        let afterDelete = AudioRouteTestingModel(
+            storageURL: storageURL
+        )
+        XCTAssertTrue(afterDelete.records.isEmpty)
+    }
+
+    @MainActor
+    func testAudioRouteTestingCountsDistinctSignatures() {
+        let model = AudioRouteTestingModel(
+            storageURL: nil
+        )
+
+        func makeRecord(
+            id: String,
+            signature: String
+        ) -> AudioRouteTestRecord {
+            AudioRouteTestRecord(
+                id: UUID(uuidString: id)!,
+                capturedAt: Date(),
+                family: .builtIn,
+                routeSignature: signature,
+                routeRevision: 1,
+                inputs: [],
+                outputs: [],
+                sampleRate: 48_000,
+                ioBufferMilliseconds: 5,
+                inputLatencyMilliseconds: 0,
+                outputLatencyMilliseconds: 0,
+                microphoneBufferMilliseconds: 21,
+                callbackAverageMilliseconds: 21,
+                callbackJitterMilliseconds: 0.1,
+                analysisAverageMilliseconds: 2,
+                analysisMaximumMilliseconds: 3,
+                fftWindowMilliseconds: 85,
+                snapshotAgeMilliseconds: 8,
+                estimatedSpectrumCenterAgeMilliseconds: 52,
+                microphoneBufferCount: 10,
+                fftTransformCount: 6
+            )
+        }
+
+        model.save(
+            makeRecord(
+                id: "00000000-0000-0000-0000-000000000001",
+                signature: "A"
+            )
+        )
+        model.save(
+            makeRecord(
+                id: "00000000-0000-0000-0000-000000000002",
+                signature: "A"
+            )
+        )
+        model.save(
+            makeRecord(
+                id: "00000000-0000-0000-0000-000000000003",
+                signature: "B"
+            )
+        )
+
+        XCTAssertEqual(model.records.count, 3)
+        XCTAssertEqual(model.distinctRouteCount, 2)
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
