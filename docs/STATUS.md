@@ -132,7 +132,7 @@
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use. #23 reduces software-side instability risk. #24 now measures the app-side processing path and exposes system-reported I/O latency, but physical route/acoustic latency still requires #25–#27 characterization.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use. #23 reduces software-side instability risk. #24 now measures the app-side processing path and exposes system-reported I/O latency, but #25 now records route-specific configuration/timing snapshots, while Bluetooth behavior and actual timing variability still require #26–#27 characterization.
 
 
 ### Milestone 3 — Reality
@@ -181,7 +181,29 @@ The app and unit-test targets compile successfully in GitHub Actions against the
   - UI explicitly warns that these numbers do not yet equal Bluetooth/acoustic end-to-end round-trip latency
   - tests cover FFT-window timing, spectrum-center-age math, rolling latency statistics, callback/DSP/snapshot tracking, and callback-jitter calculation
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #25 Add audio-route testing
+- [x] #25 Add audio-route testing
+  - new durable AudioRouteTestingModel
+  - route families distinguish Built-in, Wired analog, USB audio, Car audio, Bluetooth A2DP, Bluetooth HFP, Bluetooth LE, AirPlay, HDMI, Mixed, and Unknown
+  - Bluetooth profiles are kept separate rather than collapsed into one generic Bluetooth route
+  - route signatures are built from input/output port type + name and sorted so port ordering does not change route identity
+  - persisted route records intentionally avoid storing raw AVAudioSession port UID values
+  - AudioSessionModel now exposes a stable current route signature
+  - AudioSessionModel increments a route revision whenever the effective input/output route signature changes
+  - each route test captures timestamp, route family, signature, route revision, exact input/output port descriptions, sample rate, I/O buffer duration, iOS input/output latency, microphone buffer duration, callback cadence/jitter, DSP timing, FFT window, snapshot age, estimated spectrum-center age, buffer count, and FFT transform count
+  - route tests are stored locally as atomic JSON under Application Support
+  - saved route tests reload automatically on app launch
+  - dedicated Audio Route Testing card added to the Cancellation Lab
+  - current route family, revision, input/output ports, sample rate, buffer, and iOS latency are visible before capture
+  - Refresh Route control forces an immediate AVAudioSession route refresh
+  - Capture Route Test requires an active audio session, active microphone capture, valid input/output routes, and at least one FFT transform
+  - route-test history is newest-first and shows the 10 most recent records while retaining the full local history
+  - history reports route family, route timing, processing timing, input/output port summaries, and capture timestamp
+  - distinct-route count is shown separately from total route-test count
+  - per-record delete and Clear All Route Tests controls
+  - route-test persistence errors are surfaced in the UI
+  - UI explicitly separates route metadata/timing snapshots from acoustic round-trip latency
+  - tests cover built-in route classification, Bluetooth A2DP/HFP/LE separation, Car audio, USB and wired classification, stable signatures across port ordering, durable save/reload/delete, and distinct-route counting
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #26 Characterize Bluetooth behavior
 - [ ] #27 Add Bluetooth jitter diagnostics
 - [ ] #28 Capture accelerometer data
