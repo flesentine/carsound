@@ -423,10 +423,11 @@ final class ToneGeneratorModel {
         guard !Task.isCancelled else { return }
 
         player.stop()
-        await player.scheduleBuffer(
+        player.scheduleBuffer(
             buffer,
             at: nil,
-            options: [.loops]
+            options: [.loops],
+            completionHandler: nil
         )
         player.volume = 0
         player.play()
