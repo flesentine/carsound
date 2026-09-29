@@ -132,11 +132,31 @@
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use. #23 reduces software-side instability risk, but it does not replace physical feedback-stability, latency, or route characterization.
 
 
 ### Milestone 3 — Reality
-- [ ] #23 Add stability protection
+- [x] #23 Add stability protection
+  - new AdaptiveStabilityGuard around the #22 controller
+  - trusted phase envelope limited to ±20° from the optimized seed
+  - trusted output envelope limited to ±8 percentage points from the optimized seed
+  - adaptive output still cannot exceed the user-selected search ceiling or the hard PCM ceiling
+  - phase excursion uses shortest circular distance across the 0°/360° boundary
+  - one full monitoring iteration is inserted after each accepted adjustment before another probe is allowed
+  - four consecutive rejected probe cycles trigger a three-iteration stability hold instead of continuous control hunting
+  - stability hold count and remaining hold iterations are exposed in the Lab
+  - accepted phase direction reversals are tracked independently from amplitude direction reversals
+  - three consecutive accepted direction reversals on either dimension trigger fail-safe shutdown as oscillation
+  - adaptive windows now count only fresh FFT transforms using fftTransformCount sequence numbers
+  - repeated reads of the same/stalled FFT snapshot are ignored rather than counted as independent acoustic samples
+  - stale measurement therefore exhausts the bounded sample-attempt window and triggers the existing missing-measurement fail-safe
+  - live microphone clipping now triggers immediate adaptive fail-safe shutdown
+  - existing route/session/capture/target/amplification/instability fail-safes remain active
+  - candidate settings outside the trusted phase/output envelope are never probed
+  - UI shows current phase/output drift from the optimized seed, stability holds, hold countdown, and direction-reversal streaks
+  - UI documents the trusted-envelope and rollback-backoff behavior
+  - tests cover trusted envelope limits, circular phase distance, post-acceptance cooldown, rollback backoff, phase oscillation detection, and amplitude oscillation detection
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #24 Measure processing latency
 - [ ] #25 Add audio-route testing
 - [ ] #26 Characterize Bluetooth behavior
