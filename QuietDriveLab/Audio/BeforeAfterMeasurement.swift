@@ -168,6 +168,8 @@ final class BeforeAfterMeasurementModel {
     private(set) var baseline: TargetEnergyWindowSummary?
     private(set) var treatment: TargetEnergyWindowSummary?
 
+    private var captureGeneration: UInt64 = 0
+
     var comparison: BeforeAfterComparison? {
         guard let baseline, let treatment else {
             return nil
@@ -180,8 +182,14 @@ final class BeforeAfterMeasurementModel {
     }
 
     func reset() {
+        captureGeneration += 1
         baseline = nil
         treatment = nil
+        state = .idle
+    }
+
+    func cancelCapture() {
+        captureGeneration += 1
         state = .idle
     }
 
@@ -194,6 +202,8 @@ final class BeforeAfterMeasurementModel {
     ) async {
         guard !state.isBusy else { return }
 
+        captureGeneration += 1
+        let generation = captureGeneration
         state = .settling(window)
 
         try? await Task.sleep(
@@ -203,8 +213,13 @@ final class BeforeAfterMeasurementModel {
             )
         )
 
-        guard !Task.isCancelled else {
-            state = .idle
+        guard
+            !Task.isCancelled,
+            generation == captureGeneration
+        else {
+            if generation == captureGeneration {
+                state = .idle
+            }
             return
         }
 
@@ -219,7 +234,8 @@ final class BeforeAfterMeasurementModel {
         while
             measurements.count < Self.requiredSamples,
             attempts < Self.maximumAttempts,
-            !Task.isCancelled
+            !Task.isCancelled,
+            generation == captureGeneration
         {
             attempts += 1
 
@@ -247,8 +263,13 @@ final class BeforeAfterMeasurementModel {
             )
         }
 
-        guard !Task.isCancelled else {
-            state = .idle
+        guard
+            !Task.isCancelled,
+            generation == captureGeneration
+        else {
+            if generation == captureGeneration {
+                state = .idle
+            }
             return
         }
 
