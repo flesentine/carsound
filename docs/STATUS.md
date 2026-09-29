@@ -20,22 +20,29 @@
 - [x] #16 Measure target-frequency energy
 - [x] #17 Create before/after measurement
 - [x] #18 Add experiment recorder
-  - durable local experiment history
-  - experiment records stored as JSON under Application Support
-  - no raw microphone audio is stored
-  - each saved run records timestamp, target frequency, treatment phase, treatment output level, baseline energy, treatment energy, treatment-minus-baseline dB, measured reduction dB, center levels, baseline/treatment variability, sample counts, window durations, input route, and output route
-  - Save Run button appears after a completed A/B comparison
-  - accidental repeat saving of the same displayed comparison is disabled within the active comparison state
-  - saved runs are displayed newest-first in the Cancellation Lab
-  - history shows phase/output/target, reduction or increase, baseline/treatment values, variability, sample counts, route summaries, and timestamp
-  - per-run Delete Run control
-  - Clear All Saved Runs control
-  - history view shows the 20 most recent runs while preserving all saved records locally
-  - recorder errors are surfaced in the Lab UI instead of silently discarding failures
-  - JSON writes use atomic replacement
-  - history reloads automatically when the recorder model initializes
-  - persistence tests use temporary JSON files and cover save/reload, field capture, delete persistence, and clear-all persistence
-  - fixed an optional-value test compile issue found by CI
+- [x] #19 Add automatic phase sweep
+  - new reusable PhaseSweepModel
+  - default coarse sweep tests 8 phases: 0°, 45°, 90°, 135°, 180°, 225°, 270°, and 315°
+  - phase inputs are normalized modulo 360° and duplicate phase values are removed
+  - one previously captured baseline is reused across the full sweep
+  - target frequency and output level remain fixed across the sweep
+  - each phase gets a 350 ms settling interval after phase application
+  - each phase then collects 20 valid target-energy readings at 10 Hz
+  - treatment windows are averaged in linear power through the existing before/after math
+  - every phase is compared against the same baseline
+  - every completed phase comparison is automatically saved to durable experiment history
+  - sweep progress reports phase index, phase angle, settling state, and sample count
+  - sweep results table shows phase, treatment target-band energy, and reduction/increase relative to baseline
+  - best coarse phase is selected by lowest measured treatment-band energy
+  - treatment variability is used as a tie-breaker when energies are effectively equal
+  - Apply Best Coarse Phase control
+  - sweep automatically mutes generated output after all phases finish
+  - Cancel Sweep immediately cancels the active sweep and mutes tone output
+  - MUTE NOW cancels the sweep before muting
+  - Stop All cancels both A/B measurement and phase sweep before stopping tone/capture
+  - target/phase/output and conflicting experiment controls are locked during a sweep
+  - coarse sweep reset preserves durable experiment history while clearing the live sweep table
+  - tests cover default phase grid, phase normalization/deduplication, best-energy selection, and variability tie-breaking
   - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Milestone status
@@ -51,11 +58,11 @@
 - [x] #16 Measure target-frequency energy
 - [x] #17 Create before/after measurement
 - [x] #18 Add experiment recorder
-- [ ] #19 Add automatic phase sweep
+- [x] #19 Add automatic phase sweep
 - [ ] #20 Refine phase search
 - [ ] #21 Add automatic amplitude search
 - [ ] #22 Build adaptive controller
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Saved experiments contain relative digital measurement summaries, not calibrated acoustic SPL and not raw audio. Physical iPhone/car testing remains necessary before interpreting reductions as repeatable acoustic cancellation.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. The automatic sweep identifies the lowest measured point on a coarse 45° digital-phase grid; it is not yet a fine optimum and does not establish the acoustic phase at the phone microphone. Physical iPhone/car testing remains required.
