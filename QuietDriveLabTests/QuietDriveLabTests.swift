@@ -550,6 +550,101 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testTonePhaseNormalizesIntoOneCycle() {
+        XCTAssertEqual(
+            ToneGeneratorMath.normalizedPhaseDegrees(0),
+            0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.normalizedPhaseDegrees(360),
+            0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.normalizedPhaseDegrees(450),
+            90,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.normalizedPhaseDegrees(-90),
+            270,
+            accuracy: 0.0001
+        )
+    }
+
+    func testToneInvertAddsOneHundredEightyDegreesModuloCycle() {
+        XCTAssertEqual(
+            ToneGeneratorMath.invertedPhaseDegrees(0),
+            180,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath.invertedPhaseDegrees(225),
+            45,
+            accuracy: 0.0001
+        )
+    }
+
+    func testNinetyDegreeToneStartsAtPositivePeak() throws {
+        let samples = ToneGeneratorMath.makeOneSecondLoop(
+            frequencyHz: 80,
+            sampleRate: 48_000,
+            phaseDegrees: 90
+        )
+        let first = try XCTUnwrap(samples.first)
+
+        XCTAssertEqual(
+            first,
+            ToneGeneratorMath.maximumAmplitude,
+            accuracy: 0.000001
+        )
+    }
+
+    func testOneHundredEightyDegreePhaseInvertsWaveform() {
+        let zeroPhase = ToneGeneratorMath.makeOneSecondLoop(
+            frequencyHz: 80,
+            sampleRate: 48_000,
+            phaseDegrees: 0
+        )
+        let inverted = ToneGeneratorMath.makeOneSecondLoop(
+            frequencyHz: 80,
+            sampleRate: 48_000,
+            phaseDegrees: 180
+        )
+
+        XCTAssertEqual(zeroPhase.count, inverted.count)
+
+        for index in stride(
+            from: 0,
+            to: zeroPhase.count,
+            by: 997
+        ) {
+            XCTAssertEqual(
+                inverted[index],
+                -zeroPhase[index],
+                accuracy: 0.000001
+            )
+        }
+    }
+
+    func testPhasedToneLoopStillWrapsContinuously() throws {
+        let samples = ToneGeneratorMath.makeOneSecondLoop(
+            frequencyHz: 113,
+            sampleRate: 48_000,
+            phaseDegrees: 137
+        )
+        let first = try XCTUnwrap(samples.first)
+        let second = samples[1]
+        let last = try XCTUnwrap(samples.last)
+
+        XCTAssertEqual(
+            first - last,
+            second - first,
+            accuracy: 0.00002
+        )
+    }
+
     func testToneOutputPercentIsHardClamped() {
         XCTAssertEqual(
             ToneGeneratorMath.sanitizedOutputPercent(-10),
