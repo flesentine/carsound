@@ -4,30 +4,32 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#21 — automatic amplitude search** is implemented.
+Development effort **#22 — adaptive controller** is implemented. This completes **Milestone 2 — Fight one frequency (#12–#22)**.
 
-After coarse and fine phase search identify a refined phase, QuietDrive can now hold that phase fixed and automatically search output amplitude.
+The controller starts from the best phase/output found by the coarse phase sweep, fine phase refinement, and amplitude search. It then performs a deliberately bounded local search rather than making large uncontrolled changes.
 
-The user's **currently selected output level becomes the search ceiling**. QuietDrive may test lower output levels, but it will not silently test above that selected level. The existing hard PCM ceiling remains underneath this additional user-controlled ceiling.
+The loop alternates:
 
-The amplitude search runs in two stages:
+- **phase probes:** current accepted phase ±5°
+- **output probes:** current accepted output ±2%
 
-- **Stage 1:** coarse 10% output steps up to the selected ceiling.
-- **Stage 2:** ±10% around the coarse winner using 2% steps, clamped to the same ceiling.
+Each setting is measured with a 10-sample target-energy window. A candidate must improve target-band energy by at least **0.35 dB** before QuietDrive accepts it. Otherwise the controller restores the previous accepted settings.
 
-A non-round ceiling is included exactly. For example, a 42% ceiling produces a coarse grid of **10%, 20%, 30%, 40%, 42%**.
+Adaptive output remains bounded by the user's amplitude-search ceiling, the 2% automatic-control minimum, and the app's existing hard PCM ceiling.
 
-Every level uses the same baseline, target frequency, refined phase, settling interval, 20-sample treatment window, and linear-power comparison math used elsewhere in the Cancellation Lab. Every result is automatically saved to durable experiment history.
+The controller includes conservative fail-safe behavior. Generated output is immediately muted if the measurement path disappears, the input/output route changes, the audio session or microphone capture stops, ANC Focus is lost, the target frequency changes, measurements remain unstable, or the active treatment measures **3 dB or more above the no-tone baseline**.
 
-The winning output is the level with the **lowest measured treatment-band energy**. If energies are effectively equal, QuietDrive prefers lower variability; if those are also equal, it prefers the **lower output level**.
+Accepted adaptive adjustments are stored in the durable experiment history. The Cancellation Lab shows the active accepted phase/output, latest target energy and reduction, measurement variability, iterations, accepted adjustments, rollbacks, and the controller's latest action.
 
-The generator is automatically muted when the search completes. Cancel Amplitude Search, MUTE NOW, and Stop All safely terminate an active search.
+This remains an **experimental lab controller**. Simulator CI can prove the code and test target compile, but it cannot prove acoustic cancellation, Bluetooth timing stability, safe speaker output, or sustained feedback stability in a real vehicle.
 
-With target detection, measurement, A/B comparison, durable experiments, coarse/fine phase search, and amplitude search now in place, **#22 — adaptive controller** is the remaining Milestone 2 item.
+## What comes next
+
+**Milestone 3 — Reality** starts with #23 stability protection, then latency measurement, audio-route testing, Bluetooth characterization/jitter diagnostics, vibration sensing, sound/vibration correlation, music-interference detection, and overall confidence scoring.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, comparison summaries, phase/amplitude search results, and saved experiment metadata.
+Raw microphone audio is not stored. Live microphone buffers are reduced in memory to measurements such as level, spectrum, noise floor, candidate frequencies, persistence metrics, target-band energy, comparison summaries, search/controller results, and saved experiment metadata.
 
 ## Generate the Xcode project
 
