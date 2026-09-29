@@ -18,22 +18,29 @@
 - [x] #14 Add manual phase control
 - [x] #15 Build Lab cancellation control screen
 - [x] #16 Measure target-frequency energy
-  - new reusable TargetFrequencyEnergyMeter
-  - measurement uses the Balanced smoothed spectrum
-  - evaluates a narrow multi-bin band centered on the selected cancellation target
-  - band half-width is at least 8 Hz and otherwise scales to 1.5 FFT bins
-  - band energy is summed in linear power rather than averaging dB values
-  - center-frequency level is estimated separately using linear-power interpolation between neighboring FFT bins
-  - nearest FFT-bin frequency is reported for transparency
-  - matching noise-floor bins are summed across the same band
-  - dB above the tracked floor is reported when complete floor data is available
-  - incomplete floor data is shown as warming up rather than fabricated
-  - Cancellation Lab now has a live Target Energy card
-  - live card shows narrow-band energy, center level, floor energy, dB above floor, measured target, nearest FFT bin, actual band limits/bin count, and FFT resolution
-  - measurement is calculated from the published capture snapshot, keeping this UI work out of the audio callback
-  - UI explicitly says lower narrow-band energy means less measured energy near the selected target
-  - UI warns that phone position, route, stereo volume, and driving condition must stay consistent for meaningful comparisons
-  - tests cover multi-bin band selection, linear-power summation, 10 dB spectrum/floor separation, incomplete-floor handling, and power-domain interpolation
+- [x] #17 Create before/after measurement
+  - new reusable before/after measurement model
+  - baseline and treatment are measured as windows rather than single FFT frames
+  - each window collects 20 valid target-energy samples at 10 Hz
+  - 350 ms settling delay before each window begins
+  - window averages are calculated in linear power before converting back to dB
+  - baseline capture automatically mutes generated output if it is currently audible
+  - baseline can also be captured with the tone already stopped/muted
+  - treatment capture requires the generated tone to be actively playing and unmuted
+  - treatment is disabled if the target frequency changed after baseline
+  - changing target requires a fresh baseline
+  - baseline capture clears any previous treatment result
+  - comparison reports treatment-minus-baseline dB and measured reduction dB
+  - positive measured reduction means less target-band energy in treatment than baseline
+  - window summaries retain target frequency, phase, output level, tone state, sample count, duration, min/max energy, center level, and variability
+  - Cancellation Lab shows baseline and treatment averages plus standard deviation
+  - live progress shows settling and sample collection count
+  - target/phase/output controls are locked during a measurement window
+  - ordinary start/stop experiment controls are locked during a measurement window
+  - MUTE NOW remains available during measurement
+  - Stop All cancels any active comparison window and stops tone/capture
+  - comparison capture is generation-cancellable so stale async collection cannot overwrite a reset state
+  - tests cover power-domain window averaging, positive reduction, measured increase, target mismatch rejection, and mixed-target sample rejection
   - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Milestone status
@@ -47,7 +54,7 @@
 - [x] #14 Add manual phase control
 - [x] #15 Build Lab cancellation control screen
 - [x] #16 Measure target-frequency energy
-- [ ] #17 Create before/after measurement
+- [x] #17 Create before/after measurement
 - [ ] #18 Add experiment recorder
 - [ ] #19 Add automatic phase sweep
 - [ ] #20 Refine phase search
@@ -56,4 +63,4 @@
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Target-frequency energy is a relative digital FFT-band measurement, not calibrated acoustic SPL. Physical iPhone/car testing is still required to determine whether phase changes actually reduce the measured cabin tone in a repeatable way.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Before/after values are relative digital target-band measurements, not calibrated acoustic SPL. Meaningful physical comparisons still require a real iPhone/car test with stable phone position, route, vehicle volume, and driving conditions.
