@@ -45,6 +45,7 @@ final class MicrophoneCaptureModel {
         let noiseFloor: NoiseFloorSnapshot
         let dominantFrequencies: DominantFrequencySnapshot
         let persistentTones: PersistentToneSnapshot
+        let processingLatency: ProcessingLatencySnapshot
 
         static let empty = Snapshot(
             bufferCount: 0,
@@ -71,7 +72,8 @@ final class MicrophoneCaptureModel {
             smoothedSpectrum: .empty,
             noiseFloor: .empty,
             dominantFrequencies: .empty,
-            persistentTones: .empty
+            persistentTones: .empty,
+            processingLatency: .empty
         )
     }
 
@@ -206,6 +208,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var dominantFrequencies: DominantFrequencySnapshot = .empty
     private var persistentTones: PersistentToneSnapshot = .empty
     private var captureTimelineSeconds: Double = 0
+    private var processingLatencyTracker =
+        ProcessingLatencyTracker()
 
     func setAnalysisMode(_ mode: AnalysisMode) {
         lock.lock()
@@ -219,6 +223,9 @@ private final class CaptureStatsStore: @unchecked Sendable {
     }
 
     func record(buffer: AVAudioPCMBuffer) {
+        let callbackStartedNanoseconds =
+            DispatchTime.now().uptimeNanoseconds
+
         lock.lock()
         let currentAnalysisMode = analysisMode
         lock.unlock()
@@ -271,6 +278,9 @@ private final class CaptureStatsStore: @unchecked Sendable {
             )
         }
 
+        let analysisCompletedNanoseconds =
+            DispatchTime.now().uptimeNanoseconds
+
         lock.lock()
         bufferCount += 1
         frameCount += UInt64(buffer.frameLength)
@@ -305,12 +315,28 @@ private final class CaptureStatsStore: @unchecked Sendable {
             persistentTones = latestPersistentTones
         }
 
+        processingLatencyTracker.record(
+            callbackStartedNanoseconds:
+                callbackStartedNanoseconds,
+            analysisCompletedNanoseconds:
+                analysisCompletedNanoseconds
+        )
+
         lock.unlock()
     }
 
     func snapshot() -> MicrophoneCaptureModel.Snapshot {
         lock.lock()
         defer { lock.unlock() }
+
+        let latencySnapshot =
+            processingLatencyTracker.snapshot(
+                nowNanoseconds:
+                    DispatchTime.now().uptimeNanoseconds,
+                fftSampleCount:
+                    fftSnapshot.sampleCount,
+                sampleRate: sampleRate
+            )
 
         return MicrophoneCaptureModel.Snapshot(
             bufferCount: bufferCount,
@@ -337,7 +363,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
             smoothedSpectrum: smoothedSpectrum,
             noiseFloor: noiseFloor,
             dominantFrequencies: dominantFrequencies,
-            persistentTones: persistentTones
+            persistentTones: persistentTones,
+            processingLatency: latencySnapshot
         )
     }
 
@@ -366,6 +393,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
         dominantFrequencies = .empty
         persistentTones = .empty
         captureTimelineSeconds = 0
+        processingLatencyTracker.reset()
         lock.unlock()
     }
 
