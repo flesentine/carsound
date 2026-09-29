@@ -21,28 +21,30 @@
 - [x] #17 Create before/after measurement
 - [x] #18 Add experiment recorder
 - [x] #19 Add automatic phase sweep
-  - new reusable PhaseSweepModel
-  - default coarse sweep tests 8 phases: 0°, 45°, 90°, 135°, 180°, 225°, 270°, and 315°
-  - phase inputs are normalized modulo 360° and duplicate phase values are removed
-  - one previously captured baseline is reused across the full sweep
-  - target frequency and output level remain fixed across the sweep
-  - each phase gets a 350 ms settling interval after phase application
+- [x] #20 Refine phase search
+  - new reusable PhaseRefinementModel
+  - refinement starts from the best coarse phase found by #19
+  - Stage 1 searches coarse winner ±30° at 15° spacing
+  - Stage 2 searches the Stage-1 winner ±10° at 5° spacing
+  - phase grids normalize correctly across the 0°/360° boundary
+  - the same existing baseline, target frequency, and output level are held fixed through both refinement stages
+  - each refinement phase uses the same 350 ms settling interval as the coarse sweep
   - each phase then collects 20 valid target-energy readings at 10 Hz
-  - treatment windows are averaged in linear power through the existing before/after math
-  - every phase is compared against the same baseline
-  - every completed phase comparison is automatically saved to durable experiment history
-  - sweep progress reports phase index, phase angle, settling state, and sample count
-  - sweep results table shows phase, treatment target-band energy, and reduction/increase relative to baseline
-  - best coarse phase is selected by lowest measured treatment-band energy
-  - treatment variability is used as a tie-breaker when energies are effectively equal
-  - Apply Best Coarse Phase control
-  - sweep automatically mutes generated output after all phases finish
-  - Cancel Sweep immediately cancels the active sweep and mutes tone output
-  - MUTE NOW cancels the sweep before muting
-  - Stop All cancels both A/B measurement and phase sweep before stopping tone/capture
-  - target/phase/output and conflicting experiment controls are locked during a sweep
-  - coarse sweep reset preserves durable experiment history while clearing the live sweep table
-  - tests cover default phase grid, phase normalization/deduplication, best-energy selection, and variability tie-breaking
+  - treatment windows reuse the existing linear-power averaging and before/after comparison math
+  - every fine-search treatment is automatically saved to durable experiment history
+  - fine-search progress reports stage, phase index, angle, settling, and sample count
+  - Stage 1 and Stage 2 result tables are shown separately in the Cancellation Lab
+  - each stage identifies its own lowest-energy candidate
+  - final refined phase is selected by lowest treatment-band energy across both stages
+  - treatment variability remains the tie-breaker for effectively equal energy measurements
+  - Apply Best Refined Phase control
+  - fine refinement automatically mutes generated output when complete
+  - Cancel Fine Search immediately cancels the active refinement and mutes output
+  - MUTE NOW cancels both coarse and fine searches before muting
+  - Stop All cancels A/B measurement, coarse sweep, and fine refinement before stopping tone/capture
+  - conflicting manual/measurement controls are locked during refinement
+  - starting or resetting a new coarse sweep clears stale fine-search state
+  - tests cover 15° Stage-1 grid, 5° Stage-2 grid, wrap-around behavior at 0°/360°, and best-result selection across both stages
   - full app + unit-test simulator build-for-testing green in GitHub Actions
 
 ## Milestone status
@@ -59,10 +61,10 @@
 - [x] #17 Create before/after measurement
 - [x] #18 Add experiment recorder
 - [x] #19 Add automatic phase sweep
-- [ ] #20 Refine phase search
+- [x] #20 Refine phase search
 - [ ] #21 Add automatic amplitude search
 - [ ] #22 Build adaptive controller
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. The automatic sweep identifies the lowest measured point on a coarse 45° digital-phase grid; it is not yet a fine optimum and does not establish the acoustic phase at the phone microphone. Physical iPhone/car testing remains required.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. The refined result is the lowest measured point on a 5° digital-phase grid, not a proof of the exact acoustic phase at the phone microphone. Physical iPhone/car testing remains required to establish repeatability and real cancellation performance.
