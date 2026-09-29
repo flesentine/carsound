@@ -4,13 +4,24 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#14 — manual phase control** is implemented.
+Development effort **#15 — Lab cancellation control screen** is implemented.
 
-The generated low-frequency sine can now be shifted manually through **0–360°**, with quick **0° / 90° / 180° / 270°** presets and an **Invert +180°** control. Phase is normalized modulo one complete cycle, and the PCM generator applies that phase without changing the selected frequency or the hard-capped output amplitude.
+The app now has a dedicated **Cancellation Lab** instead of forcing the experimenter to jump between diagnostic cards. The screen centralizes the controls needed for the first manual cancellation tests:
 
-Phase can also be changed while the tone is playing. To reduce hard discontinuities, live slider changes are briefly debounced, the output ramps down for about **35 ms**, the player swaps to the newly phased loop, and output ramps back to the selected level over another **35 ms**.
+- audio/input/output readiness
+- 30–200 Hz target frequency
+- highest-confidence persistent-tone targeting
+- manual output level
+- manual 0–360° phase
+- phase presets and +180° inversion
+- microphone capture controls
+- tone-generator controls
+- combined Start Capture + Tone
+- Stop All
+- immediate MUTE NOW / Resume
+- live generator and microphone state
 
-A crucial physical limitation remains: this is **generated digital phase**. Bluetooth/car-audio latency and jitter can shift the acoustic phase that ultimately reaches the phone microphone. The later measurement and phase-search milestones are what determine whether a particular generated phase actually reduces the target cabin tone.
+The screen intentionally does **not** report whether a phase setting improved the target noise yet. That begins with **#16 — target-frequency energy measurement**, which will provide an objective measurement at the selected frequency rather than relying on listening alone.
 
 ## Privacy principle
 
