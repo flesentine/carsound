@@ -6,6 +6,7 @@ struct CancellationLabView: View {
     @Environment(ToneGeneratorModel.self) private var toneGenerator
     @Environment(BeforeAfterMeasurementModel.self) private var beforeAfterMeasurement
     @Environment(ExperimentRecorderModel.self) private var experimentRecorder
+    @Environment(PhaseSweepModel.self) private var phaseSweep
 
     @State private var lastSavedComparisonKey: String?
 
@@ -16,6 +17,7 @@ struct CancellationLabView: View {
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
+                phaseSweepCard
                 experimentHistoryCard
                 controlsCard
                 liveStateCard
@@ -209,7 +211,10 @@ struct CancellationLabView: View {
             .buttonStyle(.bordered)
         }
         .cancellationCard()
-        .disabled(beforeAfterMeasurement.state.isBusy)
+        .disabled(
+            beforeAfterMeasurement.state.isBusy ||
+            phaseSweep.state.isRunning
+        )
     }
 
     private var targetEnergyCard: some View {
@@ -374,7 +379,8 @@ struct CancellationLabView: View {
                 .disabled(
                     microphoneCapture.state != .capturing ||
                     targetEnergyMeasurement == nil ||
-                    beforeAfterMeasurement.state.isBusy
+                    beforeAfterMeasurement.state.isBusy ||
+                    phaseSweep.state.isRunning
                 )
 
                 Button("Capture Treatment") {
@@ -388,7 +394,8 @@ struct CancellationLabView: View {
                     toneGenerator.isMuted ||
                     targetEnergyMeasurement == nil ||
                     !baselineMatchesCurrentTarget ||
-                    beforeAfterMeasurement.state.isBusy
+                    beforeAfterMeasurement.state.isBusy ||
+                    phaseSweep.state.isRunning
                 )
             }
 
@@ -493,6 +500,162 @@ struct CancellationLabView: View {
                 }
                 .buttonStyle(.bordered)
                 .disabled(beforeAfterMeasurement.state.isBusy)
+            }
+        }
+        .cancellationCard()
+    }
+
+    private var phaseSweepCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Automatic Phase Sweep", systemImage: "arrow.triangle.2.circlepath")
+                    .font(.headline)
+
+                Spacer()
+
+                if phaseSweep.state.isRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+
+            Text("Coarse search: one baseline is reused while QuietDrive measures treatment at 0°, 45°, 90° … 315°. Each phase gets the same 20-sample treatment window.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if let progress = phaseSweepProgressText {
+                Text(progress)
+                    .font(.subheadline.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+
+            HStack {
+                Button("Start 8-Phase Sweep") {
+                    startPhaseSweep()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canStartPhaseSweep)
+
+                if phaseSweep.state.isRunning {
+                    Button("Cancel Sweep") {
+                        phaseSweep.cancel()
+                        toneGenerator.muteImmediately()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            if beforeAfterMeasurement.baseline == nil {
+                Text("Capture a baseline first.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if !baselineMatchesCurrentTarget {
+                Text("The baseline target no longer matches the selected target. Capture a new baseline.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if toneGenerator.state == .playing && toneGenerator.isMuted {
+                Text("Resume the tone before starting the sweep. The sweep will mute the tone automatically when it finishes.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if case let .failed(message) = phaseSweep.state {
+                Text(message)
+                    .font(.footnote)
+                    .foregroundStyle(.red)
+            }
+
+            if !phaseSweep.results.isEmpty {
+                Divider()
+
+                ForEach(phaseSweep.results) { result in
+                    HStack {
+                        Text(
+                            String(
+                                format: "%.0f°",
+                                result.phaseDegrees
+                            )
+                        )
+                        .font(.subheadline.monospacedDigit().weight(.semibold))
+                        .frame(width: 48, alignment: .leading)
+
+                        Text(
+                            String(
+                                format: "%.2f dBFS",
+                                result.treatment.averageBandEnergyDBFS
+                            )
+                        )
+                        .font(.subheadline.monospacedDigit())
+
+                        Spacer()
+
+                        Text(
+                            result.comparison.measuredReductionDB >= 0
+                                ? String(
+                                    format: "−%.2f dB",
+                                    result.comparison.measuredReductionDB
+                                )
+                                : String(
+                                    format: "+%.2f dB",
+                                    abs(result.comparison.measuredReductionDB)
+                                )
+                        )
+                        .font(.subheadline.monospacedDigit())
+                    }
+                }
+            }
+
+            if let best = phaseSweep.bestResult {
+                Divider()
+
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Best coarse phase")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Text(
+                            String(
+                                format: "%.0f° • %.2f dBFS",
+                                best.phaseDegrees,
+                                best.treatment.averageBandEnergyDBFS
+                            )
+                        )
+                        .font(.title3.monospacedDigit().weight(.semibold))
+                    }
+
+                    Spacer()
+
+                    Text(
+                        String(
+                            format: "%.2f dB reduction",
+                            best.comparison.measuredReductionDB
+                        )
+                    )
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+                }
+
+                Button("Apply Best Coarse Phase") {
+                    toneGenerator.setPhaseDegrees(
+                        best.phaseDegrees
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(toneGenerator.state != .playing)
+
+                Text("This is only the best point in the coarse 45° grid. #20 will refine the search around this region.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if !phaseSweep.results.isEmpty &&
+                !phaseSweep.state.isRunning
+            {
+                Button("Reset Sweep") {
+                    phaseSweep.reset()
+                }
+                .buttonStyle(.bordered)
             }
         }
         .cancellationCard()
@@ -658,7 +821,8 @@ struct CancellationLabView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(
                     audioSession.state != .active ||
-                    beforeAfterMeasurement.state.isBusy
+                    beforeAfterMeasurement.state.isBusy ||
+                    phaseSweep.state.isRunning
                 )
 
                 Button(
@@ -694,17 +858,19 @@ struct CancellationLabView: View {
             .disabled(
                 !isExperimentReady ||
                 bothRunning ||
-                beforeAfterMeasurement.state.isBusy
+                beforeAfterMeasurement.state.isBusy ||
+                phaseSweep.state.isRunning
             )
 
             Button("Stop All") {
                 beforeAfterMeasurement.cancelCapture()
+                phaseSweep.cancel()
                 toneGenerator.stopImmediately()
                 microphoneCapture.stopCapture()
             }
             .buttonStyle(.bordered)
 
-            Text("Use Before / After for an averaged A/B result. Experiment recording and saved run history begin in #18.")
+            Text("Use the coarse phase sweep after capturing a baseline. Fine phase refinement begins in #20.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
         }
@@ -784,6 +950,7 @@ struct CancellationLabView: View {
                 if toneGenerator.isMuted {
                     toneGenerator.unmute()
                 } else {
+                    phaseSweep.cancel()
                     toneGenerator.muteImmediately()
                 }
             }
@@ -803,6 +970,90 @@ struct CancellationLabView: View {
             )
         }
         .cancellationCard()
+    }
+
+    private var phaseSweepProgressText: String? {
+        switch phaseSweep.state {
+        case .idle:
+            nil
+        case let .settling(phaseDegrees, index, total):
+            String(
+                format: "Phase %d/%d • %.0f° • settling...",
+                index,
+                total,
+                phaseDegrees
+            )
+        case let .capturing(
+            phaseDegrees,
+            index,
+            total,
+            collected,
+            required
+        ):
+            String(
+                format: "Phase %d/%d • %.0f° • %d/%d samples",
+                index,
+                total,
+                phaseDegrees,
+                collected,
+                required
+            )
+        case .completed:
+            "Sweep complete"
+        case .failed:
+            nil
+        }
+    }
+
+    private var canStartPhaseSweep: Bool {
+        beforeAfterMeasurement.baseline != nil &&
+        baselineMatchesCurrentTarget &&
+        microphoneCapture.state == .capturing &&
+        toneGenerator.state == .playing &&
+        !toneGenerator.isMuted &&
+        toneGenerator.outputPercent > 0 &&
+        targetEnergyMeasurement != nil &&
+        !beforeAfterMeasurement.state.isBusy &&
+        !phaseSweep.state.isRunning
+    }
+
+    private func startPhaseSweep() {
+        guard
+            let baseline = beforeAfterMeasurement.baseline
+        else {
+            return
+        }
+
+        let target = baseline.condition.targetFrequencyHz
+        let output = toneGenerator.outputPercent
+        let inputRoute = inputRouteSummary
+        let outputRoute = outputRouteSummary
+
+        lastSavedComparisonKey = nil
+
+        Task { @MainActor in
+            await phaseSweep.run(
+                baseline: baseline,
+                outputPercent: output,
+                applyPhase: { phase in
+                    toneGenerator.setPhaseDegrees(phase)
+                },
+                measurementProvider: {
+                    measurementForTarget(target)
+                },
+                onComparison: { comparison in
+                    _ = experimentRecorder.record(
+                        comparison: comparison,
+                        inputRoute: inputRoute,
+                        outputRoute: outputRoute
+                    )
+                }
+            )
+
+            if phaseSweep.state == .completed {
+                toneGenerator.muteImmediately()
+            }
+        }
     }
 
     private var comparisonProgressText: String? {
