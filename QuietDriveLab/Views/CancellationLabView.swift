@@ -676,11 +676,14 @@ struct CancellationLabView: View {
                     phaseSweep.reset()
                     phaseRefinement.reset()
                     phaseRefinementProgressText = nil
+                    amplitudeSearch.reset()
+                    amplitudeSearchProgressText = nil
                 }
                 .buttonStyle(.bordered)
             }
         }
         .cancellationCard()
+        .disabled(amplitudeSearch.state.isRunning)
     }
 
     private var phaseRefinementCard: some View {
@@ -859,6 +862,7 @@ struct CancellationLabView: View {
             }
         }
         .cancellationCard()
+        .disabled(amplitudeSearch.state.isRunning)
     }
 
     private var amplitudeSearchCard: some View {
@@ -1273,7 +1277,9 @@ struct CancellationLabView: View {
                 !isExperimentReady ||
                 bothRunning ||
                 beforeAfterMeasurement.state.isBusy ||
-                phaseSweep.state.isRunning
+                phaseSweep.state.isRunning ||
+                phaseRefinement.state.isRunning ||
+                amplitudeSearch.state.isRunning
             )
 
             Button("Stop All") {
@@ -1631,7 +1637,8 @@ struct CancellationLabView: View {
         targetEnergyMeasurement != nil &&
         !beforeAfterMeasurement.state.isBusy &&
         !phaseSweep.state.isRunning &&
-        !phaseRefinement.state.isRunning
+        !phaseRefinement.state.isRunning &&
+        !amplitudeSearch.state.isRunning
     }
 
     private func startPhaseSweep() {
