@@ -492,7 +492,10 @@ struct CancellationLabView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(audioSession.state != .active)
+                .disabled(
+                    audioSession.state != .active ||
+                    beforeAfterMeasurement.state.isBusy
+                )
 
                 Button(
                     toneGenerator.state == .playing
@@ -508,7 +511,10 @@ struct CancellationLabView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(audioSession.state != .active)
+                .disabled(
+                    audioSession.state != .active ||
+                    beforeAfterMeasurement.state.isBusy
+                )
             }
 
             Button("Start Capture + Tone") {
@@ -521,9 +527,14 @@ struct CancellationLabView: View {
                 }
             }
             .buttonStyle(.borderedProminent)
-            .disabled(!isExperimentReady || bothRunning)
+            .disabled(
+                !isExperimentReady ||
+                bothRunning ||
+                beforeAfterMeasurement.state.isBusy
+            )
 
             Button("Stop All") {
+                beforeAfterMeasurement.cancelCapture()
                 toneGenerator.stopImmediately()
                 microphoneCapture.stopCapture()
             }
