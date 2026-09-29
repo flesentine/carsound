@@ -1184,4 +1184,5 @@ private extension View {
         .environment(AudioSessionModel())
         .environment(MicrophoneCaptureModel())
         .environment(ToneGeneratorModel())
+        .environment(BeforeAfterMeasurementModel())
 }
