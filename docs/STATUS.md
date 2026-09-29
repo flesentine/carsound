@@ -62,9 +62,39 @@
 - [x] #18 Add experiment recorder
 - [x] #19 Add automatic phase sweep
 - [x] #20 Refine phase search
-- [ ] #21 Add automatic amplitude search
+- [x] #21 Add automatic amplitude search
+  - new reusable AmplitudeSearchModel
+  - holds the best refined phase from #20 fixed during amplitude search
+  - uses the user's current selected output level as an additional search ceiling
+  - search never raises output above that user-selected ceiling
+  - existing 0.02 PCM hard amplitude ceiling remains enforced underneath the search ceiling
+  - minimum automatic search level is 2%
+  - Stage 1 performs a coarse 10%-step search from low output up to the selected ceiling
+  - non-round ceilings are included exactly, e.g. a 42% ceiling tests 10/20/30/40/42%
+  - Stage 2 searches around the coarse winner within ±10% using 2% steps
+  - fine-stage levels are clamped to the user-selected ceiling and never exceed it
+  - same baseline, target frequency, and refined phase are held fixed through the search
+  - each output level gets the standard 350 ms settling interval
+  - each output level then collects 20 valid target-energy readings at 10 Hz
+  - treatment windows reuse existing linear-power averaging and before/after comparison math
+  - every amplitude-search treatment is automatically saved to durable experiment history
+  - live progress reports stage, level index, output percent, settling, and sample count
+  - Stage 1 and Stage 2 result tables show output level, target-band energy, and reduction/increase versus baseline
+  - best output is selected by lowest measured treatment-band energy
+  - lower variability breaks equal-energy ties
+  - lower output level breaks ties when both energy and variability are effectively equal
+  - Apply Best Output Level control
+  - automatic search applies the refined phase before level testing
+  - search automatically mutes generated output when complete
+  - Cancel Amplitude Search immediately cancels and mutes
+  - MUTE NOW cancels coarse phase, fine phase, and amplitude search before muting
+  - Stop All cancels all active measurement/search work before stopping capture/output
+  - conflicting manual and experiment controls are locked during amplitude search
+  - starting a new coarse/fine phase search clears stale amplitude-search state
+  - tests cover coarse grid generation, non-round ceilings, ceiling enforcement, minimum level, fine 2% grid, ceiling clamping, best-energy selection, and lower-output tie-breaking
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #22 Build adaptive controller
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. The refined result is the lowest measured point on a 5° digital-phase grid, not a proof of the exact acoustic phase at the phone microphone. Physical iPhone/car testing remains required to establish repeatability and real cancellation performance.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. The refined phase and amplitude result are experimentally selected digital settings, not proof of exact acoustic phase or calibrated acoustic SPL at the phone microphone. The automatic amplitude search stays below both the user's selected search ceiling and the app's hard digital ceiling. Physical iPhone/car testing remains required to establish repeatability and real cancellation performance.
