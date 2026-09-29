@@ -32,7 +32,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 2.2 • Bounded adaptive cancellation control is available")
+                    Text("Lab build 2.3 • Adaptive stability protection is available")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
