@@ -3053,6 +3053,218 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testBluetoothJitterStableAssessmentNeedsEnoughSamples() {
+        let samples = (0..<8).map { index in
+            BluetoothJitterSample(
+                capturedAtSeconds:
+                    Double(index) * 0.25,
+                fftTransformCount:
+                    UInt64(index + 1),
+                profile: .a2dp,
+                routeRevision: 1,
+                sampleRate: 48_000,
+                ioBufferMilliseconds: 10,
+                inputLatencyMilliseconds: 2,
+                outputLatencyMilliseconds: 120,
+                callbackIntervalMilliseconds:
+                    21.0 + (index.isMultiple(of: 2) ? 0.2 : -0.2),
+                spectrumCenterAgeMilliseconds:
+                    60.0 + (index.isMultiple(of: 2) ? 1.0 : -1.0)
+            )
+        }
+
+        let snapshot =
+            BluetoothJitterMath.snapshot(
+                samples: samples
+            )
+
+        XCTAssertEqual(
+            snapshot?.stability,
+            .stable
+        )
+        XCTAssertEqual(
+            snapshot?.sampleCount,
+            8
+        )
+        XCTAssertEqual(
+            snapshot?.routeRevisionChangeCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot?.profileChangeCount,
+            0
+        )
+    }
+
+    func testBluetoothJitterInsufficientAssessmentBeforeEightSamples() {
+        let samples = (0..<7).map { index in
+            BluetoothJitterSample(
+                capturedAtSeconds:
+                    Double(index) * 0.25,
+                fftTransformCount:
+                    UInt64(index + 1),
+                profile: .a2dp,
+                routeRevision: 1,
+                sampleRate: 48_000,
+                ioBufferMilliseconds: 10,
+                inputLatencyMilliseconds: 2,
+                outputLatencyMilliseconds: 120,
+                callbackIntervalMilliseconds: 21,
+                spectrumCenterAgeMilliseconds: 60
+            )
+        }
+
+        XCTAssertEqual(
+            BluetoothJitterMath.snapshot(
+                samples: samples
+            )?.stability,
+            .insufficientData
+        )
+    }
+
+    func testBluetoothJitterDetectsRouteProfileBufferAndSampleRateChanges() {
+        let samples = [
+            BluetoothJitterSample(
+                capturedAtSeconds: 0,
+                fftTransformCount: 1,
+                profile: .a2dp,
+                routeRevision: 1,
+                sampleRate: 48_000,
+                ioBufferMilliseconds: 10,
+                inputLatencyMilliseconds: 2,
+                outputLatencyMilliseconds: 120,
+                callbackIntervalMilliseconds: 21,
+                spectrumCenterAgeMilliseconds: 60
+            ),
+            BluetoothJitterSample(
+                capturedAtSeconds: 0.25,
+                fftTransformCount: 2,
+                profile: .hfp,
+                routeRevision: 2,
+                sampleRate: 16_000,
+                ioBufferMilliseconds: 20,
+                inputLatencyMilliseconds: 20,
+                outputLatencyMilliseconds: 70,
+                callbackIntervalMilliseconds: 30,
+                spectrumCenterAgeMilliseconds: 85
+            )
+        ] + (2..<8).map { index in
+            BluetoothJitterSample(
+                capturedAtSeconds:
+                    Double(index) * 0.25,
+                fftTransformCount:
+                    UInt64(index + 1),
+                profile: .hfp,
+                routeRevision: 2,
+                sampleRate: 16_000,
+                ioBufferMilliseconds: 20,
+                inputLatencyMilliseconds: 20,
+                outputLatencyMilliseconds: 70,
+                callbackIntervalMilliseconds: 30,
+                spectrumCenterAgeMilliseconds: 85
+            )
+        }
+
+        let snapshot =
+            BluetoothJitterMath.snapshot(
+                samples: samples
+            )
+
+        XCTAssertEqual(
+            snapshot?.stability,
+            .unstable
+        )
+        XCTAssertEqual(
+            snapshot?.routeRevisionChangeCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot?.profileChangeCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot?.ioBufferChangeCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot?.sampleRateChangeCount,
+            1
+        )
+    }
+
+    func testBluetoothJitterCalculatesOutputLatencyVariation() throws {
+        let values = [
+            118.0, 120.0, 122.0, 120.0,
+            118.0, 120.0, 122.0, 120.0
+        ]
+        let samples = values.enumerated().map {
+            index, latency in
+            BluetoothJitterSample(
+                capturedAtSeconds:
+                    Double(index) * 0.25,
+                fftTransformCount:
+                    UInt64(index + 1),
+                profile: .a2dp,
+                routeRevision: 1,
+                sampleRate: 48_000,
+                ioBufferMilliseconds: 10,
+                inputLatencyMilliseconds: 2,
+                outputLatencyMilliseconds: latency,
+                callbackIntervalMilliseconds: 21,
+                spectrumCenterAgeMilliseconds: 60
+            )
+        }
+
+        let snapshot = try XCTUnwrap(
+            BluetoothJitterMath.snapshot(
+                samples: samples
+            )
+        )
+
+        XCTAssertEqual(
+            snapshot.outputLatencyMeanMilliseconds,
+            120,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.outputLatencyRangeMilliseconds,
+            4,
+            accuracy: 0.001
+        )
+        XCTAssertGreaterThan(
+            snapshot.outputLatencyJitterMilliseconds,
+            1
+        )
+    }
+
+    func testBluetoothJitterVariableAssessmentUsesTimingVariation() {
+        XCTAssertEqual(
+            BluetoothJitterMath.assessStability(
+                sampleCount: 8,
+                callbackJitterMilliseconds: 1.5,
+                spectrumCenterAgeJitterMilliseconds: 4,
+                routeRevisionChangeCount: 0,
+                profileChangeCount: 0,
+                ioBufferChangeCount: 0,
+                sampleRateChangeCount: 0
+            ),
+            .variable
+        )
+
+        XCTAssertEqual(
+            BluetoothJitterMath.assessStability(
+                sampleCount: 8,
+                callbackJitterMilliseconds: 4,
+                spectrumCenterAgeJitterMilliseconds: 4,
+                routeRevisionChangeCount: 0,
+                profileChangeCount: 0,
+                ioBufferChangeCount: 0,
+                sampleRateChangeCount: 0
+            ),
+            .unstable
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
