@@ -10,6 +10,7 @@ enum BluetoothTimingStability: String, Equatable, Sendable {
 
 struct BluetoothJitterSample: Equatable, Sendable {
     let capturedAtSeconds: Double
+    let fftTransformCount: UInt64
     let profile: BluetoothProfile
     let routeRevision: UInt64
     let sampleRate: Double
@@ -268,6 +269,7 @@ final class BluetoothJitterDiagnosticsModel {
 
     static let sampleIntervalSeconds = 0.25
     static let maximumSamples = 120
+    static let maximumConsecutiveStalePolls = 12
 
     private(set) var state: State = .idle
     private(set) var samples: [BluetoothJitterSample] = []
@@ -312,6 +314,9 @@ final class BluetoothJitterDiagnosticsModel {
         snapshot = nil
         state = .running
 
+        var lastFFTTransformCount: UInt64?
+        var consecutiveStalePolls = 0
+
         while
             currentGeneration == generation,
             !Task.isCancelled,
@@ -324,11 +329,46 @@ final class BluetoothJitterDiagnosticsModel {
             }
 
             if let sample = sampleProvider() {
-                samples.append(sample)
-                snapshot =
-                    BluetoothJitterMath.snapshot(
-                        samples: samples
+                if
+                    lastFFTTransformCount == nil ||
+                    sample.fftTransformCount >
+                        (lastFFTTransformCount ?? 0)
+                {
+                    lastFFTTransformCount =
+                        sample.fftTransformCount
+                    consecutiveStalePolls = 0
+                    samples.append(sample)
+                    snapshot =
+                        BluetoothJitterMath.snapshot(
+                            samples: samples
+                        )
+                } else {
+                    consecutiveStalePolls += 1
+
+                    if
+                        consecutiveStalePolls >=
+                            Self.maximumConsecutiveStalePolls
+                    {
+                        state = .failed(
+                            "Fresh FFT measurements stopped arriving."
+                        )
+                        generation += 1
+                        return
+                    }
+                }
+            } else {
+                consecutiveStalePolls += 1
+
+                if
+                    consecutiveStalePolls >=
+                        Self.maximumConsecutiveStalePolls
+                {
+                    state = .failed(
+                        "Bluetooth timing samples became unavailable."
                     )
+                    generation += 1
+                    return
+                }
             }
 
             try? await Task.sleep(
