@@ -12,6 +12,7 @@ struct CancellationLabView: View {
     @Environment(AdaptiveControllerModel.self) private var adaptiveController
     @Environment(AudioRouteTestingModel.self) private var audioRouteTesting
     @Environment(BluetoothJitterDiagnosticsModel.self) private var bluetoothJitterDiagnostics
+    @Environment(AccelerometerCaptureModel.self) private var accelerometerCapture
 
     @State private var lastSavedComparisonKey: String?
     @State private var phaseRefinementProgressText: String?
@@ -25,6 +26,7 @@ struct CancellationLabView: View {
                 audioRouteTestingCard
                 bluetoothBehaviorCard
                 bluetoothJitterCard
+                accelerometerCard
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
@@ -901,6 +903,181 @@ struct CancellationLabView: View {
             }
 
             Text("The stability label is based only on observable timing. A route can look stable here and still have unmeasured Bluetooth transport/acoustic delay. Physical loopback is still required before treating phase as route-stable.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
+    private var accelerometerCard: some View {
+        let snapshot = accelerometerCapture.snapshot
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Accelerometer", systemImage: "iphone.gen3.motion")
+                    .font(.headline)
+
+                Spacer()
+
+                Text(accelerometerCapture.state.label)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(
+                        accelerometerCapture.state == .capturing
+                            ? Color.green
+                            : Color.secondary
+                    )
+            }
+
+            Text("Captures raw device acceleration locally at a requested 100 Hz. The rolling in-memory buffer retains the newest 4,096 samples for vibration analysis in #29.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                if accelerometerCapture.state == .capturing {
+                    Button("Stop Accelerometer") {
+                        accelerometerCapture.stop()
+                    }
+                    .buttonStyle(.borderedProminent)
+                } else {
+                    Button("Start Accelerometer") {
+                        accelerometerCapture.start()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(!accelerometerCapture.isAvailable)
+                }
+
+                Button("Reset Motion Data") {
+                    accelerometerCapture.reset()
+                }
+                .buttonStyle(.bordered)
+                .disabled(accelerometerCapture.state == .capturing)
+            }
+
+            if !accelerometerCapture.isAvailable {
+                Text("Accelerometer data is unavailable on this device/runtime. A physical iPhone is required for meaningful vehicle vibration capture.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if case let .failed(message) = accelerometerCapture.state {
+                Text(message)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+            }
+
+            if let latest = snapshot.latestSample {
+                Divider()
+
+                Text("Latest acceleration")
+                    .font(.subheadline.weight(.semibold))
+
+                LabeledContent(
+                    "X",
+                    value: String(
+                        format: "%+.4f g",
+                        latest.xG
+                    )
+                )
+
+                LabeledContent(
+                    "Y",
+                    value: String(
+                        format: "%+.4f g",
+                        latest.yG
+                    )
+                )
+
+                LabeledContent(
+                    "Z",
+                    value: String(
+                        format: "%+.4f g",
+                        latest.zG
+                    )
+                )
+
+                LabeledContent(
+                    "Magnitude",
+                    value: String(
+                        format: "%.4f g",
+                        latest.magnitudeG
+                    )
+                )
+            }
+
+            Divider()
+
+            LabeledContent(
+                "Requested rate",
+                value: String(
+                    format: "%.0f Hz",
+                    AccelerometerCaptureModel.requestedSampleRateHz
+                )
+            )
+
+            LabeledContent(
+                "Observed rate",
+                value: snapshot.observedSampleRateHz > 0
+                    ? String(
+                        format: "%.1f Hz",
+                        snapshot.observedSampleRateHz
+                    )
+                    : "—"
+            )
+
+            LabeledContent(
+                "Average interval",
+                value: snapshot.averageIntervalMilliseconds > 0
+                    ? String(
+                        format: "%.3f ms",
+                        snapshot.averageIntervalMilliseconds
+                    )
+                    : "—"
+            )
+
+            LabeledContent(
+                "Interval jitter σ",
+                value: snapshot.intervalJitterMilliseconds > 0
+                    ? String(
+                        format: "%.3f ms",
+                        snapshot.intervalJitterMilliseconds
+                    )
+                    : "—"
+            )
+
+            LabeledContent(
+                "Interval min / max",
+                value: snapshot.averageIntervalMilliseconds > 0
+                    ? String(
+                        format: "%.3f / %.3f ms",
+                        snapshot.minimumIntervalMilliseconds,
+                        snapshot.maximumIntervalMilliseconds
+                    )
+                    : "—"
+            )
+
+            LabeledContent(
+                "Samples captured",
+                value: "\(snapshot.totalSampleCount)"
+            )
+
+            LabeledContent(
+                "Samples retained",
+                value: "\(snapshot.storedSampleCount) / \(AccelerometerCaptureModel.retainedSampleCapacity)"
+            )
+
+            LabeledContent(
+                "Elapsed",
+                value: String(
+                    format: "%.1f sec",
+                    snapshot.elapsedSeconds
+                )
+            )
+
+            Text("Raw acceleration includes gravity and depends on phone orientation. #29 will remove the static/slow component before frequency-domain vibration analysis.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("Raw motion samples remain in memory only and are not uploaded or written to the experiment history.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
