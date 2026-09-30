@@ -84,8 +84,7 @@ enum BluetoothJitterMath {
             tolerance: 0.5
         )
         let routeChanges = adjacentChangeCount(
-            samples.map { Double($0.routeRevision) },
-            tolerance: 0
+            samples.map(\.routeRevision)
         )
         let profileChanges = adjacentChangeCount(
             samples.map(\.profile)
