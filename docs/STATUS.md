@@ -252,7 +252,27 @@ The app and unit-test targets compile successfully in GitHub Actions against the
   - UI explicitly states that this measures observable app/route timing variation and does not directly measure codec or acoustic round-trip jitter
   - tests cover minimum sample requirement, stable classification, variable/unstable thresholds, route/profile/buffer/sample-rate change detection, and reported output-latency variation
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #28 Capture accelerometer data
+- [x] #28 Capture accelerometer data
+  - new Core Motion AccelerometerCaptureModel
+  - raw accelerometer requested at 100 Hz on physical hardware
+  - accelerometer callback runs on a dedicated serial OperationQueue
+  - thread-safe AccelerometerSampleStore keeps callback writes off the SwiftUI main actor
+  - 4,096-sample rolling in-memory ring buffer retains roughly 41 seconds at 100 Hz
+  - raw motion samples are not uploaded and are not written to experiment history
+  - each sample stores Core Motion monotonic timestamp plus X/Y/Z acceleration in g
+  - live magnitude is derived from all three axes
+  - capture snapshot tracks total sample count, retained sample count, elapsed time, latest sample, average sample interval, sample-interval jitter, min/max interval, and observed sample rate
+  - requested 100 Hz rate is shown separately from measured delivery rate
+  - Start Accelerometer, Stop Accelerometer, and Reset Motion Data controls added to the Cancellation Lab
+  - simulator/unavailable sensor state is surfaced clearly instead of fabricating motion data
+  - latest X/Y/Z and magnitude are visible live
+  - cadence/jitter and rolling-buffer diagnostics are visible live
+  - UI explicitly notes that raw acceleration includes gravity and phone-orientation effects
+  - #29 will remove static/slow components before vibration-spectrum analysis
+  - NSMotionUsageDescription added to generated project metadata and Info.plist
+  - app/preview environment wiring added for the accelerometer model
+  - tests cover three-axis magnitude, observed sample-rate math, ring-buffer rollover/order, cadence statistics, retained capacity, and reset behavior
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #29 Build vibration-spectrum analysis
 - [ ] #30 Correlate vibration and sound
 - [ ] #31 Detect music interference
