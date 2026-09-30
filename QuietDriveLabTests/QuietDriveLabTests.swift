@@ -2966,12 +2966,18 @@ final class QuietDriveLabTests: XCTestCase {
             Set([.a2dp, .hfp])
         )
         XCTAssertEqual(
-            snapshot.nonBluetoothOutputLatencyAverageMilliseconds,
+            try XCTUnwrap(
+                snapshot
+                    .nonBluetoothOutputLatencyAverageMilliseconds
+            ),
             10,
             accuracy: 0.001
         )
         XCTAssertEqual(
-            snapshot.outputLatencyDeltaVersusNonBluetoothMilliseconds,
+            try XCTUnwrap(
+                snapshot
+                    .outputLatencyDeltaVersusNonBluetoothMilliseconds
+            ),
             115,
             accuracy: 0.001
         )
