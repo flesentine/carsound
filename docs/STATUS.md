@@ -132,7 +132,7 @@
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use. #23 reduces software-side instability risk. #24 now measures the app-side processing path and exposes system-reported I/O latency, but #25 now records route-specific configuration/timing snapshots, while #26 now characterizes observed Bluetooth profile/topology and route-level timing behavior; #27 still needs to measure Bluetooth timing variation/jitter over repeated live samples.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use. #23 reduces software-side instability risk. #24 now measures the app-side processing path and exposes system-reported I/O latency, but #25 now records route-specific configuration/timing snapshots, while #26 now characterizes observed Bluetooth profile/topology and route-level timing behavior; #27 now measures repeated live observable timing variation and configuration changes; true Bluetooth transport/acoustic round-trip jitter still requires physical loopback correlation and is not inferred from iOS route metadata alone.
 
 
 ### Milestone 3 — Reality
@@ -224,7 +224,34 @@ The app and unit-test targets compile successfully in GitHub Actions against the
   - tests cover A2DP/HFP/LE profile separation, Bluetooth-output/local-mic topology, Bluetooth duplex topology, profile-specific averaging, profile-switch counting, observed-profile aggregation, and Bluetooth-versus-non-Bluetooth latency delta
   - fixed optional latency assertion compile issue found by CI
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #27 Add Bluetooth jitter diagnostics
+- [x] #27 Add Bluetooth jitter diagnostics
+  - new BluetoothJitterDiagnosticsModel for repeated live timing sampling
+  - jitter run samples every 250 ms for up to 120 fresh samples, roughly 30 seconds
+  - each timing sample records monotonic elapsed time, FFT transform sequence, active Bluetooth profile, route revision, sample rate, I/O buffer, iOS input/output latency, latest callback interval, and estimated spectrum-center age
+  - only fresh FFT transform sequences are accepted as new timing samples
+  - repeated reads of the same FFT snapshot are ignored instead of counted as independent observations
+  - about three seconds of stale/missing FFT updates causes the jitter run to fail instead of falsely reporting stable timing
+  - callback mean, callback standard deviation, and callback range are calculated across the live window
+  - spectrum-center age mean, standard deviation, and range are calculated across the live window
+  - iOS-reported output-latency mean, standard deviation, and range are calculated across the live window
+  - route revision changes are counted exactly
+  - Bluetooth profile changes are counted
+  - I/O buffer changes are counted
+  - sample-rate changes are counted
+  - live result is labeled Insufficient data, Stable observed timing, Variable observed timing, or Unstable observed timing
+  - stability assessment requires at least eight fresh samples
+  - route/profile/buffer/sample-rate changes force an Unstable observed timing result
+  - callback jitter above 1 ms or spectrum-center-age jitter above 5 ms enters Variable observed timing
+  - callback jitter above 3 ms or spectrum-center-age jitter above 15 ms enters Unstable observed timing
+  - Bluetooth Jitter card added to Cancellation Lab
+  - card requires an active Bluetooth route, active microphone capture, and at least one FFT transform before starting
+  - card shows progress, sample count, elapsed time, callback timing, spectrum-center timing, reported output-latency timing, and all configuration-change counters
+  - Stop Jitter Run preserves the partial summary instead of discarding it
+  - route/profile changes during a run are observed and counted rather than immediately aborting the session
+  - audio-session loss, microphone-capture loss, or disappearance of the output route aborts the diagnostic cleanly
+  - UI explicitly states that this measures observable app/route timing variation and does not directly measure codec or acoustic round-trip jitter
+  - tests cover minimum sample requirement, stable classification, variable/unstable thresholds, route/profile/buffer/sample-rate change detection, and reported output-latency variation
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #28 Capture accelerometer data
 - [ ] #29 Build vibration-spectrum analysis
 - [ ] #30 Correlate vibration and sound
