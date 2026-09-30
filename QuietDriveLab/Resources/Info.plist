@@ -6,6 +6,8 @@
     <string>QuietDrive Lab</string>
     <key>NSMicrophoneUsageDescription</key>
     <string>QuietDrive Lab uses the microphone to measure cabin noise and analyze low-frequency sound. Raw microphone audio is not saved.</string>
+    <key>NSMotionUsageDescription</key>
+    <string>QuietDrive Lab uses the accelerometer to measure vehicle and cabin vibration for local signal analysis. Raw motion samples are not uploaded.</string>
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
