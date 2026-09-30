@@ -4,51 +4,45 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#27 — Bluetooth jitter diagnostics** is implemented.
+Development effort **#28 — accelerometer capture** is implemented.
 
-QuietDrive can now run a live Bluetooth timing window instead of relying on one static route snapshot.
+QuietDrive can now capture raw iPhone accelerometer data alongside the existing microphone/audio diagnostics.
 
-A jitter run samples the active path every **250 ms** for up to **120 fresh samples**, roughly 30 seconds. Each accepted sample records:
+The motion path requests **100 Hz** accelerometer delivery and records each Core Motion sample with a monotonic sensor timestamp plus X/Y/Z acceleration in g. Because the requested Core Motion interval is not a guarantee of exact delivery cadence, the app also measures the observed rate, average sample interval, timing jitter, and minimum/maximum interval.
 
-- a monotonic elapsed timestamp
-- FFT transform sequence
-- active Bluetooth profile
-- route revision
-- sample rate
-- I/O buffer duration
-- iOS input/output latency
-- latest microphone callback interval
-- estimated spectrum-center age
+A dedicated thread-safe store receives Core Motion callbacks off the SwiftUI main actor. The newest **4,096 samples** are retained in an in-memory ring buffer—roughly 41 seconds at 100 Hz—so #29 can analyze vibration without adding disk writes to the sensor callback.
 
-A sample is accepted only when the FFT sequence advances. Reading the same published spectrum repeatedly does not count as fresh timing evidence. If fresh FFT measurements stop arriving for roughly three seconds, the run fails rather than producing a falsely stable result.
+The Cancellation Lab now shows:
 
-The live summary calculates:
+- accelerometer availability/capture state
+- live X/Y/Z acceleration
+- acceleration magnitude
+- requested sample rate
+- observed sample rate
+- average sample interval
+- interval jitter
+- minimum/maximum interval
+- total samples captured
+- samples currently retained
+- elapsed capture duration
 
-- callback timing mean, jitter, and range
-- spectrum-center age mean, jitter, and range
-- iOS-reported output-latency mean, jitter, and range
-- route-revision changes
-- Bluetooth-profile changes
-- I/O-buffer changes
-- sample-rate changes
+Raw accelerometer values include gravity and depend on phone orientation. QuietDrive does not yet interpret the raw magnitude as vehicle vibration strength. **#29 — vibration-spectrum analysis** will remove the static/slow component and analyze vibration energy in the frequency domain.
 
-The UI labels the observation as **Insufficient data**, **Stable observed timing**, **Variable observed timing**, or **Unstable observed timing**. Configuration changes automatically make the observed window unstable; timing thresholds then distinguish small versus larger variation when the route remains unchanged.
-
-These labels are deliberately limited to what the phone can observe. iOS does not expose per-packet Bluetooth codec/head-unit delay, so QuietDrive does **not** present these numbers as direct Bluetooth transport jitter or acoustic round-trip jitter.
+Motion samples remain local and in memory only. They are not uploaded or added to experiment-history JSON.
 
 ## Verification status
 
 The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so tests compile but are not executed there.
 
-Useful Bluetooth jitter data still requires physical iPhone/head-unit testing. A route may look stable in these diagnostics yet still have unmeasured transport or acoustic delay that matters for phase cancellation.
+The simulator can verify the code path but cannot supply meaningful vehicle accelerometer data. Physical iPhone testing is required for vibration measurements.
 
 ## What comes next
 
-**#28 — accelerometer capture** is next. That starts the vibration side of Milestone 3 so QuietDrive can compare cabin sound against vehicle/body vibration rather than relying on microphone data alone.
+**#29 — vibration-spectrum analysis** is next. It will turn the rolling accelerometer buffer into a low-frequency vibration spectrum so QuietDrive can identify persistent structural frequencies and then compare them with cabin sound in #30.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Bluetooth jitter diagnostics retain only live timing and route metadata in memory for the current diagnostic window.
+Raw microphone audio is not stored. Raw accelerometer samples are retained only in the in-memory rolling buffer for local analysis and are not uploaded.
 
 ## Generate the Xcode project
 
