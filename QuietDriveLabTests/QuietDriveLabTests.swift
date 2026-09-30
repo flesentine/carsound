@@ -3265,6 +3265,162 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testAccelerometerMagnitudeUsesThreeAxes() {
+        let sample = AccelerometerSample(
+            timestampSeconds: 1,
+            xG: 3,
+            yG: 4,
+            zG: 12
+        )
+
+        XCTAssertEqual(
+            sample.magnitudeG,
+            13,
+            accuracy: 0.001
+        )
+    }
+
+    func testAccelerometerObservedRateFromInterval() {
+        XCTAssertEqual(
+            AccelerometerMath.observedSampleRateHz(
+                averageIntervalMilliseconds: 10
+            ),
+            100,
+            accuracy: 0.001
+        )
+
+        XCTAssertEqual(
+            AccelerometerMath.observedSampleRateHz(
+                averageIntervalMilliseconds: 0
+            ),
+            0,
+            accuracy: 0.001
+        )
+    }
+
+    func testAccelerometerRingBufferKeepsNewestSamplesInOrder() {
+        var buffer = AccelerometerRingBuffer(
+            capacity: 3
+        )
+
+        for index in 1...4 {
+            buffer.append(
+                AccelerometerSample(
+                    timestampSeconds:
+                        Double(index),
+                    xG: Double(index),
+                    yG: 0,
+                    zG: 0
+                )
+            )
+        }
+
+        XCTAssertEqual(buffer.count, 3)
+        XCTAssertEqual(
+            buffer.orderedSamples().map(\.xG),
+            [2, 3, 4]
+        )
+    }
+
+    func testAccelerometerStoreTracksCadenceAndRollingCapacity() {
+        let store = AccelerometerSampleStore(
+            capacity: 3
+        )
+
+        store.record(
+            timestampSeconds: 0.00,
+            xG: 1,
+            yG: 0,
+            zG: 0
+        )
+        store.record(
+            timestampSeconds: 0.01,
+            xG: 2,
+            yG: 0,
+            zG: 0
+        )
+        store.record(
+            timestampSeconds: 0.02,
+            xG: 3,
+            yG: 0,
+            zG: 0
+        )
+        store.record(
+            timestampSeconds: 0.03,
+            xG: 4,
+            yG: 0,
+            zG: 0
+        )
+
+        let snapshot = store.snapshot()
+
+        XCTAssertEqual(
+            snapshot.totalSampleCount,
+            4
+        )
+        XCTAssertEqual(
+            snapshot.storedSampleCount,
+            3
+        )
+        XCTAssertEqual(
+            snapshot.elapsedSeconds,
+            0.03,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            snapshot.averageIntervalMilliseconds,
+            10,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.intervalJitterMilliseconds,
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.observedSampleRateHz,
+            100,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.latestSample?.xG,
+            4
+        )
+        XCTAssertEqual(
+            store.recentSamples().map(\.xG),
+            [2, 3, 4]
+        )
+    }
+
+    func testAccelerometerStoreResetClearsSamplesAndTiming() {
+        let store = AccelerometerSampleStore(
+            capacity: 8
+        )
+
+        store.record(
+            timestampSeconds: 1,
+            xG: 0.1,
+            yG: 0.2,
+            zG: 0.3
+        )
+        store.record(
+            timestampSeconds: 1.01,
+            xG: 0.2,
+            yG: 0.3,
+            zG: 0.4
+        )
+
+        store.reset()
+
+        XCTAssertEqual(
+            store.snapshot(),
+            .empty
+        )
+        XCTAssertTrue(
+            store.recentSamples().isEmpty
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
