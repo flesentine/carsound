@@ -2713,6 +2713,340 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(model.distinctRouteCount, 2)
     }
 
+    func testBluetoothProfileDetectionSeparatesA2DPHFPAndLE() {
+        XCTAssertEqual(
+            BluetoothBehaviorMath.profile(
+                inputs: [],
+                outputs: [
+                    AudioRoutePortRecord(
+                        name: "Car",
+                        type: "Bluetooth A2DP",
+                        isBluetooth: true
+                    )
+                ]
+            ),
+            .a2dp
+        )
+
+        XCTAssertEqual(
+            BluetoothBehaviorMath.profile(
+                inputs: [
+                    AudioRoutePortRecord(
+                        name: "Car Mic",
+                        type: "Bluetooth HFP",
+                        isBluetooth: true
+                    )
+                ],
+                outputs: [
+                    AudioRoutePortRecord(
+                        name: "Car",
+                        type: "Bluetooth HFP",
+                        isBluetooth: true
+                    )
+                ]
+            ),
+            .hfp
+        )
+
+        XCTAssertEqual(
+            BluetoothBehaviorMath.profile(
+                inputs: [],
+                outputs: [
+                    AudioRoutePortRecord(
+                        name: "LE",
+                        type: "Bluetooth LE",
+                        isBluetooth: true
+                    )
+                ]
+            ),
+            .le
+        )
+    }
+
+    func testBluetoothTopologyDetectsLocalMicWithBluetoothOutput() {
+        let topology = BluetoothBehaviorMath.topology(
+            inputs: [
+                AudioRoutePortRecord(
+                    name: "iPhone Mic",
+                    type: "Built-in microphone",
+                    isBluetooth: false
+                )
+            ],
+            outputs: [
+                AudioRoutePortRecord(
+                    name: "Car",
+                    type: "Bluetooth A2DP",
+                    isBluetooth: true
+                )
+            ]
+        )
+
+        XCTAssertEqual(
+            topology,
+            .bluetoothOutputLocalInput
+        )
+    }
+
+    func testBluetoothTopologyDetectsBluetoothDuplex() {
+        let topology = BluetoothBehaviorMath.topology(
+            inputs: [
+                AudioRoutePortRecord(
+                    name: "Car Mic",
+                    type: "Bluetooth HFP",
+                    isBluetooth: true
+                )
+            ],
+            outputs: [
+                AudioRoutePortRecord(
+                    name: "Car",
+                    type: "Bluetooth HFP",
+                    isBluetooth: true
+                )
+            ]
+        )
+
+        XCTAssertEqual(topology, .bluetoothDuplex)
+    }
+
+    func testBluetoothStatisticsAverageMatchingProfileOnly() throws {
+        let records = [
+            makeRouteRecord(
+                id: "00000000-0000-0000-0000-000000000101",
+                time: 1,
+                family: .bluetoothA2DP,
+                signature: "A2DP-1",
+                sampleRate: 48_000,
+                ioBuffer: 10,
+                inputLatency: 2,
+                outputLatency: 120,
+                jitter: 1,
+                centerAge: 60
+            ),
+            makeRouteRecord(
+                id: "00000000-0000-0000-0000-000000000102",
+                time: 2,
+                family: .bluetoothA2DP,
+                signature: "A2DP-1",
+                sampleRate: 48_000,
+                ioBuffer: 12,
+                inputLatency: 4,
+                outputLatency: 140,
+                jitter: 3,
+                centerAge: 64
+            ),
+            makeRouteRecord(
+                id: "00000000-0000-0000-0000-000000000103",
+                time: 3,
+                family: .builtIn,
+                signature: "BuiltIn",
+                sampleRate: 48_000,
+                ioBuffer: 5,
+                inputLatency: 1,
+                outputLatency: 8,
+                jitter: 0.2,
+                centerAge: 50
+            )
+        ]
+
+        let stats = try XCTUnwrap(
+            BluetoothBehaviorMath.statistics(
+                for: .a2dp,
+                records: records
+            )
+        )
+
+        XCTAssertEqual(stats.recordCount, 2)
+        XCTAssertEqual(
+            stats.averageIOBufferMilliseconds,
+            11,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            stats.averageOutputLatencyMilliseconds,
+            130,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            stats.averageCallbackJitterMilliseconds,
+            2,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            stats.averageSpectrumCenterAgeMilliseconds,
+            62,
+            accuracy: 0.001
+        )
+    }
+
+    func testBluetoothBehaviorCountsProfileSwitchesAndLatencyDelta() {
+        let records = [
+            makeRouteRecord(
+                id: "00000000-0000-0000-0000-000000000111",
+                time: 1,
+                family: .bluetoothA2DP,
+                signature: "A2DP",
+                sampleRate: 48_000,
+                ioBuffer: 10,
+                inputLatency: 2,
+                outputLatency: 120,
+                jitter: 1,
+                centerAge: 60
+            ),
+            makeRouteRecord(
+                id: "00000000-0000-0000-0000-000000000112",
+                time: 2,
+                family: .bluetoothHFP,
+                signature: "HFP",
+                sampleRate: 16_000,
+                ioBuffer: 20,
+                inputLatency: 20,
+                outputLatency: 70,
+                jitter: 2,
+                centerAge: 75
+            ),
+            makeRouteRecord(
+                id: "00000000-0000-0000-0000-000000000113",
+                time: 3,
+                family: .bluetoothA2DP,
+                signature: "A2DP",
+                sampleRate: 48_000,
+                ioBuffer: 10,
+                inputLatency: 2,
+                outputLatency: 130,
+                jitter: 1,
+                centerAge: 61
+            ),
+            makeRouteRecord(
+                id: "00000000-0000-0000-0000-000000000114",
+                time: 4,
+                family: .builtIn,
+                signature: "BuiltIn",
+                sampleRate: 48_000,
+                ioBuffer: 5,
+                inputLatency: 1,
+                outputLatency: 10,
+                jitter: 0.2,
+                centerAge: 50
+            )
+        ]
+
+        let snapshot = BluetoothBehaviorMath.behavior(
+            inputs: [
+                AudioRoutePortRecord(
+                    name: "iPhone Mic",
+                    type: "Built-in microphone",
+                    isBluetooth: false
+                )
+            ],
+            outputs: [
+                AudioRoutePortRecord(
+                    name: "Car",
+                    type: "Bluetooth A2DP",
+                    isBluetooth: true
+                )
+            ],
+            routeRevision: 9,
+            sampleRate: 48_000,
+            ioBufferDuration: 0.01,
+            inputLatency: 0.002,
+            outputLatency: 0.125,
+            records: records
+        )
+
+        XCTAssertEqual(snapshot.profile, .a2dp)
+        XCTAssertEqual(
+            snapshot.topology,
+            .bluetoothOutputLocalInput
+        )
+        XCTAssertEqual(snapshot.savedBluetoothTestCount, 3)
+        XCTAssertEqual(snapshot.distinctBluetoothRouteCount, 2)
+        XCTAssertEqual(snapshot.observedProfileSwitchCount, 2)
+        XCTAssertEqual(
+            Set(snapshot.observedProfiles),
+            Set([.a2dp, .hfp])
+        )
+        XCTAssertEqual(
+            snapshot.nonBluetoothOutputLatencyAverageMilliseconds,
+            10,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.outputLatencyDeltaVersusNonBluetoothMilliseconds,
+            115,
+            accuracy: 0.001
+        )
+    }
+
+    private func makeRouteRecord(
+        id: String,
+        time: TimeInterval,
+        family: AudioRouteFamily,
+        signature: String,
+        sampleRate: Double,
+        ioBuffer: Double,
+        inputLatency: Double,
+        outputLatency: Double,
+        jitter: Double,
+        centerAge: Double
+    ) -> AudioRouteTestRecord {
+        let bluetooth = family.isBluetooth
+        let portType: String
+
+        switch family {
+        case .bluetoothA2DP:
+            portType = "Bluetooth A2DP"
+        case .bluetoothHFP:
+            portType = "Bluetooth HFP"
+        case .bluetoothLE:
+            portType = "Bluetooth LE"
+        case .builtIn:
+            portType = "Built-in speaker"
+        default:
+            portType = family.rawValue
+        }
+
+        return AudioRouteTestRecord(
+            id: UUID(uuidString: id)!,
+            capturedAt: Date(
+                timeIntervalSince1970: time
+            ),
+            family: family,
+            routeSignature: signature,
+            routeRevision: 1,
+            inputs: bluetooth && family == .bluetoothHFP
+                ? [
+                    AudioRoutePortRecord(
+                        name: "Input",
+                        type: portType,
+                        isBluetooth: true
+                    )
+                ]
+                : [],
+            outputs: [
+                AudioRoutePortRecord(
+                    name: "Output",
+                    type: portType,
+                    isBluetooth: bluetooth
+                )
+            ],
+            sampleRate: sampleRate,
+            ioBufferMilliseconds: ioBuffer,
+            inputLatencyMilliseconds: inputLatency,
+            outputLatencyMilliseconds: outputLatency,
+            microphoneBufferMilliseconds: 21,
+            callbackAverageMilliseconds: 21,
+            callbackJitterMilliseconds: jitter,
+            analysisAverageMilliseconds: 2,
+            analysisMaximumMilliseconds: 3,
+            fftWindowMilliseconds: 85,
+            snapshotAgeMilliseconds: 8,
+            estimatedSpectrumCenterAgeMilliseconds:
+                centerAge,
+            microphoneBufferCount: 100,
+            fftTransformCount: 90
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
