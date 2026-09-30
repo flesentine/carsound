@@ -32,7 +32,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 2.5 • Audio route testing is available")
+                    Text("Lab build 2.6 • Bluetooth behavior characterization is available")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
