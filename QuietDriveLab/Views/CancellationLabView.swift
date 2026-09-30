@@ -22,6 +22,7 @@ struct CancellationLabView: View {
                 readinessCard
                 processingLatencyCard
                 audioRouteTestingCard
+                bluetoothBehaviorCard
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
@@ -491,6 +492,222 @@ struct CancellationLabView: View {
             Text("Route snapshots are diagnostic metadata only; they do not measure acoustic round-trip latency. Bluetooth-specific behavior is #26 and jitter characterization is #27.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
+    private var bluetoothBehaviorCard: some View {
+        let inputs =
+            AudioRouteTestingMath.records(
+                from: audioSession.inputs
+            )
+        let outputs =
+            AudioRouteTestingMath.records(
+                from: audioSession.outputs
+            )
+        let behavior =
+            BluetoothBehaviorMath.behavior(
+                inputs: inputs,
+                outputs: outputs,
+                routeRevision:
+                    audioSession.routeRevision,
+                sampleRate:
+                    audioSession.sampleRate,
+                ioBufferDuration:
+                    audioSession.ioBufferDuration,
+                inputLatency:
+                    audioSession.inputLatency,
+                outputLatency:
+                    audioSession.outputLatency,
+                records:
+                    audioRouteTesting.records
+            )
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Bluetooth Behavior", systemImage: "dot.radiowaves.left.and.right")
+                    .font(.headline)
+
+                Spacer()
+
+                Text(behavior.profile.rawValue)
+                    .font(.caption.weight(.bold))
+            }
+
+            Text("Characterizes the Bluetooth path from the active route plus saved route tests. This is observational route behavior, not a prediction that Bluetooth will be suitable for cancellation.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            LabeledContent(
+                "Topology",
+                value: behavior.topology.rawValue
+            )
+
+            LabeledContent(
+                "Bluetooth input",
+                value: behavior.hasBluetoothInput
+                    ? "Yes"
+                    : "No"
+            )
+
+            LabeledContent(
+                "Bluetooth output",
+                value: behavior.hasBluetoothOutput
+                    ? "Yes"
+                    : "No"
+            )
+
+            LabeledContent(
+                "Route revision",
+                value: "\(behavior.routeRevision)"
+            )
+
+            LabeledContent(
+                "Sample rate",
+                value: String(
+                    format: "%.0f Hz",
+                    behavior.sampleRate
+                )
+            )
+
+            LabeledContent(
+                "I/O buffer",
+                value: String(
+                    format: "%.2f ms",
+                    behavior.ioBufferMilliseconds
+                )
+            )
+
+            LabeledContent(
+                "Input latency",
+                value: String(
+                    format: "%.2f ms",
+                    behavior.inputLatencyMilliseconds
+                )
+            )
+
+            LabeledContent(
+                "Output latency",
+                value: String(
+                    format: "%.2f ms",
+                    behavior.outputLatencyMilliseconds
+                )
+            )
+
+            if
+                let nonBluetooth =
+                    behavior
+                        .nonBluetoothOutputLatencyAverageMilliseconds,
+                let delta =
+                    behavior
+                        .outputLatencyDeltaVersusNonBluetoothMilliseconds
+            {
+                LabeledContent(
+                    "Saved non-Bluetooth output avg",
+                    value: String(
+                        format: "%.2f ms",
+                        nonBluetooth
+                    )
+                )
+
+                LabeledContent(
+                    "Current output delta",
+                    value: String(
+                        format: "%+.2f ms",
+                        delta
+                    )
+                )
+            }
+
+            Divider()
+
+            LabeledContent(
+                "Saved Bluetooth tests",
+                value: "\(behavior.savedBluetoothTestCount)"
+            )
+
+            LabeledContent(
+                "Distinct Bluetooth routes",
+                value: "\(behavior.distinctBluetoothRouteCount)"
+            )
+
+            LabeledContent(
+                "Observed profile switches",
+                value: "\(behavior.observedProfileSwitchCount)"
+            )
+
+            LabeledContent(
+                "Observed profiles",
+                value:
+                    behavior.observedProfiles.isEmpty
+                    ? "None yet"
+                    : behavior.observedProfiles
+                        .map(\.rawValue)
+                        .joined(separator: ", ")
+            )
+
+            if let stats = behavior.currentProfileStatistics {
+                Divider()
+
+                Text("\(stats.profile.rawValue) saved-test averages")
+                    .font(.subheadline.weight(.semibold))
+
+                LabeledContent(
+                    "Tests",
+                    value: "\(stats.recordCount)"
+                )
+
+                LabeledContent(
+                    "Sample rate",
+                    value: String(
+                        format: "%.0f Hz",
+                        stats.averageSampleRate
+                    )
+                )
+
+                LabeledContent(
+                    "I/O buffer",
+                    value: String(
+                        format: "%.2f ms",
+                        stats.averageIOBufferMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Input / output latency",
+                    value: String(
+                        format: "%.2f / %.2f ms",
+                        stats.averageInputLatencyMilliseconds,
+                        stats.averageOutputLatencyMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Callback jitter σ",
+                    value: String(
+                        format: "%.3f ms",
+                        stats.averageCallbackJitterMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Spectrum-center age",
+                    value: String(
+                        format: "%.2f ms",
+                        stats.averageSpectrumCenterAgeMilliseconds
+                    )
+                )
+            }
+
+            if behavior.profile == .none {
+                Text("Connect a Bluetooth route, run microphone capture, and save route tests to build a Bluetooth behavior record.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Text("Save several route tests for this profile under the same physical setup. #27 will analyze timing variation/jitter across the Bluetooth path rather than relying only on one snapshot.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .cancellationCard()
     }
