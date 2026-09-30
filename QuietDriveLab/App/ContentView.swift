@@ -1191,4 +1191,5 @@ private extension View {
         .environment(AmplitudeSearchModel())
         .environment(AdaptiveControllerModel())
         .environment(AudioRouteTestingModel(storageURL: nil))
+        .environment(BluetoothJitterDiagnosticsModel())
 }
