@@ -11,6 +11,7 @@ struct CancellationLabView: View {
     @Environment(AmplitudeSearchModel.self) private var amplitudeSearch
     @Environment(AdaptiveControllerModel.self) private var adaptiveController
     @Environment(AudioRouteTestingModel.self) private var audioRouteTesting
+    @Environment(BluetoothJitterDiagnosticsModel.self) private var bluetoothJitterDiagnostics
 
     @State private var lastSavedComparisonKey: String?
     @State private var phaseRefinementProgressText: String?
@@ -23,6 +24,7 @@ struct CancellationLabView: View {
                 processingLatencyCard
                 audioRouteTestingCard
                 bluetoothBehaviorCard
+                bluetoothJitterCard
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
@@ -708,6 +710,199 @@ struct CancellationLabView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+        }
+        .cancellationCard()
+    }
+
+    private var bluetoothJitterCard: some View {
+        let inputRecords =
+            AudioRouteTestingMath.records(
+                from: audioSession.inputs
+            )
+        let outputRecords =
+            AudioRouteTestingMath.records(
+                from: audioSession.outputs
+            )
+        let profile =
+            BluetoothBehaviorMath.profile(
+                inputs: inputRecords,
+                outputs: outputRecords
+            )
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Bluetooth Jitter", systemImage: "waveform.path.ecg")
+                    .font(.headline)
+
+                Spacer()
+
+                if bluetoothJitterDiagnostics.state.isRunning {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if
+                    let snapshot =
+                        bluetoothJitterDiagnostics.snapshot
+                {
+                    Text(snapshot.stability.rawValue)
+                        .font(.caption.weight(.bold))
+                }
+            }
+
+            Text("Runs a live ~30 second timing window at 4 samples/second. It measures observable app/route timing variation; it does not claim direct codec or acoustic round-trip jitter.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            LabeledContent(
+                "Active profile",
+                value: profile.rawValue
+            )
+
+            HStack {
+                Button("Start 30s Jitter Run") {
+                    startBluetoothJitterRun()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canStartBluetoothJitterRun)
+
+                if bluetoothJitterDiagnostics.state.isRunning {
+                    Button("Stop Jitter Run") {
+                        bluetoothJitterDiagnostics.stop()
+                    }
+                    .buttonStyle(.bordered)
+                } else if
+                    bluetoothJitterDiagnostics.snapshot != nil
+                {
+                    Button("Reset") {
+                        bluetoothJitterDiagnostics.reset()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            switch bluetoothJitterDiagnostics.state {
+            case .idle:
+                if !canStartBluetoothJitterRun {
+                    Text("Use an active Bluetooth route with microphone capture running and at least one FFT transform available.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+            case .running:
+                Text(
+                    "\(bluetoothJitterDiagnostics.samples.count) / \(BluetoothJitterDiagnosticsModel.maximumSamples) fresh samples"
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            case .completed:
+                Text("Timing window complete.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+            case let .failed(message):
+                Text(message)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+            }
+
+            if let snapshot = bluetoothJitterDiagnostics.snapshot {
+                Divider()
+
+                LabeledContent(
+                    "Observed timing",
+                    value: snapshot.stability.rawValue
+                )
+
+                LabeledContent(
+                    "Fresh samples",
+                    value: "\(snapshot.sampleCount)"
+                )
+
+                LabeledContent(
+                    "Elapsed",
+                    value: String(
+                        format: "%.1f sec",
+                        snapshot.elapsedSeconds
+                    )
+                )
+
+                LabeledContent(
+                    "Callback mean / jitter σ",
+                    value: String(
+                        format: "%.2f / %.3f ms",
+                        snapshot.callbackMeanMilliseconds,
+                        snapshot.callbackJitterMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Callback range",
+                    value: String(
+                        format: "%.2f ms",
+                        snapshot.callbackRangeMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Spectrum-center mean / jitter σ",
+                    value: String(
+                        format: "%.2f / %.2f ms",
+                        snapshot.spectrumCenterAgeMeanMilliseconds,
+                        snapshot.spectrumCenterAgeJitterMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Spectrum-center range",
+                    value: String(
+                        format: "%.2f ms",
+                        snapshot.spectrumCenterAgeRangeMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Reported output latency mean / jitter σ",
+                    value: String(
+                        format: "%.2f / %.3f ms",
+                        snapshot.outputLatencyMeanMilliseconds,
+                        snapshot.outputLatencyJitterMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Reported output latency range",
+                    value: String(
+                        format: "%.2f ms",
+                        snapshot.outputLatencyRangeMilliseconds
+                    )
+                )
+
+                Divider()
+
+                LabeledContent(
+                    "Route revision changes",
+                    value: "\(snapshot.routeRevisionChangeCount)"
+                )
+
+                LabeledContent(
+                    "Profile changes",
+                    value: "\(snapshot.profileChangeCount)"
+                )
+
+                LabeledContent(
+                    "I/O buffer changes",
+                    value: "\(snapshot.ioBufferChangeCount)"
+                )
+
+                LabeledContent(
+                    "Sample-rate changes",
+                    value: "\(snapshot.sampleRateChangeCount)"
+                )
+            }
+
+            Text("The stability label is based only on observable timing. A route can look stable here and still have unmeasured Bluetooth transport/acoustic delay. Physical loopback is still required before treating phase as route-stable.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .cancellationCard()
     }
@@ -2255,6 +2450,95 @@ struct CancellationLabView: View {
             )
         }
         .cancellationCard()
+    }
+
+    private var canStartBluetoothJitterRun: Bool {
+        let inputs =
+            AudioRouteTestingMath.records(
+                from: audioSession.inputs
+            )
+        let outputs =
+            AudioRouteTestingMath.records(
+                from: audioSession.outputs
+            )
+
+        return
+            audioSession.state == .active &&
+            BluetoothBehaviorMath.profile(
+                inputs: inputs,
+                outputs: outputs
+            ) != .none &&
+            microphoneCapture.state == .capturing &&
+            microphoneCapture.snapshot.fftTransformCount > 0 &&
+            !bluetoothJitterDiagnostics.state.isRunning
+    }
+
+    private func startBluetoothJitterRun() {
+        let startedAt =
+            ProcessInfo.processInfo.systemUptime
+
+        Task { @MainActor in
+            await bluetoothJitterDiagnostics.run(
+                sampleProvider: {
+                    let inputRecords =
+                        AudioRouteTestingMath.records(
+                            from: audioSession.inputs
+                        )
+                    let outputRecords =
+                        AudioRouteTestingMath.records(
+                            from: audioSession.outputs
+                        )
+                    let snapshot =
+                        microphoneCapture.snapshot
+                    let latency =
+                        snapshot.processingLatency
+
+                    return BluetoothJitterSample(
+                        capturedAtSeconds:
+                            ProcessInfo.processInfo.systemUptime -
+                            startedAt,
+                        fftTransformCount:
+                            snapshot.fftTransformCount,
+                        profile:
+                            BluetoothBehaviorMath.profile(
+                                inputs: inputRecords,
+                                outputs: outputRecords
+                            ),
+                        routeRevision:
+                            audioSession.routeRevision,
+                        sampleRate:
+                            audioSession.sampleRate,
+                        ioBufferMilliseconds:
+                            audioSession.ioBufferDuration * 1_000,
+                        inputLatencyMilliseconds:
+                            audioSession.inputLatency * 1_000,
+                        outputLatencyMilliseconds:
+                            audioSession.outputLatency * 1_000,
+                        callbackIntervalMilliseconds:
+                            latency
+                                .latestCallbackIntervalMilliseconds,
+                        spectrumCenterAgeMilliseconds:
+                            latency
+                                .estimatedSpectrumCenterAgeMilliseconds
+                    )
+                },
+                safetyCheck: {
+                    if audioSession.state != .active {
+                        return "Audio session became inactive."
+                    }
+
+                    if microphoneCapture.state != .capturing {
+                        return "Microphone capture stopped."
+                    }
+
+                    if audioSession.outputs.isEmpty {
+                        return "Audio output route disappeared."
+                    }
+
+                    return nil
+                }
+            )
+        }
     }
 
     private var canCaptureRouteTest: Bool {
