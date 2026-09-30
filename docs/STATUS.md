@@ -132,7 +132,7 @@
 
 ## Verification note
 
-The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use. #23 reduces software-side instability risk. #24 now measures the app-side processing path and exposes system-reported I/O latency, but #25 now records route-specific configuration/timing snapshots, while Bluetooth behavior and actual timing variability still require #26–#27 characterization.
+The app and unit-test targets compile successfully in GitHub Actions against the iOS simulator SDK. CI currently uses `build-for-testing`, so it compiles the unit tests but does not execute them. Milestone 2 now includes a bounded experimental adaptive controller, but simulator CI cannot validate acoustic cancellation, Bluetooth timing, physical feedback stability, or real-world route behavior. The adaptive controller's phase/output values are digital settings, not proof of exact acoustic phase or calibrated acoustic SPL. Physical iPhone/car testing is required before treating the controller as effective or safe for sustained real-world use. #23 reduces software-side instability risk. #24 now measures the app-side processing path and exposes system-reported I/O latency, but #25 now records route-specific configuration/timing snapshots, while #26 now characterizes observed Bluetooth profile/topology and route-level timing behavior; #27 still needs to measure Bluetooth timing variation/jitter over repeated live samples.
 
 
 ### Milestone 3 — Reality
@@ -204,7 +204,26 @@ The app and unit-test targets compile successfully in GitHub Actions against the
   - UI explicitly separates route metadata/timing snapshots from acoustic round-trip latency
   - tests cover built-in route classification, Bluetooth A2DP/HFP/LE separation, Car audio, USB and wired classification, stable signatures across port ordering, durable save/reload/delete, and distinct-route counting
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #26 Characterize Bluetooth behavior
+- [x] #26 Characterize Bluetooth behavior
+  - new BluetoothBehaviorDiagnostics model derived from active route metadata plus saved #25 route tests
+  - active Bluetooth profile is identified as None, A2DP, HFP, Bluetooth LE, or Mixed Bluetooth
+  - route topology distinguishes Bluetooth output + local/non-Bluetooth input, Bluetooth duplex, Bluetooth input-only, mixed, and no-Bluetooth paths
+  - current Bluetooth input/output participation is shown explicitly rather than inferred from a generic route label
+  - current route revision, sample rate, I/O buffer, input latency, and output latency are included in the Bluetooth behavior snapshot
+  - saved Bluetooth route-test count and distinct Bluetooth route count are tracked
+  - observed Bluetooth profiles are summarized across saved physical route tests
+  - profile-switch count is derived chronologically from saved Bluetooth captures
+  - per-profile averages are calculated for sample rate, I/O buffer, input latency, output latency, callback jitter, and estimated spectrum-center age
+  - current Bluetooth output latency can be compared against the average output latency of saved non-Bluetooth route tests
+  - Bluetooth Behavior card added to the Cancellation Lab
+  - card shows active profile, topology, Bluetooth input/output status, route revision, sample rate, buffer, input/output latency, saved-test count, distinct routes, observed profiles, and observed profile switches
+  - when a matching profile has saved records, the card shows profile-specific averages from those physical captures
+  - when non-Bluetooth route tests exist, the card shows the current output-latency delta versus the saved non-Bluetooth average
+  - UI explicitly states that characterization is observational and does not yet establish cancellation suitability
+  - UI directs repeated same-profile captures into #27 jitter analysis instead of treating a single route snapshot as conclusive
+  - tests cover A2DP/HFP/LE profile separation, Bluetooth-output/local-mic topology, Bluetooth duplex topology, profile-specific averaging, profile-switch counting, observed-profile aggregation, and Bluetooth-versus-non-Bluetooth latency delta
+  - fixed optional latency assertion compile issue found by CI
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #27 Add Bluetooth jitter diagnostics
 - [ ] #28 Capture accelerometer data
 - [ ] #29 Build vibration-spectrum analysis
