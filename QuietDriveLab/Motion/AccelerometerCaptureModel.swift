@@ -282,7 +282,7 @@ final class AccelerometerCaptureModel {
         }
     }
 
-    static let requestedSampleRateHz = 100.0
+    static let requestedSampleRateHz = 200.0
     static let requestedUpdateInterval =
         1.0 / requestedSampleRateHz
     static let retainedSampleCapacity = 4_096
@@ -290,6 +290,8 @@ final class AccelerometerCaptureModel {
     private(set) var state: State = .stopped
     private(set) var snapshot:
         AccelerometerCaptureSnapshot = .empty
+    private(set) var vibrationSpectrum:
+        VibrationSpectrumSnapshot = .empty
 
     @ObservationIgnored
     private let motionManager =
@@ -333,6 +335,7 @@ final class AccelerometerCaptureModel {
 
         sampleStore.reset()
         snapshot = .empty
+        vibrationSpectrum = .empty
 
         motionManager.accelerometerUpdateInterval =
             Self.requestedUpdateInterval
@@ -384,6 +387,7 @@ final class AccelerometerCaptureModel {
         stop()
         sampleStore.reset()
         snapshot = .empty
+        vibrationSpectrum = .empty
         state = .stopped
     }
 
@@ -395,6 +399,8 @@ final class AccelerometerCaptureModel {
         publishTask?.cancel()
 
         publishTask = Task { @MainActor [weak self] in
+            var tick = 0
+
             while
                 let self,
                 !Task.isCancelled,
@@ -414,6 +420,25 @@ final class AccelerometerCaptureModel {
                         .failed(message)
                     return
                 }
+
+                if tick.isMultiple(of: 3) {
+                    let samples =
+                        self.sampleStore
+                            .recentSamples()
+
+                    self.vibrationSpectrum =
+                        await Task.detached(
+                            priority: .userInitiated
+                        ) {
+                            VibrationSpectrumAnalyzer
+                                .analyze(
+                                    samples: samples
+                                )
+                        }
+                        .value
+                }
+
+                tick &+= 1
 
                 try? await Task.sleep(
                     nanoseconds: 100_000_000
