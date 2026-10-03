@@ -402,8 +402,10 @@ enum VibrationSpectrumAnalyzer {
         let count =
             min(
                 x.count,
-                y.count,
-                z.count
+                min(
+                    y.count,
+                    z.count
+                )
             )
 
         guard count > 0 else {
@@ -526,8 +528,8 @@ enum VibrationSpectrumAnalyzer {
 
         var real =
             zip(samples, window)
-            .map { sample, weight in
-                sample * weight
+            .map { pair in
+                pair.0 * pair.1
             }
         var imag =
             Array(
