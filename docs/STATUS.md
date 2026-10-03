@@ -273,7 +273,26 @@ The app and unit-test targets compile successfully in GitHub Actions against the
   - app/preview environment wiring added for the accelerometer model
   - tests cover three-axis magnitude, observed sample-rate math, ring-buffer rollover/order, cadence statistics, retained capacity, and reset behavior
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #29 Build vibration-spectrum analysis
+- [x] #29 Build vibration-spectrum analysis
+  - new VibrationSpectrumAnalyzer for retained accelerometer samples
+  - accelerometer requested rate raised to 200 Hz for spectrum work while all frequency math still uses the observed delivered rate
+  - analyzer is Nyquist-aware and limits displayed analysis to 90% of observed Nyquist, capped at 100 Hz
+  - hardware capped near 100 Hz therefore analyzes only to roughly 45 Hz instead of aliasing higher frequencies
+  - 72 Hz resolvability is reported explicitly from the observed sample rate
+  - latest 512 samples are preferred for FFT analysis, with 256 samples as the minimum
+  - irregular Core Motion timestamps are linearly resampled onto a uniform grid before FFT
+  - first-order 1.5 Hz high-pass filtering is applied independently to X/Y/Z to suppress gravity and slow tilt
+  - X/Y/Z are FFT analyzed separately and combined as vector spectral amplitude so peak frequency is less dependent on phone orientation
+  - spectrum frequency resolution is derived from the observed sample rate and actual FFT length
+  - dynamic vibration RMS is calculated from the high-passed three-axis signal
+  - dominant local vibration peaks are extracted with minimum amplitude and frequency-separation guards
+  - peak amplitudes are displayed in milli-g
+  - live vibration spectrum is updated off the main actor roughly three times per second while accelerometer capture runs
+  - new Vibration Spectrum card shows observed rate, Nyquist, analyzed band, resolution, high-pass cutoff, dynamic RMS, dominant peaks, and 72 Hz capability
+  - new Canvas spectrum graph added for the live vibration spectrum
+  - UI explicitly refuses to infer frequencies above the safe analyzed band
+  - synthetic tests cover 20 Hz detection, 72 Hz detection at 200 Hz sampling, refusal to resolve 72 Hz at 100 Hz sampling, gravity/DC rejection, and uniform resampling
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #30 Correlate vibration and sound
 - [ ] #31 Detect music interference
 - [ ] #32 Build overall confidence scoring
