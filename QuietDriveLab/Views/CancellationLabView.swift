@@ -27,6 +27,7 @@ struct CancellationLabView: View {
                 bluetoothBehaviorCard
                 bluetoothJitterCard
                 accelerometerCard
+                vibrationSpectrumCard
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
@@ -928,7 +929,7 @@ struct CancellationLabView: View {
                     )
             }
 
-            Text("Captures raw device acceleration locally at a requested 100 Hz. The rolling in-memory buffer retains the newest 4,096 samples for vibration analysis in #29.")
+            Text("Captures raw device acceleration locally at a requested 200 Hz. Core Motion may cap delivery lower on some hardware, so the observed rate is measured and used for all vibration frequency math.")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
 
@@ -1073,11 +1074,152 @@ struct CancellationLabView: View {
                 )
             )
 
-            Text("Raw acceleration includes gravity and depends on phone orientation. #29 will remove the static/slow component before frequency-domain vibration analysis.")
+            Text("Raw acceleration includes gravity and phone-orientation effects. The vibration spectrum removes the slow/static component before frequency analysis.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
             Text("Raw motion samples remain in memory only and are not uploaded or written to the experiment history.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
+    private var vibrationSpectrumCard: some View {
+        let spectrum =
+            accelerometerCapture.vibrationSpectrum
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label("Vibration Spectrum", systemImage: "waveform")
+                    .font(.headline)
+
+                Spacer()
+
+                if spectrum.sampleCount > 0 {
+                    Text(
+                        String(
+                            format: "%.1f Hz max",
+                            spectrum.maximumAnalyzedFrequencyHz
+                        )
+                    )
+                    .font(.caption.weight(.bold))
+                }
+            }
+
+            Text("High-pass filters each accelerometer axis to remove gravity/slow tilt, resamples the latest motion window uniformly, FFTs X/Y/Z separately, then combines their amplitudes so dominant vibration frequencies are less dependent on phone orientation.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            VibrationSpectrumView(
+                snapshot: spectrum
+            )
+
+            if spectrum.sampleCount > 0 {
+                LabeledContent(
+                    "FFT samples",
+                    value: "\(spectrum.sampleCount)"
+                )
+
+                LabeledContent(
+                    "Observed motion rate",
+                    value: String(
+                        format: "%.1f Hz",
+                        spectrum.observedSampleRateHz
+                    )
+                )
+
+                LabeledContent(
+                    "Nyquist",
+                    value: String(
+                        format: "%.1f Hz",
+                        spectrum.nyquistFrequencyHz
+                    )
+                )
+
+                LabeledContent(
+                    "Analyzed band",
+                    value: String(
+                        format: "%.1f–%.1f Hz",
+                        VibrationSpectrumAnalyzer.minimumAnalyzedFrequencyHz,
+                        spectrum.maximumAnalyzedFrequencyHz
+                    )
+                )
+
+                LabeledContent(
+                    "Resolution",
+                    value: String(
+                        format: "%.3f Hz",
+                        spectrum.frequencyResolutionHz
+                    )
+                )
+
+                LabeledContent(
+                    "High-pass cutoff",
+                    value: String(
+                        format: "%.1f Hz",
+                        spectrum.highPassCutoffHz
+                    )
+                )
+
+                LabeledContent(
+                    "Dynamic RMS",
+                    value: String(
+                        format: "%.3f mg",
+                        spectrum.dynamicRMSG * 1_000
+                    )
+                )
+
+                Divider()
+
+                Text("Dominant vibration peaks")
+                    .font(.subheadline.weight(.semibold))
+
+                if spectrum.dominantPeaks.isEmpty {
+                    Text("No dominant vibration peaks above the current detection floor.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    ForEach(
+                        Array(
+                            spectrum.dominantPeaks
+                                .enumerated()
+                        ),
+                        id: \.element.id
+                    ) { index, peak in
+                        LabeledContent(
+                            "#\(index + 1)",
+                            value: String(
+                                format: "%.2f Hz • %.3f mg",
+                                peak.frequencyHz,
+                                peak.amplitudeMilliG
+                            )
+                        )
+                    }
+                }
+
+                if spectrum.canResolveSeventyTwoHz {
+                    Text("This observed sample rate can directly resolve a 72 Hz vibration.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text(
+                        String(
+                            format:
+                                "This device/run cannot directly resolve 72 Hz: the safe analyzed limit is %.1f Hz. Higher-frequency peaks are intentionally not inferred.",
+                            spectrum.maximumAnalyzedFrequencyHz
+                        )
+                    )
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+                }
+            } else {
+                Text("Collect at least 256 fresh accelerometer samples to populate the vibration spectrum.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Spectrum amplitudes are relative device acceleration in milli-g, not calibrated vehicle-body displacement or force.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
