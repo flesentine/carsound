@@ -526,7 +526,9 @@ enum VibrationSpectrumAnalyzer {
 
         var real =
             zip(samples, window)
-            .map(*)
+            .map { sample, weight in
+                sample * weight
+            }
         var imag =
             Array(
                 repeating: 0.0,
