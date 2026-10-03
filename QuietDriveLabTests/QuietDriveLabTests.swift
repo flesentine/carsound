@@ -3421,6 +3421,198 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testVibrationSpectrumDetectsTwentyHertzTone() throws {
+        let sampleRate = 200.0
+        let count = 512
+        let samples = (0..<count).map { index in
+            let time = Double(index) / sampleRate
+            return AccelerometerSample(
+                timestampSeconds: time,
+                xG:
+                    1.0 +
+                    0.01 *
+                    sin(
+                        2 * .pi * 20 * time
+                    ),
+                yG: 0,
+                zG: 0
+            )
+        }
+
+        let spectrum =
+            VibrationSpectrumAnalyzer.analyze(
+                samples: samples
+            )
+        let peak = try XCTUnwrap(
+            spectrum.dominantPeaks.first
+        )
+
+        XCTAssertEqual(
+            peak.frequencyHz,
+            20,
+            accuracy: 0.6
+        )
+        XCTAssertGreaterThan(
+            peak.amplitudeMilliG,
+            5
+        )
+        XCTAssertEqual(
+            spectrum.observedSampleRateHz,
+            200,
+            accuracy: 0.5
+        )
+    }
+
+    func testVibrationSpectrumDetectsSeventyTwoHertzWhenSampleRateAllows() throws {
+        let sampleRate = 200.0
+        let count = 512
+        let samples = (0..<count).map { index in
+            let time = Double(index) / sampleRate
+            return AccelerometerSample(
+                timestampSeconds: time,
+                xG: 0,
+                yG:
+                    1.0 +
+                    0.008 *
+                    sin(
+                        2 * .pi * 72 * time
+                    ),
+                zG: 0
+            )
+        }
+
+        let spectrum =
+            VibrationSpectrumAnalyzer.analyze(
+                samples: samples
+            )
+
+        XCTAssertTrue(
+            spectrum.canResolveSeventyTwoHz
+        )
+
+        let nearest = try XCTUnwrap(
+            spectrum.dominantPeaks.min {
+                abs($0.frequencyHz - 72) <
+                abs($1.frequencyHz - 72)
+            }
+        )
+
+        XCTAssertEqual(
+            nearest.frequencyHz,
+            72,
+            accuracy: 0.6
+        )
+    }
+
+    func testVibrationSpectrumRefusesSeventyTwoHertzWhenNyquistIsTooLow() {
+        let sampleRate = 100.0
+        let count = 512
+        let samples = (0..<count).map { index in
+            let time = Double(index) / sampleRate
+            return AccelerometerSample(
+                timestampSeconds: time,
+                xG:
+                    1.0 +
+                    0.01 *
+                    sin(
+                        2 * .pi * 20 * time
+                    ),
+                yG: 0,
+                zG: 0
+            )
+        }
+
+        let spectrum =
+            VibrationSpectrumAnalyzer.analyze(
+                samples: samples
+            )
+
+        XCTAssertFalse(
+            spectrum.canResolveSeventyTwoHz
+        )
+        XCTAssertEqual(
+            spectrum.nyquistFrequencyHz,
+            50,
+            accuracy: 0.3
+        )
+        XCTAssertLessThanOrEqual(
+            spectrum.maximumAnalyzedFrequencyHz,
+            45.1
+        )
+        XCTAssertTrue(
+            spectrum.bins.allSatisfy {
+                $0.frequencyHz <= 45.1
+            }
+        )
+    }
+
+    func testVibrationHighPassRemovesConstantGravity() {
+        let samples =
+            Array(
+                repeating: 1.0,
+                count: 512
+            )
+
+        let filtered =
+            VibrationSpectrumAnalyzer.highPass(
+                samples,
+                cutoffHz: 1.5,
+                dt: 0.005
+            )
+
+        let tail =
+            filtered.suffix(100)
+        let maximum =
+            tail.map(abs).max() ?? 1
+
+        XCTAssertLessThan(
+            maximum,
+            0.001
+        )
+    }
+
+    func testVibrationResamplingProducesUniformTimestamps() {
+        let samples = [
+            AccelerometerSample(
+                timestampSeconds: 0,
+                xG: 0,
+                yG: 0,
+                zG: 0
+            ),
+            AccelerometerSample(
+                timestampSeconds: 0.012,
+                xG: 1,
+                yG: 0,
+                zG: 0
+            ),
+            AccelerometerSample(
+                timestampSeconds: 0.020,
+                xG: 2,
+                yG: 0,
+                zG: 0
+            )
+        ]
+
+        let result =
+            VibrationSpectrumAnalyzer
+                .resampleUniformly(
+                    samples: samples,
+                    sampleCount: 5
+                )
+
+        XCTAssertEqual(result.count, 5)
+        XCTAssertEqual(
+            result[1].timestampSeconds,
+            0.005,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            result[4].timestampSeconds,
+            0.020,
+            accuracy: 0.0001
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
