@@ -4,45 +4,44 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#28 — accelerometer capture** is implemented.
+Development effort **#29 — vibration spectrum analysis** is implemented.
 
-QuietDrive can now capture raw iPhone accelerometer data alongside the existing microphone/audio diagnostics.
+QuietDrive now converts the rolling accelerometer buffer into a live structural-vibration spectrum.
 
-The motion path requests **100 Hz** accelerometer delivery and records each Core Motion sample with a monotonic sensor timestamp plus X/Y/Z acceleration in g. Because the requested Core Motion interval is not a guarantee of exact delivery cadence, the app also measures the observed rate, average sample interval, timing jitter, and minimum/maximum interval.
+The motion capture requests **200 Hz** for spectrum work, but the analyzer never assumes the phone actually delivers that rate. It measures the real Core Motion timestamps and derives the observed sample rate from them. The displayed frequency band is limited to **90% of observed Nyquist**, capped at 100 Hz.
 
-A dedicated thread-safe store receives Core Motion callbacks off the SwiftUI main actor. The newest **4,096 samples** are retained in an in-memory ring buffer—roughly 41 seconds at 100 Hz—so #29 can analyze vibration without adding disk writes to the sensor callback.
+That distinction matters. If a phone only delivers around 100 Hz, QuietDrive will stop the trustworthy vibration spectrum near 45 Hz and explicitly report that a 72 Hz vibration cannot be resolved. It will not alias a higher-frequency vibration into a fake lower-frequency peak. Apple documents the maximum Core Motion update rate as hardware-dependent, so physical-device behavior is intentionally measured rather than assumed.
 
-The Cancellation Lab now shows:
+Before FFT analysis, the latest motion samples are resampled onto a uniform time grid and each accelerometer axis is high-pass filtered at **1.5 Hz** to suppress gravity and slow phone tilt. X, Y and Z are FFT analyzed independently, then their amplitudes are combined into a vector vibration spectrum so dominant frequencies are less dependent on how the phone is oriented.
 
-- accelerometer availability/capture state
-- live X/Y/Z acceleration
-- acceleration magnitude
-- requested sample rate
-- observed sample rate
-- average sample interval
-- interval jitter
-- minimum/maximum interval
-- total samples captured
-- samples currently retained
-- elapsed capture duration
+The live Vibration Spectrum panel reports:
 
-Raw accelerometer values include gravity and depend on phone orientation. QuietDrive does not yet interpret the raw magnitude as vehicle vibration strength. **#29 — vibration-spectrum analysis** will remove the static/slow component and analyze vibration energy in the frequency domain.
+- observed accelerometer sample rate
+- Nyquist frequency
+- trustworthy analyzed frequency band
+- FFT frequency resolution
+- high-pass cutoff
+- dynamic vibration RMS
+- dominant vibration peaks and amplitudes in milli-g
+- whether the current sample rate can directly resolve 72 Hz
 
-Motion samples remain local and in memory only. They are not uploaded or added to experiment-history JSON.
+A live spectrum graph is also shown while enough accelerometer samples are available.
 
 ## Verification status
 
-The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so tests compile but are not executed there.
+The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so the tests compile but are not executed there.
 
-The simulator can verify the code path but cannot supply meaningful vehicle accelerometer data. Physical iPhone testing is required for vibration measurements.
+Synthetic test coverage includes known 20 Hz and 72 Hz vibration signals, Nyquist rejection when sampling is too slow, gravity/DC rejection, and timestamp resampling.
+
+Meaningful vibration measurements still require a physical iPhone mounted consistently in the vehicle. Spectrum amplitudes are relative device acceleration, not calibrated chassis displacement, force, or road-input measurements.
 
 ## What comes next
 
-**#29 — vibration-spectrum analysis** is next. It will turn the rolling accelerometer buffer into a low-frequency vibration spectrum so QuietDrive can identify persistent structural frequencies and then compare them with cabin sound in #30.
+**#30 — correlate vibration and sound** is next. QuietDrive now has independent acoustic and vibration frequency measurements, so the next step is to determine when a microphone tone and structural vibration occupy the same frequency region and how strongly they move together.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Raw accelerometer samples are retained only in the in-memory rolling buffer for local analysis and are not uploaded.
+Raw microphone audio is not stored. Raw accelerometer samples remain only in the in-memory rolling buffer for local vibration analysis and are not uploaded.
 
 ## Generate the Xcode project
 
