@@ -13,6 +13,7 @@ struct CancellationLabView: View {
     @Environment(AudioRouteTestingModel.self) private var audioRouteTesting
     @Environment(BluetoothJitterDiagnosticsModel.self) private var bluetoothJitterDiagnostics
     @Environment(AccelerometerCaptureModel.self) private var accelerometerCapture
+    @Environment(SoundVibrationCorrelationModel.self) private var soundVibrationCorrelation
 
     @State private var lastSavedComparisonKey: String?
     @State private var phaseRefinementProgressText: String?
@@ -28,6 +29,7 @@ struct CancellationLabView: View {
                 bluetoothJitterCard
                 accelerometerCard
                 vibrationSpectrumCard
+                soundVibrationCorrelationCard
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
@@ -1220,6 +1222,264 @@ struct CancellationLabView: View {
             }
 
             Text("Spectrum amplitudes are relative device acceleration in milli-g, not calibrated vehicle-body displacement or force.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
+    private var soundVibrationCorrelationCard: some View {
+        let summary =
+            soundVibrationCorrelation.summary
+        let sound =
+            microphoneCapture.snapshot
+        let vibration =
+            accelerometerCapture
+                .vibrationSpectrum
+        let tolerance =
+            SoundVibrationCorrelationMath
+                .matchingToleranceHz(
+                    audioResolutionHz:
+                        sound.fftResolutionHz,
+                    vibrationResolutionHz:
+                        vibration
+                            .frequencyResolutionHz
+                )
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label(
+                    "Sound ↔ Vibration Correlation",
+                    systemImage:
+                        "waveform.path.ecg.rectangle"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                if soundVibrationCorrelation
+                    .state.isRunning
+                {
+                    ProgressView()
+                        .controlSize(.small)
+                } else if
+                    summary.opportunityCount > 0
+                {
+                    Text(summary.level.rawValue)
+                        .font(.caption.weight(.bold))
+                }
+            }
+
+            Text("Runs a 30-second paired analysis. Fresh microphone and accelerometer spectra are sampled together every 0.5 seconds, then shared-frequency matches are tracked over time. Frequency agreement and amplitude co-movement are reported separately.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if vibration.sampleCount > 0 {
+                LabeledContent(
+                    "Current overlap ceiling",
+                    value: String(
+                        format: "%.1f Hz",
+                        vibration
+                            .maximumAnalyzedFrequencyHz
+                    )
+                )
+
+                LabeledContent(
+                    "Current match tolerance",
+                    value: String(
+                        format: "±%.2f Hz",
+                        tolerance
+                    )
+                )
+            }
+
+            HStack {
+                Button("Start 30s Correlation") {
+                    startSoundVibrationCorrelation()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    !canStartSoundVibrationCorrelation
+                )
+
+                if soundVibrationCorrelation
+                    .state.isRunning
+                {
+                    Button("Stop Correlation") {
+                        soundVibrationCorrelation
+                            .stop()
+                    }
+                    .buttonStyle(.bordered)
+                } else if
+                    summary.opportunityCount > 0
+                {
+                    Button("Reset") {
+                        soundVibrationCorrelation
+                            .reset()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            switch soundVibrationCorrelation.state {
+            case .idle:
+                if !canStartSoundVibrationCorrelation {
+                    Text("Run microphone capture and accelerometer capture until both sound and vibration spectra are populated.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+            case .running:
+                Text(
+                    "\(summary.opportunityCount) / \(SoundVibrationCorrelationModel.maximumObservations) fresh paired observations"
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            case .completed:
+                Text("Correlation window complete.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+            case let .failed(message):
+                Text(message)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+            }
+
+            if summary.opportunityCount > 0 {
+                Divider()
+
+                LabeledContent(
+                    "Assessment",
+                    value: summary.level.rawValue
+                )
+
+                if let frequency =
+                    summary.primarySharedFrequencyHz
+                {
+                    LabeledContent(
+                        "Primary shared frequency",
+                        value: String(
+                            format: "%.2f Hz",
+                            frequency
+                        )
+                    )
+                }
+
+                LabeledContent(
+                    "Primary track observations",
+                    value:
+                        "\(summary.primaryTrackObservationCount) / \(summary.opportunityCount)"
+                )
+
+                LabeledContent(
+                    "Match presence",
+                    value: String(
+                        format: "%.0f%%",
+                        summary.matchPresenceRatio *
+                            100
+                    )
+                )
+
+                if let delta =
+                    summary.averageFrequencyDeltaHz
+                {
+                    LabeledContent(
+                        "Average frequency delta",
+                        value: String(
+                            format: "%.2f Hz",
+                            delta
+                        )
+                    )
+                }
+
+                if let agreement =
+                    summary.averageFrequencyAgreement
+                {
+                    LabeledContent(
+                        "Average frequency agreement",
+                        value: String(
+                            format: "%.0f%%",
+                            agreement * 100
+                        )
+                    )
+                }
+
+                if let correlation =
+                    summary.amplitudeCorrelation
+                {
+                    LabeledContent(
+                        "Amplitude co-movement r",
+                        value: String(
+                            format: "%+.3f",
+                            correlation
+                        )
+                    )
+                } else {
+                    LabeledContent(
+                        "Amplitude co-movement r",
+                        value: "Not enough variation"
+                    )
+                }
+
+                LabeledContent(
+                    "Persistent sound matches",
+                    value: String(
+                        format: "%.0f%%",
+                        summary
+                            .persistentSoundRatio *
+                            100
+                    )
+                )
+
+                LabeledContent(
+                    "Avg sound persistence confidence",
+                    value: String(
+                        format: "%.0f%%",
+                        summary
+                            .averageSoundPersistenceConfidence *
+                            100
+                    )
+                )
+            }
+
+            if !soundVibrationCorrelation
+                .latestMatches.isEmpty
+            {
+                Divider()
+
+                Text("Latest shared-frequency matches")
+                    .font(.subheadline.weight(.semibold))
+
+                ForEach(
+                    Array(
+                        soundVibrationCorrelation
+                            .latestMatches
+                            .prefix(3)
+                    )
+                ) { match in
+                    LabeledContent(
+                        String(
+                            format:
+                                "%.2f Hz sound",
+                            match.soundFrequencyHz
+                        ),
+                        value: String(
+                            format:
+                                "%.2f Hz vibration • Δ %.2f Hz",
+                            match.vibrationFrequencyHz,
+                            match.frequencyDeltaHz
+                        )
+                    )
+                }
+            }
+
+            Text("A shared frequency is evidence that cabin sound and device vibration occupy the same band. A positive amplitude correlation means their measured strengths tend to rise and fall together. Neither result by itself proves that structural vibration caused the sound.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("Only frequencies inside the vibration analyzer's Nyquist-safe band can be correlated. Higher microphone tones are left unresolved rather than aliased into a false vibration match.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -2769,6 +3029,99 @@ struct CancellationLabView: View {
             )
         }
         .cancellationCard()
+    }
+
+    private var canStartSoundVibrationCorrelation: Bool {
+        microphoneCapture.state ==
+            .capturing &&
+        accelerometerCapture.state ==
+            .capturing &&
+        audioSession.state == .active &&
+        microphoneCapture.snapshot
+            .fftTransformCount > 0 &&
+        accelerometerCapture.snapshot
+            .totalSampleCount > 0 &&
+        accelerometerCapture
+            .vibrationSpectrum
+            .sampleCount > 0 &&
+        !soundVibrationCorrelation
+            .state.isRunning
+    }
+
+    private func startSoundVibrationCorrelation() {
+        let routeRevision =
+            audioSession.routeRevision
+
+        Task { @MainActor in
+            await soundVibrationCorrelation.run(
+                sampleProvider: {
+                    let sound =
+                        microphoneCapture.snapshot
+                    let vibration =
+                        accelerometerCapture
+                            .vibrationSpectrum
+                    let motion =
+                        accelerometerCapture
+                            .snapshot
+
+                    guard
+                        sound.fftTransformCount > 0,
+                        motion.totalSampleCount > 0,
+                        vibration.sampleCount > 0
+                    else {
+                        return nil
+                    }
+
+                    return SoundVibrationCorrelationInput(
+                        audioFFTTransformCount:
+                            sound
+                                .fftTransformCount,
+                        motionSampleCount:
+                            motion
+                                .totalSampleCount,
+                        audioResolutionHz:
+                            sound
+                                .fftResolutionHz,
+                        vibrationResolutionHz:
+                            vibration
+                                .frequencyResolutionHz,
+                        vibrationMaximumFrequencyHz:
+                            vibration
+                                .maximumAnalyzedFrequencyHz,
+                        dominantSoundFrequencies:
+                            sound
+                                .dominantFrequencies
+                                .frequencies,
+                        persistentTones:
+                            sound
+                                .persistentTones
+                                .tones,
+                        vibrationPeaks:
+                            vibration
+                                .dominantPeaks
+                    )
+                },
+                safetyCheck: {
+                    if audioSession.state != .active {
+                        return "Audio session became inactive."
+                    }
+
+                    if microphoneCapture.state != .capturing {
+                        return "Microphone capture stopped."
+                    }
+
+                    if accelerometerCapture.state != .capturing {
+                        return "Accelerometer capture stopped."
+                    }
+
+                    if audioSession.routeRevision != routeRevision {
+                        return "Audio route changed during correlation."
+                    }
+
+                    return nil
+                }
+            )
+        }
     }
 
     private var canStartBluetoothJitterRun: Bool {
