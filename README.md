@@ -4,46 +4,80 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#31 — music interference detection** is implemented.
+Development effort **#32 — overall confidence scoring** is implemented. This completes **Milestone 3 — Reality (#23–#32)**.
 
-QuietDrive now automatically scores whether the live microphone spectrum looks contaminated by **broad, changing program audio** rather than only by narrow cabin/engine tones.
+QuietDrive now combines the independent evidence streams built across the project into one **explainable confidence score** while keeping the actual measured dB reduction separate.
 
-The detector operates on the raw full microphone FFT even when the Lab is using ANC Focus for the main cancellation workflow. It compares:
+The score uses seven weighted components:
 
-- low-frequency energy from **30–200 Hz**
-- program-band energy from **200–4000 Hz**
-- broadband spectral occupancy
-- spectral flatness
-- frame-to-frame spectral change
-- program-band strength relative to the low-frequency band
+- **Tone evidence — 18 points**
+- **Measurement quality — 16 points**
+- **Measured reduction — 14 points**
+- **Adaptive stability — 14 points**
+- **Route timing — 14 points**
+- **Sound/vibration evidence — 12 points**
+- **Interference / safety — 12 points**
 
-Those features are combined into an instantaneous score and then temporally smoothed into one of three states:
+The component weights total 100, but the UI also reports **evidence coverage** separately. Missing diagnostics do not become fake zero scores; they reduce coverage. QuietDrive requires at least **60% evidence coverage** before it will label the result Low, Moderate, or High confidence.
 
-- **Clear**
-- **Possible interference**
-- **Likely interference**
+This design deliberately prevents one impressive-looking measurement from dominating the conclusion. A one-off 6 dB reduction cannot produce High confidence if the target tone is unstable, measurements are noisy, Bluetooth timing is unresolved, the adaptive controller is oscillating, or music is contaminating the microphone.
 
-The classifier deliberately includes two false-positive guards. A strong **single sine/test tone** is capped below the Possible threshold, so QuietDrive's own generated cancellation tone is not treated as music. Broad but nearly static road/wind-like spectra can reach Possible, but cannot reach Likely unless the spectrum also changes measurably over time.
+Hard red flags also cap the final score:
 
-The Cancellation Lab now shows the current interference level plus the component metrics behind it.
+- microphone clipping → maximum 20
+- target amplification of 3 dB or more → maximum 20
+- adaptive fail-safe → maximum 35
+- unstable Bluetooth timing → maximum 55
+- likely program-audio interference → maximum 60
 
-This is a **spectral interference detector**, not a content-recognition system. It cannot identify a song, artist, or source, and speech or other changing broadband sounds can also register as interference. The point is to know when microphone evidence is contaminated enough that downstream confidence should be reduced.
+The Cancellation Lab now shows the overall score, evidence coverage, confidence level, every weighted component with its detail, and the specific factors limiting the result.
+
+The score is **confidence in the current experimental evidence**. It is not the measured cancellation itself, and it is not a probability that full-car active noise cancellation will work.
+
+## Milestone 3 complete
+
+QuietDrive now includes:
+
+- bounded adaptive phase/amplitude control
+- adaptive stability protection
+- processing-latency diagnostics
+- route-specific testing
+- Bluetooth profile characterization
+- live Bluetooth timing/jitter diagnostics
+- accelerometer capture
+- vibration-spectrum analysis
+- sound/vibration correlation
+- music/program-audio interference detection
+- overall evidence confidence scoring
+
+The software is now substantially better at telling us **when a result is trustworthy and when it is not**.
 
 ## Verification status
 
-The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so the tests compile but are not executed there.
+The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so tests compile but are not executed there.
 
-Synthetic coverage includes low-frequency road-like spectra, a strong narrow program-band tone, static broadband spectra, changing broadband program-audio-like spectra, and spectral-flux behavior.
+Confidence scoring has deterministic coverage for high-quality evidence, sparse evidence, missing optional diagnostics, clipping, target amplification, adaptive fail-safe, unstable Bluetooth timing, and likely music interference.
 
-Real-world thresholds still need physical driving tests with music off/on at different cabin volumes.
+Physical vehicle testing is still mandatory. High confidence in one controlled run does not establish repeatability across vehicles, road surfaces, speeds, phone mounting positions, temperatures, routes, head units, or days.
 
 ## What comes next
 
-**#32 — overall confidence scoring** is next and is the final Milestone 3 item. It will combine tone persistence, cancellation measurement quality, route/Bluetooth timing stability, sound-vibration correlation, clipping/stability state, and the new music-interference signal into one evidence-based confidence score.
+**Milestone 4 — Prove it** starts with **#33 calibration**.
+
+The remaining roadmap is:
+
+- #33 calibration
+- #34 structured logs
+- #35 CSV/JSON export
+- #36 test dashboard
+- #37 repeatability
+- #38 head-position sensitivity
+- #39 multiple frequencies
+- #40 Lab go/no-go report
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Music interference detection uses only derived FFT magnitudes and keeps no song/content fingerprint.
+Raw microphone audio is not stored. Raw accelerometer samples remain in memory only. Confidence scoring uses only derived diagnostic measurements already produced locally by the Lab.
 
 ## Generate the Xcode project
 
