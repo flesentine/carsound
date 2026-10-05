@@ -293,6 +293,35 @@ The app and unit-test targets compile successfully in GitHub Actions against the
   - UI explicitly refuses to infer frequencies above the safe analyzed band
   - synthetic tests cover 20 Hz detection, 72 Hz detection at 200 Hz sampling, refusal to resolve 72 Hz at 100 Hz sampling, gravity/DC rejection, and uniform resampling
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #30 Correlate vibration and sound
+- [x] #30 Correlate vibration and sound
+  - new SoundVibrationCorrelationMath and SoundVibrationCorrelationModel
+  - dedicated 30-second paired correlation run samples fresh sound/vibration observations every 0.5 seconds
+  - each paired observation requires both a newer microphone FFT transform and a newer accelerometer sample count
+  - stale paired measurements are skipped; extended stale data causes the correlation run to fail instead of inventing stability
+  - microphone dominant frequencies are matched one-to-one against vibration dominant peaks
+  - match tolerance is resolution-aware and derived from both audio FFT resolution and vibration FFT resolution
+  - correlation matching is bounded to a 2–8 Hz tolerance window to avoid either unrealistic precision or overly broad matches
+  - sound tones above the vibration analyzer's current Nyquist-safe maximum frequency are not matched
+  - frequency agreement is reported separately from amplitude co-movement
+  - each match records sound frequency, vibration frequency, frequency delta, tolerance, agreement, sound level, vibration amplitude, and sound-persistence metadata
+  - persistent-tone confidence is carried into matched sound/vibration observations
+  - repeated matches are clustered into shared-frequency tracks so different bands are never mixed into one amplitude correlation
+  - primary shared-frequency track is selected by observation count, then frequency agreement
+  - match presence ratio is computed across all paired observation opportunities
+  - average shared-frequency delta and average frequency agreement are reported
+  - sound and vibration amplitudes on the primary shared-frequency track are compared with Pearson correlation
+  - amplitude correlation is withheld when there is insufficient amplitude variation instead of returning a misleading value
+  - live assessment reports Insufficient data, No consistent shared frequency, Frequency aligned, or Frequency aligned + co-moving
+  - at least eight paired observations and four matches on one frequency track are required before assessment
+  - Frequency aligned requires the primary shared-frequency track to appear in at least 50% of paired observations
+  - Frequency aligned + co-moving additionally requires amplitude Pearson r >= +0.50
+  - live Cancellation Lab card shows overlap ceiling, match tolerance, progress, primary shared frequency, presence, frequency delta/agreement, Pearson r, persistence metrics, and latest matched peaks
+  - audio route revision is frozen for each run and a mid-run route change aborts correlation
+  - correlation run also aborts cleanly if microphone capture, accelerometer capture, or audio session stops
+  - UI explicitly states that shared frequency and positive co-movement are evidence of association, not proof that structural vibration caused the sound
+  - UI explicitly refuses to correlate microphone tones above the vibration analyzer's safe band
+  - tests cover tolerance math, nearby peak matching, Nyquist-safe rejection, positive/negative Pearson correlation, persistent co-movement, separation of distinct shared-frequency tracks, and no-consistent-match behavior
+  - fixed Swift key-path escaping issues and simplified one compiler-heavy test expression found by CI
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #31 Detect music interference
 - [ ] #32 Build overall confidence scoring
