@@ -276,13 +276,32 @@ enum MusicInterferenceMath {
                 ) / 24.0
             )
 
-        return clamp01(
+        var result = clamp01(
             0.34 * activity +
             0.26 * occupancy +
             0.16 * flatness +
             0.16 * dynamics +
             0.08 * programPresence
         )
+
+        // A single strong sine/test tone can make the average
+        // program-band level look high even though almost no
+        // spectrum is occupied. Do not call that music.
+        if
+            occupiedBinRatio < 0.05 &&
+            spectralFlatness < 0.02
+        {
+            result = min(result, 0.25)
+        }
+
+        // Broad but nearly static road/wind noise can look
+        // program-like in one FFT. Require temporal movement
+        // before elevating the result to "likely".
+        if spectralFlux < 0.08 {
+            result = min(result, 0.58)
+        }
+
+        return result
     }
 
     static func level(
