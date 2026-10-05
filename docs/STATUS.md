@@ -394,3 +394,18 @@ The app and unit-test targets compile successfully in GitHub Actions against the
 - [x] #32 Build overall confidence scoring
 
 Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus stability, timing, route, Bluetooth, vibration, correlation, interference, and evidence-quality diagnostics. The next phase is Milestone 4 — Prove it, beginning with calibration.
+
+
+### Milestone 4 — Prove it
+- [x] #33 calibration
+  - new durable route-specific calibration profiles
+  - 5-second quiet-reference capture from fresh paired microphone + accelerometer observations
+  - optional external SPL reference remains approximate and route-specific
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
+- [ ] #34 structured logs
+- [ ] #35 CSV/JSON export
+- [ ] #36 test dashboard
+- [ ] #37 repeatability
+- [ ] #38 head-position sensitivity
+- [ ] #39 multiple frequencies
+- [ ] #40 Lab go/no-go report
