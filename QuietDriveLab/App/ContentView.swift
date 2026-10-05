@@ -1194,4 +1194,5 @@ private extension View {
         .environment(BluetoothJitterDiagnosticsModel())
         .environment(AccelerometerCaptureModel())
         .environment(SoundVibrationCorrelationModel())
+        .environment(CalibrationModel(storageURL: nil))
 }
