@@ -323,5 +323,28 @@ The app and unit-test targets compile successfully in GitHub Actions against the
   - tests cover tolerance math, nearby peak matching, Nyquist-safe rejection, positive/negative Pearson correlation, persistent co-movement, separation of distinct shared-frequency tracks, and no-consistent-match behavior
   - fixed Swift key-path escaping issues and simplified one compiler-heavy test expression found by CI
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #31 Detect music interference
+- [x] #31 Detect music interference
+  - new MusicInterferenceDetector runs automatically on each fresh microphone FFT
+  - detector uses the raw full microphone spectrum independently of ANC Focus display filtering
+  - dedicated program-audio analysis band covers 200–4000 Hz while the low comparison band covers 30–200 Hz
+  - program-band and low-band average power are calculated in linear power before conversion back to dBFS
+  - program-to-low spectral balance is tracked
+  - broadband occupancy measures how much of the program band is materially active relative to the current program-band peak
+  - spectral flatness distinguishes broad spectra from narrow tonal spectra
+  - frame-to-frame spectral flux measures temporal change in the program band
+  - instantaneous interference score combines program-band activity, broadband occupancy, flatness, temporal change, and program-vs-low balance
+  - score is temporally smoothed to avoid single-frame interference state changes
+  - result states are Clear, Possible interference, and Likely interference
+  - a strong narrow sine/test tone is explicitly capped below the Possible threshold so QuietDrive's own cancellation tone does not masquerade as music
+  - broad but nearly static road/wind-like spectra cannot reach Likely without measurable temporal spectral change
+  - Likely requires both broadband evidence and dynamic program-band behavior
+  - detector resets with microphone capture state so old interference history does not leak into a new experiment
+  - Music / Program Interference card added to Cancellation Lab
+  - card shows smoothed and instantaneous score, program-band level, low-band level, program-vs-low ratio, occupancy, flatness, spectral change, and FFT update count
+  - UI explains that this is a program-audio-like interference detector, not a song/content recognizer
+  - UI warns that speech and other changing broadband sources may also register as interference
+  - UI states that #32 will discount overall confidence when Likely interference is active
+  - tests cover narrow-tone rejection, static-broadband capping, dynamic-broadband likelihood, low-frequency road-noise rejection, single strong program-tone rejection, changing broadband program-audio detection, and zero flux for identical frames
+  - fixed detector occupancy parsing issue found by CI
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #32 Build overall confidence scoring
