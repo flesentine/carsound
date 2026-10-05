@@ -14,15 +14,18 @@ struct CancellationLabView: View {
     @Environment(BluetoothJitterDiagnosticsModel.self) private var bluetoothJitterDiagnostics
     @Environment(AccelerometerCaptureModel.self) private var accelerometerCapture
     @Environment(SoundVibrationCorrelationModel.self) private var soundVibrationCorrelation
+    @Environment(CalibrationModel.self) private var calibration
 
     @State private var lastSavedComparisonKey: String?
     @State private var phaseRefinementProgressText: String?
     @State private var amplitudeSearchProgressText: String?
+    @State private var externalSPLReferenceText = ""
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
                 readinessCard
+                calibrationCard
                 processingLatencyCard
                 audioRouteTestingCard
                 bluetoothBehaviorCard
@@ -84,6 +87,331 @@ struct CancellationLabView: View {
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
+        }
+        .cancellationCard()
+    }
+
+    private var calibrationCard: some View {
+        let matching =
+            calibration.latestMatchingProfile(
+                routeSignature:
+                    audioSession.routeSignature,
+                sampleRate:
+                    audioSession.sampleRate
+            )
+        let approximateLiveSPL =
+            matching.flatMap {
+                CalibrationMath.approximateSPLDB(
+                    rmsDBFS:
+                        microphoneCapture.snapshot
+                            .rmsDBFS,
+                    profile: $0,
+                    currentRouteSignature:
+                        audioSession.routeSignature
+                )
+            }
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label(
+                    "Calibration",
+                    systemImage: "scope"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                if let matching {
+                    Text("Route matched")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.green)
+                } else {
+                    Text("No matching profile")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Text("Capture a 5-second quiet reference with generated output off. QuietDrive stores a route-specific microphone, timing, and vibration baseline. Native measurements remain dBFS/g; optional external SPL creates only an approximate route-specific offset.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            TextField(
+                "Optional external SPL reference (dB)",
+                text: $externalSPLReferenceText
+            )
+            .textFieldStyle(.roundedBorder)
+            .keyboardType(.decimalPad)
+            .disabled(calibration.state.isRunning)
+
+            Text("If you use an external sound meter, enter its simultaneous reading before calibration. QuietDrive does not apply A/C weighting or certify the phone as an SPL meter.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            HStack {
+                Button("Start 5s Calibration") {
+                    startCalibration()
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!canStartCalibration)
+
+                if calibration.state.isRunning {
+                    Button("Cancel") {
+                        calibration.cancel()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            switch calibration.state {
+            case .idle:
+                if !canStartCalibration {
+                    Text("Requires active audio session, microphone + accelerometer capture, generated tone off/muted, fresh FFT/motion data, no clipping, and no likely program-audio interference.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+            case let .capturing(collected, required):
+                ProgressView(
+                    value: Double(collected),
+                    total: Double(required)
+                )
+                Text(
+                    "\(collected) / \(required) fresh paired calibration samples"
+                )
+                .font(.caption.monospacedDigit())
+                .foregroundStyle(.secondary)
+
+            case .completed:
+                Text("Calibration profile saved.")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.green)
+
+            case let .failed(message):
+                Text(message)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.red)
+            }
+
+            if let profile = matching {
+                Divider()
+
+                Text("Current matching reference")
+                    .font(.subheadline.weight(.semibold))
+
+                LabeledContent(
+                    "Captured",
+                    value: profile.capturedAt.formatted(
+                        date: .abbreviated,
+                        time: .shortened
+                    )
+                )
+
+                LabeledContent(
+                    "Route",
+                    value: profile.routeFamily.rawValue
+                )
+
+                LabeledContent(
+                    "Reference mic RMS",
+                    value: String(
+                        format: "%.1f dBFS",
+                        profile.microphoneRMSDBFS
+                    )
+                )
+
+                LabeledContent(
+                    "Mic variation σ",
+                    value: String(
+                        format: "%.2f dB",
+                        profile
+                            .microphoneRMSStandardDeviationDB
+                    )
+                )
+
+                LabeledContent(
+                    "LF / wide floor",
+                    value: String(
+                        format: "%.1f / %.1f dBFS",
+                        profile.lowFrequencyFloorDBFS,
+                        profile.widebandFloorDBFS
+                    )
+                )
+
+                if
+                    let target =
+                        profile.targetFrequencyHz,
+                    let energy =
+                        profile.targetBandEnergyDBFS
+                {
+                    LabeledContent(
+                        "Target reference",
+                        value: String(
+                            format:
+                                "%.0f Hz • %.1f dBFS",
+                            target,
+                            energy
+                        )
+                    )
+                }
+
+                LabeledContent(
+                    "Vibration RMS",
+                    value: String(
+                        format: "%.3f mg",
+                        profile.dynamicVibrationRMSG *
+                            1_000
+                    )
+                )
+
+                LabeledContent(
+                    "Accelerometer rate",
+                    value: String(
+                        format: "%.1f Hz",
+                        profile
+                            .accelerometerObservedRateHz
+                    )
+                )
+
+                LabeledContent(
+                    "Callback jitter σ",
+                    value: String(
+                        format: "%.3f ms",
+                        profile
+                            .callbackJitterMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Spectrum-center age",
+                    value: String(
+                        format: "%.2f ms",
+                        profile
+                            .spectrumCenterAgeMilliseconds
+                    )
+                )
+
+                if
+                    let reference =
+                        profile.externalReferenceSPLDB,
+                    let offset =
+                        profile.approximateSPLOffsetDB
+                {
+                    LabeledContent(
+                        "External reference",
+                        value: String(
+                            format: "%.1f dB",
+                            reference
+                        )
+                    )
+
+                    LabeledContent(
+                        "Approx. SPL offset",
+                        value: String(
+                            format: "%+.1f dB",
+                            offset
+                        )
+                    )
+
+                    if let approximateLiveSPL {
+                        LabeledContent(
+                            "Approx. live SPL",
+                            value: String(
+                                format: "%.1f dB",
+                                approximateLiveSPL
+                            )
+                        )
+                    }
+                } else {
+                    Text("No external SPL reference is attached to this profile; absolute SPL is intentionally unavailable.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Divider()
+
+            HStack {
+                Text("Saved calibration profiles")
+                    .font(.subheadline.weight(.semibold))
+
+                Spacer()
+
+                Text("\(calibration.profiles.count)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let error = calibration.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            ForEach(
+                Array(
+                    calibration.profiles
+                        .prefix(6)
+                )
+            ) { profile in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(profile.routeFamily.rawValue)
+                            .font(.caption.weight(.semibold))
+
+                        Spacer()
+
+                        Text(
+                            profile.capturedAt.formatted(
+                                date: .numeric,
+                                time: .shortened
+                            )
+                        )
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    }
+
+                    Text(profile.outputRoute)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+
+                    Text(
+                        String(
+                            format:
+                                "%.0f Hz • mic %.1f dBFS • vibration %.3f mg",
+                            profile.sampleRate,
+                            profile.microphoneRMSDBFS,
+                            profile.dynamicVibrationRMSG *
+                                1_000
+                        )
+                    )
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.secondary)
+
+                    Button("Delete Calibration") {
+                        calibration.delete(
+                            id: profile.id
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(calibration.state.isRunning)
+                }
+            }
+
+            if !calibration.profiles.isEmpty {
+                Button(
+                    "Clear All Calibrations",
+                    role: .destructive
+                ) {
+                    calibration.clearAll()
+                }
+                .buttonStyle(.bordered)
+                .disabled(calibration.state.isRunning)
+            }
+
+            Text("A calibration profile is valid only for the same route signature and sample rate. Changing the microphone/output route intentionally removes the live match instead of reusing the wrong reference.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .cancellationCard()
     }
@@ -3563,6 +3891,207 @@ struct CancellationLabView: View {
 
                     if audioSession.routeRevision != routeRevision {
                         return "Audio route changed during correlation."
+                    }
+
+                    return nil
+                }
+            )
+        }
+    }
+
+    private var canStartCalibration: Bool {
+        let sound =
+            microphoneCapture.snapshot
+        let motion =
+            accelerometerCapture.snapshot
+        let toneIsQuiet =
+            toneGenerator.state != .playing ||
+            toneGenerator.isMuted
+
+        return
+            audioSession.state == .active &&
+            microphoneCapture.state == .capturing &&
+            accelerometerCapture.state == .capturing &&
+            sound.fftTransformCount > 0 &&
+            motion.totalSampleCount > 0 &&
+            accelerometerCapture
+                .vibrationSpectrum
+                .sampleCount > 0 &&
+            toneIsQuiet &&
+            !sound.isClipping &&
+            sound.musicInterference.level != .likely &&
+            !audioSession.inputs.isEmpty &&
+            !audioSession.outputs.isEmpty &&
+            !calibration.state.isRunning
+    }
+
+    private func parsedExternalSPLReference() -> Double? {
+        let trimmed =
+            externalSPLReferenceText
+                .trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+
+        return Double(trimmed)
+    }
+
+    private func startCalibration() {
+        let routeSignature =
+            audioSession.routeSignature
+        let routeRevision =
+            audioSession.routeRevision
+        let inputRoute =
+            inputRouteSummary
+        let outputRoute =
+            outputRouteSummary
+        let inputRecords =
+            AudioRouteTestingMath.records(
+                from: audioSession.inputs
+            )
+        let outputRecords =
+            AudioRouteTestingMath.records(
+                from: audioSession.outputs
+            )
+        let routeFamily =
+            AudioRouteTestingMath.classify(
+                inputs: inputRecords,
+                outputs: outputRecords
+            )
+        let target =
+            toneGenerator.frequencyHz
+        let externalReference =
+            parsedExternalSPLReference()
+
+        Task { @MainActor in
+            await calibration.run(
+                routeSignature:
+                    routeSignature,
+                routeFamily:
+                    routeFamily,
+                routeRevision:
+                    routeRevision,
+                inputRoute:
+                    inputRoute,
+                outputRoute:
+                    outputRoute,
+                sampleRate:
+                    audioSession.sampleRate,
+                ioBufferDuration:
+                    audioSession.ioBufferDuration,
+                inputLatency:
+                    audioSession.inputLatency,
+                outputLatency:
+                    audioSession.outputLatency,
+                targetFrequencyHz:
+                    target,
+                externalReferenceSPLDB:
+                    externalReference,
+                sampleProvider: {
+                    let sound =
+                        microphoneCapture.snapshot
+                    let motion =
+                        accelerometerCapture.snapshot
+                    let vibration =
+                        accelerometerCapture
+                            .vibrationSpectrum
+                    let targetMeasurement =
+                        measurementForTarget(
+                            target
+                        )
+
+                    return CalibrationSample(
+                        fftTransformCount:
+                            sound.fftTransformCount,
+                        motionSampleCount:
+                            motion.totalSampleCount,
+                        microphoneRMSDBFS:
+                            sound.rmsDBFS,
+                        lowFrequencyFloorDBFS:
+                            sound
+                                .noiseFloor
+                                .lowFrequencyFloorDBFS,
+                        widebandFloorDBFS:
+                            sound
+                                .noiseFloor
+                                .widebandFloorDBFS,
+                        targetBandEnergyDBFS:
+                            targetMeasurement?
+                                .bandEnergyDBFS,
+                        callbackJitterMilliseconds:
+                            sound
+                                .processingLatency
+                                .callbackJitterMilliseconds,
+                        spectrumCenterAgeMilliseconds:
+                            sound
+                                .processingLatency
+                                .estimatedSpectrumCenterAgeMilliseconds,
+                        accelerationXG:
+                            motion.latestSample?
+                                .xG,
+                        accelerationYG:
+                            motion.latestSample?
+                                .yG,
+                        accelerationZG:
+                            motion.latestSample?
+                                .zG,
+                        dynamicVibrationRMSG:
+                            vibration.dynamicRMSG,
+                        accelerometerObservedRateHz:
+                            motion
+                                .observedSampleRateHz,
+                        accelerometerIntervalJitterMilliseconds:
+                            motion
+                                .intervalJitterMilliseconds,
+                        musicInterferenceScore:
+                            sound
+                                .musicInterference
+                                .smoothedScore
+                    )
+                },
+                safetyCheck: {
+                    if audioSession.state != .active {
+                        return "Audio session became inactive."
+                    }
+
+                    if
+                        audioSession.routeSignature !=
+                            routeSignature ||
+                        audioSession.routeRevision !=
+                            routeRevision
+                    {
+                        return "Audio route changed during calibration."
+                    }
+
+                    if microphoneCapture.state != .capturing {
+                        return "Microphone capture stopped."
+                    }
+
+                    if accelerometerCapture.state != .capturing {
+                        return "Accelerometer capture stopped."
+                    }
+
+                    if microphoneCapture.snapshot.isClipping {
+                        return "Microphone clipping invalidated calibration."
+                    }
+
+                    if
+                        microphoneCapture
+                            .snapshot
+                            .musicInterference
+                            .level == .likely
+                    {
+                        return "Likely program-audio interference invalidated calibration."
+                    }
+
+                    if
+                        toneGenerator.state == .playing &&
+                        !toneGenerator.isMuted
+                    {
+                        return "Generated tone became audible during calibration."
                     }
 
                     return nil
