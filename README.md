@@ -4,62 +4,46 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#30 — sound/vibration correlation** is implemented.
+Development effort **#31 — music interference detection** is implemented.
 
-QuietDrive can now run a controlled **30-second paired correlation window** using the independent microphone and vibration pipelines built in earlier milestones.
+QuietDrive now automatically scores whether the live microphone spectrum looks contaminated by **broad, changing program audio** rather than only by narrow cabin/engine tones.
 
-Every 0.5 seconds, the correlation model waits for both a fresh microphone FFT and fresh accelerometer data. The current microphone dominant-frequency candidates are then paired one-to-one with vibration peaks using a tolerance derived from the actual audio and vibration frequency resolutions.
+The detector operates on the raw full microphone FFT even when the Lab is using ANC Focus for the main cancellation workflow. It compares:
 
-The matcher is also constrained by the vibration analyzer's Nyquist-safe upper limit. A microphone tone above the vibration system's trustworthy band is left unresolved rather than matched to an aliased lower-frequency motion peak.
+- low-frequency energy from **30–200 Hz**
+- program-band energy from **200–4000 Hz**
+- broadband spectral occupancy
+- spectral flatness
+- frame-to-frame spectral change
+- program-band strength relative to the low-frequency band
 
-For each matched band QuietDrive tracks:
+Those features are combined into an instantaneous score and then temporally smoothed into one of three states:
 
-- sound frequency
-- vibration frequency
-- frequency difference
-- resolution-aware match tolerance
-- normalized frequency agreement
-- sound level
-- vibration amplitude
-- whether the sound tone is persistent
-- sound persistence confidence
+- **Clear**
+- **Possible interference**
+- **Likely interference**
 
-Repeated matches are clustered by shared frequency before any temporal amplitude correlation is calculated. That prevents unrelated bands—such as a 40 Hz structural mode and a 72 Hz mode—from being combined into one meaningless statistic.
+The classifier deliberately includes two false-positive guards. A strong **single sine/test tone** is capped below the Possible threshold, so QuietDrive's own generated cancellation tone is not treated as music. Broad but nearly static road/wind-like spectra can reach Possible, but cannot reach Likely unless the spectrum also changes measurably over time.
 
-The primary shared-frequency track reports:
+The Cancellation Lab now shows the current interference level plus the component metrics behind it.
 
-- how often it appears across paired observations
-- mean shared frequency
-- average sound/vibration frequency delta
-- average frequency agreement
-- persistent-sound match ratio
-- average persistence confidence
-- **Pearson amplitude correlation (r)** between sound strength and vibration amplitude
-
-The live assessment is intentionally descriptive:
-
-- **Insufficient data**
-- **No consistent shared frequency**
-- **Frequency aligned**
-- **Frequency aligned + co-moving**
-
-A positive amplitude correlation means sound and vibration strength tended to rise and fall together on the same frequency track. It does **not** prove that structural vibration caused the sound.
+This is a **spectral interference detector**, not a content-recognition system. It cannot identify a song, artist, or source, and speech or other changing broadband sounds can also register as interference. The point is to know when microphone evidence is contaminated enough that downstream confidence should be reduced.
 
 ## Verification status
 
 The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so the tests compile but are not executed there.
 
-The correlation math has deterministic synthetic coverage for frequency matching, Nyquist-safe rejection, positive and negative Pearson correlation, repeated shared-frequency tracking, and separation of distinct frequency bands.
+Synthetic coverage includes low-frequency road-like spectra, a strong narrow program-band tone, static broadband spectra, changing broadband program-audio-like spectra, and spectral-flux behavior.
 
-Meaningful correlation results still require a physical iPhone in a consistently mounted vehicle position with both microphone and accelerometer capture active.
+Real-world thresholds still need physical driving tests with music off/on at different cabin volumes.
 
 ## What comes next
 
-**#31 — music interference detection** is next. QuietDrive now knows when sound and vibration share a structural-looking frequency; the next step is to recognize when cabin music or other playback is contaminating the microphone spectrum so those observations can be discounted.
+**#32 — overall confidence scoring** is next and is the final Milestone 3 item. It will combine tone persistence, cancellation measurement quality, route/Bluetooth timing stability, sound-vibration correlation, clipping/stability state, and the new music-interference signal into one evidence-based confidence score.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Raw accelerometer samples remain in memory only. The correlation layer keeps derived frequency/amplitude observations in memory for the active correlation run and does not upload them.
+Raw microphone audio is not stored. Music interference detection uses only derived FFT magnitudes and keeps no song/content fingerprint.
 
 ## Generate the Xcode project
 
