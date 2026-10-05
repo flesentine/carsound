@@ -4,44 +4,62 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#29 — vibration spectrum analysis** is implemented.
+Development effort **#30 — sound/vibration correlation** is implemented.
 
-QuietDrive now converts the rolling accelerometer buffer into a live structural-vibration spectrum.
+QuietDrive can now run a controlled **30-second paired correlation window** using the independent microphone and vibration pipelines built in earlier milestones.
 
-The motion capture requests **200 Hz** for spectrum work, but the analyzer never assumes the phone actually delivers that rate. It measures the real Core Motion timestamps and derives the observed sample rate from them. The displayed frequency band is limited to **90% of observed Nyquist**, capped at 100 Hz.
+Every 0.5 seconds, the correlation model waits for both a fresh microphone FFT and fresh accelerometer data. The current microphone dominant-frequency candidates are then paired one-to-one with vibration peaks using a tolerance derived from the actual audio and vibration frequency resolutions.
 
-That distinction matters. If a phone only delivers around 100 Hz, QuietDrive will stop the trustworthy vibration spectrum near 45 Hz and explicitly report that a 72 Hz vibration cannot be resolved. It will not alias a higher-frequency vibration into a fake lower-frequency peak. Apple documents the maximum Core Motion update rate as hardware-dependent, so physical-device behavior is intentionally measured rather than assumed.
+The matcher is also constrained by the vibration analyzer's Nyquist-safe upper limit. A microphone tone above the vibration system's trustworthy band is left unresolved rather than matched to an aliased lower-frequency motion peak.
 
-Before FFT analysis, the latest motion samples are resampled onto a uniform time grid and each accelerometer axis is high-pass filtered at **1.5 Hz** to suppress gravity and slow phone tilt. X, Y and Z are FFT analyzed independently, then their amplitudes are combined into a vector vibration spectrum so dominant frequencies are less dependent on how the phone is oriented.
+For each matched band QuietDrive tracks:
 
-The live Vibration Spectrum panel reports:
+- sound frequency
+- vibration frequency
+- frequency difference
+- resolution-aware match tolerance
+- normalized frequency agreement
+- sound level
+- vibration amplitude
+- whether the sound tone is persistent
+- sound persistence confidence
 
-- observed accelerometer sample rate
-- Nyquist frequency
-- trustworthy analyzed frequency band
-- FFT frequency resolution
-- high-pass cutoff
-- dynamic vibration RMS
-- dominant vibration peaks and amplitudes in milli-g
-- whether the current sample rate can directly resolve 72 Hz
+Repeated matches are clustered by shared frequency before any temporal amplitude correlation is calculated. That prevents unrelated bands—such as a 40 Hz structural mode and a 72 Hz mode—from being combined into one meaningless statistic.
 
-A live spectrum graph is also shown while enough accelerometer samples are available.
+The primary shared-frequency track reports:
+
+- how often it appears across paired observations
+- mean shared frequency
+- average sound/vibration frequency delta
+- average frequency agreement
+- persistent-sound match ratio
+- average persistence confidence
+- **Pearson amplitude correlation (r)** between sound strength and vibration amplitude
+
+The live assessment is intentionally descriptive:
+
+- **Insufficient data**
+- **No consistent shared frequency**
+- **Frequency aligned**
+- **Frequency aligned + co-moving**
+
+A positive amplitude correlation means sound and vibration strength tended to rise and fall together on the same frequency track. It does **not** prove that structural vibration caused the sound.
 
 ## Verification status
 
 The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so the tests compile but are not executed there.
 
-Synthetic test coverage includes known 20 Hz and 72 Hz vibration signals, Nyquist rejection when sampling is too slow, gravity/DC rejection, and timestamp resampling.
+The correlation math has deterministic synthetic coverage for frequency matching, Nyquist-safe rejection, positive and negative Pearson correlation, repeated shared-frequency tracking, and separation of distinct frequency bands.
 
-Meaningful vibration measurements still require a physical iPhone mounted consistently in the vehicle. Spectrum amplitudes are relative device acceleration, not calibrated chassis displacement, force, or road-input measurements.
+Meaningful correlation results still require a physical iPhone in a consistently mounted vehicle position with both microphone and accelerometer capture active.
 
 ## What comes next
 
-**#30 — correlate vibration and sound** is next. QuietDrive now has independent acoustic and vibration frequency measurements, so the next step is to determine when a microphone tone and structural vibration occupy the same frequency region and how strongly they move together.
+**#31 — music interference detection** is next. QuietDrive now knows when sound and vibration share a structural-looking frequency; the next step is to recognize when cabin music or other playback is contaminating the microphone spectrum so those observations can be discounted.
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Raw accelerometer samples remain only in the in-memory rolling buffer for local vibration analysis and are not uploaded.
+Raw microphone audio is not stored. Raw accelerometer samples remain in memory only. The correlation layer keeps derived frequency/amplitude observations in memory for the active correlation run and does not upload them.
 
 ## Generate the Xcode project
 
