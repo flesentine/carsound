@@ -85,12 +85,14 @@ enum MusicInterferenceMath {
             )
         }
 
+        let magnitudes =
+            band.map {
+                $0.magnitudeDBFS
+            }
+
         guard
-            let peak =
-                band.map {
-                    $0.magnitudeDBFS
-                }.max(),
-            !band.isEmpty
+            !magnitudes.isEmpty,
+            let peak = magnitudes.max()
         else {
             return 0
         }
