@@ -32,7 +32,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 3.2 • Overall confidence scoring is available")
+                    Text("Lab build 3.3 • Route-specific calibration is available")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
