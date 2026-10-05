@@ -1193,4 +1193,5 @@ private extension View {
         .environment(AudioRouteTestingModel(storageURL: nil))
         .environment(BluetoothJitterDiagnosticsModel())
         .environment(AccelerometerCaptureModel())
+        .environment(SoundVibrationCorrelationModel())
 }
