@@ -31,6 +31,7 @@ struct CancellationLabView: View {
                 vibrationSpectrumCard
                 soundVibrationCorrelationCard
                 musicInterferenceCard
+                overallConfidenceCard
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
@@ -1634,6 +1635,301 @@ struct CancellationLabView: View {
             return .orange
         case .likely:
             return .red
+        }
+    }
+
+    private var overallConfidenceCard: some View {
+        let confidence =
+            overallConfidenceSnapshot
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label(
+                    "Overall Confidence",
+                    systemImage:
+                        "gauge.with.dots.needle.67percent"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                Text(confidence.level.rawValue)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(
+                        overallConfidenceColor(
+                            confidence.level
+                        )
+                    )
+            }
+
+            HStack(alignment: .firstTextBaseline) {
+                Text(
+                    String(
+                        format: "%.0f",
+                        confidence.scorePercent
+                    )
+                )
+                .font(
+                    .system(
+                        size: 42,
+                        weight: .bold,
+                        design: .rounded
+                    )
+                )
+
+                Text("/ 100")
+                    .font(.title3)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Evidence coverage")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Text(
+                        String(
+                            format: "%.0f%%",
+                            confidence
+                                .evidenceCoveragePercent
+                        )
+                    )
+                    .font(.title3.weight(.semibold))
+                }
+            }
+
+            ProgressView(
+                value:
+                    confidence.scorePercent,
+                total: 100
+            )
+
+            Text("Confidence measures how trustworthy the current experimental evidence is. It is not the measured dB reduction and is not a probability that full-car ANC will work.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            Divider()
+
+            Text("Evidence breakdown")
+                .font(.subheadline.weight(.semibold))
+
+            ForEach(confidence.components) { component in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack {
+                        Text(component.id.rawValue)
+                            .font(.subheadline)
+
+                        Spacer()
+
+                        if let score = component.score {
+                            Text(
+                                String(
+                                    format:
+                                        "%.0f%% • %.0f pts",
+                                    score * 100,
+                                    component.weight *
+                                        score
+                                )
+                            )
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                        } else {
+                            Text("Missing")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+
+                    Text(
+                        String(
+                            format:
+                                "Weight %.0f • %@",
+                            component.weight,
+                            component.detail
+                        )
+                    )
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            if !confidence.limitingFactors.isEmpty {
+                Divider()
+
+                Text("Limiting factors")
+                    .font(.subheadline.weight(.semibold))
+
+                ForEach(
+                    Array(
+                        confidence
+                            .limitingFactors
+                            .enumerated()
+                    ),
+                    id: \.offset
+                ) { _, factor in
+                    Text("• \(factor)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Text("Hard caps prevent a strong result in one metric from hiding unsafe or contaminated evidence: clipping and ≥3 dB target amplification cap confidence at 20, adaptive fail-safe at 35, unstable Bluetooth timing at 55, and likely program-audio interference at 60.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("High confidence still means only that the current evidence is internally strong and consistent. Physical repeatability across vehicles, routes, speeds, positions, and days remains a separate proof step.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
+    private var overallConfidenceSnapshot:
+        OverallConfidenceSnapshot
+    {
+        let sound =
+            microphoneCapture.snapshot
+        let inputRecords =
+            AudioRouteTestingMath.records(
+                from: audioSession.inputs
+            )
+        let outputRecords =
+            AudioRouteTestingMath.records(
+                from: audioSession.outputs
+            )
+        let bluetoothProfile =
+            BluetoothBehaviorMath.profile(
+                inputs: inputRecords,
+                outputs: outputRecords
+            )
+        let bluetoothActive =
+            bluetoothProfile != .none
+        let matchingBluetoothJitter:
+            BluetoothJitterSnapshot?
+
+        if
+            let snapshot =
+                bluetoothJitterDiagnostics.snapshot,
+            snapshot.profile ==
+                bluetoothProfile
+        {
+            matchingBluetoothJitter =
+                snapshot
+        } else {
+            matchingBluetoothJitter =
+                nil
+        }
+
+        let adaptiveFailed: Bool
+
+        if case .failed =
+            adaptiveController.state
+        {
+            adaptiveFailed = true
+        } else {
+            adaptiveFailed = false
+        }
+
+        let comparison:
+            BeforeAfterComparison?
+
+        if
+            let current =
+                beforeAfterMeasurement.comparison,
+            abs(
+                current
+                    .baseline
+                    .condition
+                    .targetFrequencyHz -
+                toneGenerator.frequencyHz
+            ) <= 0.5
+        {
+            comparison = current
+        } else {
+            comparison = nil
+        }
+
+        let processingJitter: Double?
+
+        if sound.fftTransformCount > 0 {
+            processingJitter =
+                sound
+                    .processingLatency
+                    .callbackJitterMilliseconds
+        } else {
+            processingJitter = nil
+        }
+
+        return OverallConfidenceMath.score(
+            input: OverallConfidenceInput(
+                persistentToneUpdateCount:
+                    sound
+                        .persistentTones
+                        .updateCount,
+                persistentTones:
+                    sound
+                        .persistentTones
+                        .tones,
+                comparison: comparison,
+                adaptiveEvidencePresent:
+                    adaptiveFailed ||
+                    adaptiveController
+                        .iterationCount > 0 ||
+                    adaptiveController
+                        .lastObservation != nil,
+                adaptiveFailed:
+                    adaptiveFailed,
+                adaptiveIterations:
+                    adaptiveController
+                        .iterationCount,
+                adaptiveRollbacks:
+                    adaptiveController
+                        .rollbackCount,
+                adaptiveStabilityHoldCount:
+                    adaptiveController
+                        .stabilityHoldCount,
+                adaptivePhaseReversalStreak:
+                    adaptiveController
+                        .phaseDirectionReversalStreak,
+                adaptiveAmplitudeReversalStreak:
+                    adaptiveController
+                        .amplitudeDirectionReversalStreak,
+                adaptiveTreatmentStandardDeviationDB:
+                    adaptiveController
+                        .lastObservation?
+                        .treatment
+                        .standardDeviationDB,
+                processingCallbackJitterMilliseconds:
+                    processingJitter,
+                bluetoothActive:
+                    bluetoothActive,
+                bluetoothJitter:
+                    matchingBluetoothJitter,
+                soundVibration:
+                    soundVibrationCorrelation
+                        .summary,
+                musicInterference:
+                    sound
+                        .musicInterference,
+                microphoneIsClipping:
+                    sound.isClipping
+            )
+        )
+    }
+
+    private func overallConfidenceColor(
+        _ level: OverallConfidenceLevel
+    ) -> Color {
+        switch level {
+        case .insufficientEvidence:
+            return .secondary
+        case .low:
+            return .red
+        case .moderate:
+            return .orange
+        case .high:
+            return .green
         }
     }
 
