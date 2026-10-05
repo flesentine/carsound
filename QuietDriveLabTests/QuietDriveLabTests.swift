@@ -3613,6 +3613,348 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testSoundVibrationMatchingToleranceUsesBothResolutions() {
+        XCTAssertEqual(
+            SoundVibrationCorrelationMath
+                .matchingToleranceHz(
+                    audioResolutionHz: 11.71875,
+                    vibrationResolutionHz: 0.390625
+                ),
+            6.640625,
+            accuracy: 0.0001
+        )
+    }
+
+    func testSoundVibrationMatchesNearbyPeaks() throws {
+        let input = SoundVibrationCorrelationInput(
+            audioFFTTransformCount: 10,
+            motionSampleCount: 500,
+            audioResolutionHz: 11.71875,
+            vibrationResolutionHz: 0.390625,
+            vibrationMaximumFrequencyHz: 90,
+            dominantSoundFrequencies: [
+                DominantFrequency(
+                    frequencyHz: 40,
+                    magnitudeDBFS: -30,
+                    temporalExcessDB: 8,
+                    localProminenceDB: 7,
+                    scoreDB: 11
+                )
+            ],
+            persistentTones: [],
+            vibrationPeaks: [
+                VibrationPeak(
+                    frequencyHz: 41,
+                    amplitudeG: 0.005
+                )
+            ]
+        )
+
+        let match = try XCTUnwrap(
+            SoundVibrationCorrelationMath
+                .matches(input: input)
+                .first
+        )
+
+        XCTAssertEqual(
+            match.soundFrequencyHz,
+            40,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            match.vibrationFrequencyHz,
+            41,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            match.frequencyDeltaHz,
+            1,
+            accuracy: 0.001
+        )
+        XCTAssertGreaterThan(
+            match.frequencyAgreement,
+            0.8
+        )
+    }
+
+    func testSoundVibrationDoesNotMatchAboveVibrationSafeBand() {
+        let input = SoundVibrationCorrelationInput(
+            audioFFTTransformCount: 10,
+            motionSampleCount: 500,
+            audioResolutionHz: 11.71875,
+            vibrationResolutionHz: 0.1953125,
+            vibrationMaximumFrequencyHz: 45,
+            dominantSoundFrequencies: [
+                DominantFrequency(
+                    frequencyHz: 72,
+                    magnitudeDBFS: -25,
+                    temporalExcessDB: 10,
+                    localProminenceDB: 9,
+                    scoreDB: 14
+                )
+            ],
+            persistentTones: [],
+            vibrationPeaks: [
+                VibrationPeak(
+                    frequencyHz: 44,
+                    amplitudeG: 0.01
+                )
+            ]
+        )
+
+        XCTAssertTrue(
+            SoundVibrationCorrelationMath
+                .matches(input: input)
+                .isEmpty
+        )
+    }
+
+    func testSoundVibrationPearsonCorrelationDetectsCoMovement() throws {
+        let positive = try XCTUnwrap(
+            SoundVibrationCorrelationMath
+                .pearsonCorrelation(
+                    x: [1, 2, 3, 4, 5],
+                    y: [2, 4, 6, 8, 10]
+                )
+        )
+        let negative = try XCTUnwrap(
+            SoundVibrationCorrelationMath
+                .pearsonCorrelation(
+                    x: [1, 2, 3, 4, 5],
+                    y: [10, 8, 6, 4, 2]
+                )
+        )
+
+        XCTAssertEqual(
+            positive,
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            negative,
+            -1,
+            accuracy: 0.0001
+        )
+    }
+
+    func testSoundVibrationSummaryDetectsPersistentCoMovement() {
+        let observations = (0..<8).map { index in
+            let amplitude =
+                Double(index + 1)
+
+            return SoundVibrationObservation(
+                capturedAtSeconds:
+                    Double(index) * 0.5,
+                matches: [
+                    makeSoundVibrationMatch(
+                        soundFrequencyHz:
+                            40.0 +
+                            Double(index % 2) * 0.2,
+                        vibrationFrequencyHz:
+                            40.5 +
+                            Double(index % 2) * 0.2,
+                        soundAmplitudeLinear:
+                            amplitude,
+                        vibrationAmplitudeG:
+                            amplitude * 0.002,
+                        persistent: true
+                    )
+                ]
+            )
+        }
+
+        let summary =
+            SoundVibrationCorrelationMath
+                .summarize(
+                    observations:
+                        observations
+                )
+
+        XCTAssertEqual(
+            summary.level,
+            .coMoving
+        )
+        XCTAssertEqual(
+            summary.primaryTrackObservationCount,
+            8
+        )
+        XCTAssertEqual(
+            summary.matchPresenceRatio,
+            1,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            summary.amplitudeCorrelation ?? 0,
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            summary.persistentSoundRatio,
+            1,
+            accuracy: 0.001
+        )
+    }
+
+    func testSoundVibrationSummaryDoesNotMixDifferentFrequencyTracks() {
+        var observations:
+            [SoundVibrationObservation] = []
+
+        for index in 0..<6 {
+            observations.append(
+                SoundVibrationObservation(
+                    capturedAtSeconds:
+                        Double(index) * 0.5,
+                    matches: [
+                        makeSoundVibrationMatch(
+                            soundFrequencyHz: 40,
+                            vibrationFrequencyHz: 40.5,
+                            soundAmplitudeLinear:
+                                Double(index + 1),
+                            vibrationAmplitudeG:
+                                Double(index + 1) *
+                                0.002,
+                            persistent: true
+                        )
+                    ]
+                )
+            )
+        }
+
+        for index in 0..<4 {
+            observations.append(
+                SoundVibrationObservation(
+                    capturedAtSeconds:
+                        Double(index + 6) * 0.5,
+                    matches: [
+                        makeSoundVibrationMatch(
+                            soundFrequencyHz: 72,
+                            vibrationFrequencyHz: 72.4,
+                            soundAmplitudeLinear:
+                                Double(index + 1),
+                            vibrationAmplitudeG:
+                                Double(index + 1) *
+                                0.003,
+                            persistent: false
+                        )
+                    ]
+                )
+            )
+        }
+
+        let summary =
+            SoundVibrationCorrelationMath
+                .summarize(
+                    observations:
+                        observations
+                )
+
+        XCTAssertEqual(
+            summary.primaryTrackObservationCount,
+            6
+        )
+        XCTAssertEqual(
+            summary.primarySharedFrequencyHz ?? 0,
+            40.25,
+            accuracy: 0.5
+        )
+        XCTAssertEqual(
+            summary.matchPresenceRatio,
+            0.6,
+            accuracy: 0.001
+        )
+    }
+
+    func testSoundVibrationSummaryReportsNoConsistentSharedFrequency() {
+        let matched = (0..<4).map { index in
+            SoundVibrationObservation(
+                capturedAtSeconds:
+                    Double(index) * 0.5,
+                matches: [
+                    makeSoundVibrationMatch(
+                        soundFrequencyHz: 35,
+                        vibrationFrequencyHz: 35.5,
+                        soundAmplitudeLinear:
+                            Double(index + 1),
+                        vibrationAmplitudeG:
+                            Double(index + 1) *
+                            0.001,
+                        persistent: false
+                    )
+                ]
+            )
+        }
+
+        let unmatched = (4..<10).map { index in
+            SoundVibrationObservation(
+                capturedAtSeconds:
+                    Double(index) * 0.5,
+                matches: []
+            )
+        }
+
+        let summary =
+            SoundVibrationCorrelationMath
+                .summarize(
+                    observations:
+                        matched + unmatched
+                )
+
+        XCTAssertEqual(
+            summary.level,
+            .noConsistentMatch
+        )
+        XCTAssertEqual(
+            summary.matchPresenceRatio,
+            0.4,
+            accuracy: 0.001
+        )
+    }
+
+    private func makeSoundVibrationMatch(
+        soundFrequencyHz: Double,
+        vibrationFrequencyHz: Double,
+        soundAmplitudeLinear: Double,
+        vibrationAmplitudeG: Double,
+        persistent: Bool
+    ) -> SoundVibrationMatch {
+        let tolerance = 6.0
+        let delta = abs(
+            soundFrequencyHz -
+            vibrationFrequencyHz
+        )
+
+        return SoundVibrationMatch(
+            soundFrequencyHz:
+                soundFrequencyHz,
+            vibrationFrequencyHz:
+                vibrationFrequencyHz,
+            frequencyDeltaHz: delta,
+            toleranceHz: tolerance,
+            frequencyAgreement:
+                max(
+                    0,
+                    1.0 -
+                    delta / tolerance
+                ),
+            soundMagnitudeDBFS:
+                20.0 *
+                log10(
+                    max(
+                        soundAmplitudeLinear,
+                        1e-12
+                    )
+                ),
+            soundAmplitudeLinear:
+                soundAmplitudeLinear,
+            vibrationAmplitudeG:
+                vibrationAmplitudeG,
+            soundIsPersistent:
+                persistent,
+            soundPersistenceConfidence:
+                persistent ? 0.9 : 0
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
