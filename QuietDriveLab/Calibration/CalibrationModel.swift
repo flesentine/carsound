@@ -304,6 +304,21 @@ final class CalibrationModel {
         }
     }
 
+    @discardableResult
+    func save(
+        _ profile: CalibrationProfile
+    ) -> CalibrationProfile {
+        profiles.removeAll {
+            $0.id == profile.id
+        }
+        profiles.insert(
+            profile,
+            at: 0
+        )
+        persist()
+        return profile
+    }
+
     func delete(
         id: UUID
     ) {
@@ -646,13 +661,9 @@ final class CalibrationModel {
                         )
             )
 
-        profiles.insert(
-            profile,
-            at: 0
-        )
+        save(profile)
         lastCapturedProfile =
             profile
-        persist()
 
         state = .completed
     }
