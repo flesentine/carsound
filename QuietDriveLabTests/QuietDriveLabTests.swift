@@ -3865,43 +3865,50 @@ final class QuietDriveLabTests: XCTestCase {
     }
 
     func testSoundVibrationSummaryReportsNoConsistentSharedFrequency() {
-        let matched = (0..<4).map { index in
-            SoundVibrationObservation(
-                capturedAtSeconds:
-                    Double(index) * 0.5,
-                matches: [
-                    makeSoundVibrationMatch(
-                        soundFrequencyHz: 35,
-                        vibrationFrequencyHz: 35.5,
-                        soundAmplitudeLinear:
-                            Double(index + 1),
-                        vibrationAmplitudeG:
-                            Double(index + 1) *
-                            0.001,
-                        persistent: false
-                    )
-                ]
+        var observations: [SoundVibrationObservation] = []
+
+        for index in 0..<4 {
+            let match = makeSoundVibrationMatch(
+                soundFrequencyHz: 35,
+                vibrationFrequencyHz: 35.5,
+                soundAmplitudeLinear:
+                    Double(index + 1),
+                vibrationAmplitudeG:
+                    Double(index + 1) *
+                    0.001,
+                persistent: false
+            )
+
+            observations.append(
+                SoundVibrationObservation(
+                    capturedAtSeconds:
+                        Double(index) * 0.5,
+                    matches: [match]
+                )
             )
         }
 
-        let unmatched = (4..<10).map { index in
-            SoundVibrationObservation(
-                capturedAtSeconds:
-                    Double(index) * 0.5,
-                matches: []
+        for index in 4..<10 {
+            observations.append(
+                SoundVibrationObservation(
+                    capturedAtSeconds:
+                        Double(index) * 0.5,
+                    matches: []
+                )
             )
         }
 
-        let summary =
+        let summary: SoundVibrationCorrelationSummary =
             SoundVibrationCorrelationMath
                 .summarize(
                     observations:
-                        matched + unmatched
+                        observations
                 )
 
         XCTAssertEqual(
             summary.level,
-            .noConsistentMatch
+            SoundVibrationCorrelationLevel
+                .noConsistentMatch
         )
         XCTAssertEqual(
             summary.matchPresenceRatio,
