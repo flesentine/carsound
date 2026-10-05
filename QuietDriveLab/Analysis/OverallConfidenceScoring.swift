@@ -98,6 +98,7 @@ enum OverallConfidenceMath {
     static let routeTimingWeight = 14.0
     static let soundVibrationWeight = 12.0
     static let interferenceSafetyWeight = 12.0
+    static let expectedMeasurementSamples = 20
 
     static func score(
         input: OverallConfidenceInput
@@ -380,8 +381,7 @@ enum OverallConfidenceMath {
 
         let expectedSamples =
             Double(
-                BeforeAfterMeasurementModel
-                    .requiredSamples
+                expectedMeasurementSamples
             )
         let completeness =
             min(
