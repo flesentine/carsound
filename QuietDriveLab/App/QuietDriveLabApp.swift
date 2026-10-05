@@ -16,6 +16,7 @@ struct QuietDriveLabApp: App {
     @State private var bluetoothJitterDiagnostics = BluetoothJitterDiagnosticsModel()
     @State private var accelerometerCapture = AccelerometerCaptureModel()
     @State private var soundVibrationCorrelation = SoundVibrationCorrelationModel()
+    @State private var calibration = CalibrationModel()
 
     var body: some Scene {
         WindowGroup {
@@ -34,6 +35,7 @@ struct QuietDriveLabApp: App {
                 .environment(bluetoothJitterDiagnostics)
                 .environment(accelerometerCapture)
                 .environment(soundVibrationCorrelation)
+                .environment(calibration)
                 .task {
                     microphonePermission.refresh()
                     audioSession.refreshRoute()
