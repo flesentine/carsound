@@ -4233,6 +4233,520 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testOverallConfidenceWeightsSumToHundred() {
+        let total =
+            OverallConfidenceMath.toneWeight +
+            OverallConfidenceMath.measurementQualityWeight +
+            OverallConfidenceMath.measuredReductionWeight +
+            OverallConfidenceMath.adaptiveStabilityWeight +
+            OverallConfidenceMath.routeTimingWeight +
+            OverallConfidenceMath.soundVibrationWeight +
+            OverallConfidenceMath.interferenceSafetyWeight
+
+        XCTAssertEqual(
+            total,
+            100,
+            accuracy: 0.001
+        )
+    }
+
+    func testOverallConfidenceIsInsufficientWithSparseEvidence() {
+        let snapshot =
+            OverallConfidenceMath.score(
+                input:
+                    makeOverallConfidenceInput()
+            )
+
+        XCTAssertEqual(
+            snapshot.level,
+            .insufficientEvidence
+        )
+        XCTAssertLessThan(
+            snapshot.evidenceCoveragePercent,
+            60
+        )
+    }
+
+    func testOverallConfidenceStrongEvidenceProducesHighConfidence() {
+        let snapshot =
+            OverallConfidenceMath.score(
+                input:
+                    makeOverallConfidenceInput(
+                        persistentToneUpdateCount: 20,
+                        persistentTones: [
+                            makeConfidenceTone(
+                                confidence: 0.95,
+                                persistent: true
+                            )
+                        ],
+                        comparison:
+                            makeConfidenceComparison(
+                                reductionDB: 6,
+                                standardDeviationDB: 0.35
+                            ),
+                        adaptiveEvidencePresent: true,
+                        adaptiveIterations: 12,
+                        adaptiveRollbacks: 1,
+                        adaptiveTreatmentStandardDeviationDB: 0.4,
+                        processingCallbackJitterMilliseconds: 0.4,
+                        soundVibration:
+                            makeConfidenceCorrelation(
+                                level: .coMoving,
+                                presence: 0.9,
+                                correlation: 0.9
+                            ),
+                        musicInterference:
+                            makeConfidenceMusic(
+                                level: .clear,
+                                score: 0.1
+                            )
+                    )
+            )
+
+        XCTAssertEqual(
+            snapshot.level,
+            .high
+        )
+        XCTAssertGreaterThanOrEqual(
+            snapshot.scorePercent,
+            80
+        )
+        XCTAssertEqual(
+            snapshot.evidenceCoveragePercent,
+            100,
+            accuracy: 0.001
+        )
+    }
+
+    func testOverallConfidenceMissingCorrelationReducesCoverageNotAvailableScores() {
+        let snapshot =
+            OverallConfidenceMath.score(
+                input:
+                    makeOverallConfidenceInput(
+                        persistentToneUpdateCount: 20,
+                        persistentTones: [
+                            makeConfidenceTone(
+                                confidence: 0.95,
+                                persistent: true
+                            )
+                        ],
+                        comparison:
+                            makeConfidenceComparison(
+                                reductionDB: 6,
+                                standardDeviationDB: 0.35
+                            ),
+                        adaptiveEvidencePresent: true,
+                        adaptiveIterations: 12,
+                        adaptiveRollbacks: 1,
+                        adaptiveTreatmentStandardDeviationDB: 0.4,
+                        processingCallbackJitterMilliseconds: 0.4,
+                        musicInterference:
+                            makeConfidenceMusic(
+                                level: .clear,
+                                score: 0.1
+                            )
+                    )
+            )
+
+        XCTAssertEqual(
+            snapshot.evidenceCoveragePercent,
+            88,
+            accuracy: 0.001
+        )
+        XCTAssertTrue(
+            snapshot.components
+                .contains {
+                    $0.id == .soundVibration &&
+                    $0.score == nil
+                }
+        )
+    }
+
+    func testOverallConfidenceClippingCapsScoreAtTwenty() {
+        let snapshot =
+            OverallConfidenceMath.score(
+                input:
+                    makeStrongConfidenceInput(
+                        microphoneIsClipping: true
+                    )
+            )
+
+        XCTAssertLessThanOrEqual(
+            snapshot.scorePercent,
+            20
+        )
+        XCTAssertEqual(
+            snapshot.level,
+            .low
+        )
+        XCTAssertTrue(
+            snapshot.limitingFactors
+                .contains(
+                    "Microphone clipping is active."
+                )
+        )
+    }
+
+    func testOverallConfidenceAmplificationCapsScoreAtTwenty() {
+        let snapshot =
+            OverallConfidenceMath.score(
+                input:
+                    makeStrongConfidenceInput(
+                        comparison:
+                            makeConfidenceComparison(
+                                reductionDB: -3,
+                                standardDeviationDB: 0.35
+                            )
+                    )
+            )
+
+        XCTAssertLessThanOrEqual(
+            snapshot.scorePercent,
+            20
+        )
+        XCTAssertTrue(
+            snapshot.limitingFactors
+                .contains(
+                    "Treatment amplified the target by 3 dB or more."
+                )
+        )
+    }
+
+    func testOverallConfidenceAdaptiveFailSafeCapsScoreAtThirtyFive() {
+        let snapshot =
+            OverallConfidenceMath.score(
+                input:
+                    makeStrongConfidenceInput(
+                        adaptiveFailed: true
+                    )
+            )
+
+        XCTAssertLessThanOrEqual(
+            snapshot.scorePercent,
+            35
+        )
+        XCTAssertTrue(
+            snapshot.limitingFactors
+                .contains(
+                    "Adaptive controller entered a fail-safe state."
+                )
+        )
+    }
+
+    func testOverallConfidenceUnstableBluetoothCapsScoreAtFiftyFive() {
+        let snapshot =
+            OverallConfidenceMath.score(
+                input:
+                    makeStrongConfidenceInput(
+                        bluetoothActive: true,
+                        bluetoothJitter:
+                            makeConfidenceBluetoothJitter(
+                                stability: .unstable
+                            )
+                    )
+            )
+
+        XCTAssertLessThanOrEqual(
+            snapshot.scorePercent,
+            55
+        )
+        XCTAssertTrue(
+            snapshot.limitingFactors
+                .contains(
+                    "Bluetooth timing was unstable during the live jitter run."
+                )
+        )
+    }
+
+    func testOverallConfidenceLikelyMusicCapsScoreAtSixty() {
+        let snapshot =
+            OverallConfidenceMath.score(
+                input:
+                    makeStrongConfidenceInput(
+                        musicInterference:
+                            makeConfidenceMusic(
+                                level: .likely,
+                                score: 0.85
+                            )
+                    )
+            )
+
+        XCTAssertLessThanOrEqual(
+            snapshot.scorePercent,
+            60
+        )
+        XCTAssertTrue(
+            snapshot.limitingFactors
+                .contains(
+                    "Likely program-audio interference is contaminating the microphone spectrum."
+                )
+        )
+    }
+
+    private func makeStrongConfidenceInput(
+        comparison: BeforeAfterComparison? = nil,
+        adaptiveFailed: Bool = false,
+        bluetoothActive: Bool = false,
+        bluetoothJitter: BluetoothJitterSnapshot? = nil,
+        musicInterference: MusicInterferenceSnapshot? = nil,
+        microphoneIsClipping: Bool = false
+    ) -> OverallConfidenceInput {
+        makeOverallConfidenceInput(
+            persistentToneUpdateCount: 20,
+            persistentTones: [
+                makeConfidenceTone(
+                    confidence: 0.95,
+                    persistent: true
+                )
+            ],
+            comparison:
+                comparison ??
+                makeConfidenceComparison(
+                    reductionDB: 6,
+                    standardDeviationDB: 0.35
+                ),
+            adaptiveEvidencePresent: true,
+            adaptiveFailed: adaptiveFailed,
+            adaptiveIterations: 12,
+            adaptiveRollbacks: 1,
+            adaptiveTreatmentStandardDeviationDB: 0.4,
+            processingCallbackJitterMilliseconds: 0.4,
+            bluetoothActive: bluetoothActive,
+            bluetoothJitter: bluetoothJitter,
+            soundVibration:
+                makeConfidenceCorrelation(
+                    level: .coMoving,
+                    presence: 0.9,
+                    correlation: 0.9
+                ),
+            musicInterference:
+                musicInterference ??
+                makeConfidenceMusic(
+                    level: .clear,
+                    score: 0.1
+                ),
+            microphoneIsClipping:
+                microphoneIsClipping
+        )
+    }
+
+    private func makeOverallConfidenceInput(
+        persistentToneUpdateCount: UInt64 = 0,
+        persistentTones: [PersistentTone] = [],
+        comparison: BeforeAfterComparison? = nil,
+        adaptiveEvidencePresent: Bool = false,
+        adaptiveFailed: Bool = false,
+        adaptiveIterations: Int = 0,
+        adaptiveRollbacks: Int = 0,
+        adaptiveStabilityHoldCount: Int = 0,
+        adaptivePhaseReversalStreak: Int = 0,
+        adaptiveAmplitudeReversalStreak: Int = 0,
+        adaptiveTreatmentStandardDeviationDB: Double? = nil,
+        processingCallbackJitterMilliseconds: Double? = nil,
+        bluetoothActive: Bool = false,
+        bluetoothJitter: BluetoothJitterSnapshot? = nil,
+        soundVibration: SoundVibrationCorrelationSummary = .empty,
+        musicInterference: MusicInterferenceSnapshot = .empty,
+        microphoneIsClipping: Bool = false
+    ) -> OverallConfidenceInput {
+        OverallConfidenceInput(
+            persistentToneUpdateCount:
+                persistentToneUpdateCount,
+            persistentTones:
+                persistentTones,
+            comparison:
+                comparison,
+            adaptiveEvidencePresent:
+                adaptiveEvidencePresent,
+            adaptiveFailed:
+                adaptiveFailed,
+            adaptiveIterations:
+                adaptiveIterations,
+            adaptiveRollbacks:
+                adaptiveRollbacks,
+            adaptiveStabilityHoldCount:
+                adaptiveStabilityHoldCount,
+            adaptivePhaseReversalStreak:
+                adaptivePhaseReversalStreak,
+            adaptiveAmplitudeReversalStreak:
+                adaptiveAmplitudeReversalStreak,
+            adaptiveTreatmentStandardDeviationDB:
+                adaptiveTreatmentStandardDeviationDB,
+            processingCallbackJitterMilliseconds:
+                processingCallbackJitterMilliseconds,
+            bluetoothActive:
+                bluetoothActive,
+            bluetoothJitter:
+                bluetoothJitter,
+            soundVibration:
+                soundVibration,
+            musicInterference:
+                musicInterference,
+            microphoneIsClipping:
+                microphoneIsClipping
+        )
+    }
+
+    private func makeConfidenceTone(
+        confidence: Double,
+        persistent: Bool
+    ) -> PersistentTone {
+        PersistentTone(
+            trackID: 1,
+            frequencyHz: 80,
+            durationSeconds: 5,
+            observationCount: 20,
+            presenceRatio: 0.9,
+            frequencyStdDevHz: 0.8,
+            averageLocalProminenceDB: 8,
+            averageTemporalExcessDB: 7,
+            confidence: confidence,
+            confidenceLevel:
+                confidence >= 0.75
+                ? .high
+                : .medium,
+            isPersistent: persistent
+        )
+    }
+
+    private func makeConfidenceComparison(
+        reductionDB: Double,
+        standardDeviationDB: Double
+    ) -> BeforeAfterComparison {
+        let baseline =
+            TargetEnergyWindowSummary(
+                condition:
+                    MeasurementCondition(
+                        targetFrequencyHz: 80,
+                        phaseDegrees: 0,
+                        outputPercent: 30,
+                        toneAudible: false
+                    ),
+                sampleCount: 20,
+                durationSeconds: 1.9,
+                averageBandEnergyDBFS: -30,
+                minimumBandEnergyDBFS: -31,
+                maximumBandEnergyDBFS: -29,
+                averageCenterLevelDBFS: -33,
+                standardDeviationDB:
+                    standardDeviationDB
+            )
+        let treatmentEnergy =
+            baseline.averageBandEnergyDBFS -
+            reductionDB
+        let treatment =
+            TargetEnergyWindowSummary(
+                condition:
+                    MeasurementCondition(
+                        targetFrequencyHz: 80,
+                        phaseDegrees: 140,
+                        outputPercent: 30,
+                        toneAudible: true
+                    ),
+                sampleCount: 20,
+                durationSeconds: 1.9,
+                averageBandEnergyDBFS:
+                    treatmentEnergy,
+                minimumBandEnergyDBFS:
+                    treatmentEnergy - 1,
+                maximumBandEnergyDBFS:
+                    treatmentEnergy + 1,
+                averageCenterLevelDBFS:
+                    treatmentEnergy - 3,
+                standardDeviationDB:
+                    standardDeviationDB
+            )
+
+        return BeforeAfterComparison(
+            baseline: baseline,
+            treatment: treatment,
+            treatmentMinusBaselineDB:
+                -reductionDB,
+            measuredReductionDB:
+                reductionDB
+        )
+    }
+
+    private func makeConfidenceCorrelation(
+        level: SoundVibrationCorrelationLevel,
+        presence: Double,
+        correlation: Double?
+    ) -> SoundVibrationCorrelationSummary {
+        SoundVibrationCorrelationSummary(
+            opportunityCount: 20,
+            matchedObservationCount: 18,
+            primaryTrackObservationCount:
+                Int(
+                    (
+                        presence *
+                        20
+                    ).rounded()
+                ),
+            primarySharedFrequencyHz: 80,
+            matchPresenceRatio: presence,
+            averageFrequencyDeltaHz: 0.7,
+            averageFrequencyAgreement: 0.9,
+            amplitudeCorrelation:
+                correlation,
+            persistentSoundRatio: 0.9,
+            averageSoundPersistenceConfidence:
+                0.9,
+            level: level
+        )
+    }
+
+    private func makeConfidenceMusic(
+        level: MusicInterferenceLevel,
+        score: Double
+    ) -> MusicInterferenceSnapshot {
+        MusicInterferenceSnapshot(
+            level: level,
+            instantaneousScore: score,
+            smoothedScore: score,
+            programBandLevelDBFS: -50,
+            lowBandLevelDBFS: -45,
+            programToLowRatioDB: -5,
+            occupiedBinRatio: 0.2,
+            spectralFlatness: 0.1,
+            spectralFlux: 0.2,
+            analyzedBinCount: 300,
+            updateCount: 20
+        )
+    }
+
+    private func makeConfidenceBluetoothJitter(
+        stability: BluetoothTimingStability
+    ) -> BluetoothJitterSnapshot {
+        BluetoothJitterSnapshot(
+            sampleCount: 120,
+            elapsedSeconds: 30,
+            profile: .a2dp,
+            stability: stability,
+            callbackMeanMilliseconds: 21,
+            callbackJitterMilliseconds:
+                stability == .unstable
+                ? 4
+                : 0.5,
+            callbackRangeMilliseconds: 2,
+            spectrumCenterAgeMeanMilliseconds: 60,
+            spectrumCenterAgeJitterMilliseconds:
+                stability == .unstable
+                ? 18
+                : 2,
+            spectrumCenterAgeRangeMilliseconds: 8,
+            outputLatencyMeanMilliseconds: 120,
+            outputLatencyJitterMilliseconds: 2,
+            outputLatencyRangeMilliseconds: 6,
+            ioBufferChangeCount:
+                stability == .unstable
+                ? 1
+                : 0,
+            sampleRateChangeCount: 0,
+            routeRevisionChangeCount: 0,
+            profileChangeCount: 0
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
