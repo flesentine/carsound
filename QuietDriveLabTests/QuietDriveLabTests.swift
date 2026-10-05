@@ -4747,6 +4747,270 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testCalibrationAverageDBUsesLinearPower() throws {
+        let average = try XCTUnwrap(
+            CalibrationMath.averageDBFromPower(
+                [-30, -30]
+            )
+        )
+
+        XCTAssertEqual(
+            average,
+            -30,
+            accuracy: 0.001
+        )
+
+        let mixed = try XCTUnwrap(
+            CalibrationMath.averageDBFromPower(
+                [-20, -40]
+            )
+        )
+
+        XCTAssertGreaterThan(
+            mixed,
+            -24
+        )
+        XCTAssertLessThan(
+            mixed,
+            -22
+        )
+    }
+
+    func testCalibrationExternalSPLOffsetAndRouteGuard() {
+        let profile =
+            makeCalibrationProfile(
+                routeSignature: "route-A",
+                sampleRate: 48_000,
+                externalReferenceSPLDB: 72,
+                approximateSPLOffsetDB: 112
+            )
+
+        XCTAssertEqual(
+            CalibrationMath.approximateSPLDB(
+                rmsDBFS: -38,
+                profile: profile,
+                currentRouteSignature: "route-A"
+            ),
+            74,
+            accuracy: 0.001
+        )
+
+        XCTAssertNil(
+            CalibrationMath.approximateSPLDB(
+                rmsDBFS: -38,
+                profile: profile,
+                currentRouteSignature: "route-B"
+            )
+        )
+    }
+
+    func testCalibrationRouteMatchRequiresSignatureAndSampleRate() {
+        let profile =
+            makeCalibrationProfile(
+                routeSignature: "route-A",
+                sampleRate: 48_000
+            )
+
+        XCTAssertTrue(
+            CalibrationMath.routeMatches(
+                profile: profile,
+                routeSignature: "route-A",
+                sampleRate: 48_000.5
+            )
+        )
+
+        XCTAssertFalse(
+            CalibrationMath.routeMatches(
+                profile: profile,
+                routeSignature: "route-B",
+                sampleRate: 48_000
+            )
+        )
+
+        XCTAssertFalse(
+            CalibrationMath.routeMatches(
+                profile: profile,
+                routeSignature: "route-A",
+                sampleRate: 44_100
+            )
+        )
+    }
+
+    func testCalibrationRejectsInvalidExternalSPL() {
+        XCTAssertFalse(
+            CalibrationMath
+                .isValidExternalReferenceSPLDB(
+                    10
+                )
+        )
+        XCTAssertTrue(
+            CalibrationMath
+                .isValidExternalReferenceSPLDB(
+                    72
+                )
+        )
+        XCTAssertFalse(
+            CalibrationMath
+                .isValidExternalReferenceSPLDB(
+                    150
+                )
+        )
+    }
+
+    @MainActor
+    func testCalibrationModelPersistsProfiles() throws {
+        let url =
+            FileManager.default
+                .temporaryDirectory
+                .appendingPathComponent(
+                    "quietdrive-calibration-\(UUID().uuidString).json"
+                )
+        defer {
+            try? FileManager.default
+                .removeItem(at: url)
+        }
+
+        let model =
+            CalibrationModel(
+                storageURL: url
+            )
+
+        var fft: UInt64 = 0
+        var motion: UInt64 = 0
+
+        let expectation =
+            XCTestExpectation(
+                description:
+                    "calibration completes"
+            )
+
+        Task { @MainActor in
+            await model.run(
+                routeSignature: "route-A",
+                routeFamily: .builtIn,
+                routeRevision: 2,
+                inputRoute: "Mic",
+                outputRoute: "Speaker",
+                sampleRate: 48_000,
+                ioBufferDuration: 0.005,
+                inputLatency: 0.002,
+                outputLatency: 0.003,
+                targetFrequencyHz: 80,
+                externalReferenceSPLDB: 70,
+                sampleProvider: {
+                    fft += 1
+                    motion += 1
+
+                    return CalibrationSample(
+                        fftTransformCount: fft,
+                        motionSampleCount: motion,
+                        microphoneRMSDBFS: -40,
+                        lowFrequencyFloorDBFS: -65,
+                        widebandFloorDBFS: -70,
+                        targetBandEnergyDBFS: -48,
+                        callbackJitterMilliseconds: 0.4,
+                        spectrumCenterAgeMilliseconds: 55,
+                        accelerationXG: 0.01,
+                        accelerationYG: 0.02,
+                        accelerationZG: 0.99,
+                        dynamicVibrationRMSG: 0.002,
+                        accelerometerObservedRateHz: 198,
+                        accelerometerIntervalJitterMilliseconds: 0.2,
+                        musicInterferenceScore: 0.1
+                    )
+                },
+                safetyCheck: {
+                    nil
+                }
+            )
+
+            expectation.fulfill()
+        }
+
+        wait(
+            for: [expectation],
+            timeout: 8
+        )
+
+        XCTAssertEqual(
+            model.profiles.count,
+            1
+        )
+        XCTAssertEqual(
+            model.profiles.first?
+                .sampleCount,
+            CalibrationModel.requiredSamples
+        )
+        XCTAssertEqual(
+            model.profiles.first?
+                .approximateSPLOffsetDB,
+            110,
+            accuracy: 0.001
+        )
+
+        let reloaded =
+            CalibrationModel(
+                storageURL: url
+            )
+
+        XCTAssertEqual(
+            reloaded.profiles,
+            model.profiles
+        )
+        XCTAssertNotNil(
+            reloaded.latestMatchingProfile(
+                routeSignature: "route-A",
+                sampleRate: 48_000
+            )
+        )
+    }
+
+    private func makeCalibrationProfile(
+        routeSignature: String,
+        sampleRate: Double,
+        externalReferenceSPLDB: Double? = nil,
+        approximateSPLOffsetDB: Double? = nil
+    ) -> CalibrationProfile {
+        CalibrationProfile(
+            id: UUID(),
+            capturedAt: Date(
+                timeIntervalSince1970: 1
+            ),
+            routeSignature:
+                routeSignature,
+            routeFamily: .builtIn,
+            routeRevision: 1,
+            inputRoute: "Mic",
+            outputRoute: "Speaker",
+            sampleRate: sampleRate,
+            ioBufferMilliseconds: 5,
+            inputLatencyMilliseconds: 2,
+            outputLatencyMilliseconds: 3,
+            sampleCount: 50,
+            durationSeconds: 4.9,
+            microphoneRMSDBFS: -40,
+            microphoneRMSStandardDeviationDB: 0.5,
+            lowFrequencyFloorDBFS: -65,
+            widebandFloorDBFS: -70,
+            targetFrequencyHz: 80,
+            targetBandEnergyDBFS: -48,
+            targetBandStandardDeviationDB: 0.7,
+            accelerationBiasXG: 0.01,
+            accelerationBiasYG: 0.02,
+            accelerationBiasZG: 0.99,
+            dynamicVibrationRMSG: 0.002,
+            accelerometerObservedRateHz: 198,
+            accelerometerIntervalJitterMilliseconds: 0.2,
+            callbackJitterMilliseconds: 0.4,
+            spectrumCenterAgeMilliseconds: 55,
+            maximumMusicInterferenceScore: 0.1,
+            externalReferenceSPLDB:
+                externalReferenceSPLDB,
+            approximateSPLOffsetDB:
+                approximateSPLOffsetDB
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
