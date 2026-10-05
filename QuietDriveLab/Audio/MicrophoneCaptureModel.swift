@@ -46,6 +46,7 @@ final class MicrophoneCaptureModel {
         let dominantFrequencies: DominantFrequencySnapshot
         let persistentTones: PersistentToneSnapshot
         let processingLatency: ProcessingLatencySnapshot
+        let musicInterference: MusicInterferenceSnapshot
 
         static let empty = Snapshot(
             bufferCount: 0,
@@ -73,7 +74,8 @@ final class MicrophoneCaptureModel {
             noiseFloor: .empty,
             dominantFrequencies: .empty,
             persistentTones: .empty,
-            processingLatency: .empty
+            processingLatency: .empty,
+            musicInterference: .empty
         )
     }
 
@@ -201,12 +203,15 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private let noiseFloorEstimator = NoiseFloorEstimator()
     private let dominantFrequencyDetector = DominantFrequencyDetector()
     private let persistentToneTracker = PersistentToneTracker()
+    private let musicInterferenceDetector = MusicInterferenceDetector()
 
     private var fftSnapshot: FFTSnapshot = .empty
     private var smoothedSpectrum: SmoothedSpectrumSnapshot = .empty
     private var noiseFloor: NoiseFloorSnapshot = .empty
     private var dominantFrequencies: DominantFrequencySnapshot = .empty
     private var persistentTones: PersistentToneSnapshot = .empty
+    private var musicInterference:
+        MusicInterferenceSnapshot = .empty
     private var captureTimelineSeconds: Double = 0
     private var processingLatencyTracker =
         ProcessingLatencyTracker()
@@ -234,6 +239,11 @@ private final class CaptureStatsStore: @unchecked Sendable {
         let description = Self.describe(format: format)
         let measurement = AudioLevelAnalyzer.analyze(buffer: buffer)
         let latestFFT = fftAnalyzer.ingest(buffer: buffer)
+        let latestMusicInterference = latestFFT.map {
+            musicInterferenceDetector.process(
+                $0.bins
+            )
+        }
         let latestSmoothedSpectrum = latestFFT.map {
             smoothingBank.process(
                 $0.bins,
@@ -315,6 +325,11 @@ private final class CaptureStatsStore: @unchecked Sendable {
             persistentTones = latestPersistentTones
         }
 
+        if let latestMusicInterference {
+            musicInterference =
+                latestMusicInterference
+        }
+
         processingLatencyTracker.record(
             callbackStartedNanoseconds:
                 callbackStartedNanoseconds,
@@ -364,7 +379,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
             noiseFloor: noiseFloor,
             dominantFrequencies: dominantFrequencies,
             persistentTones: persistentTones,
-            processingLatency: latencySnapshot
+            processingLatency: latencySnapshot,
+            musicInterference: musicInterference
         )
     }
 
@@ -373,6 +389,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
         smoothingBank.reset()
         noiseFloorEstimator.reset()
         persistentToneTracker.reset()
+        musicInterferenceDetector.reset()
 
         lock.lock()
         bufferCount = 0
@@ -392,6 +409,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
         noiseFloor = .empty
         dominantFrequencies = .empty
         persistentTones = .empty
+        musicInterference = .empty
         captureTimelineSeconds = 0
         processingLatencyTracker.reset()
         lock.unlock()
