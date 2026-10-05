@@ -552,7 +552,7 @@ enum SoundVibrationCorrelationMath {
                     average(
                         tracks[index]
                             .matches
-                            map {
+                            .map {
                                 $0.centerFrequencyHz
                             }
                     )
