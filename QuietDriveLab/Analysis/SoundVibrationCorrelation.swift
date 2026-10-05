@@ -324,9 +324,9 @@ enum SoundVibrationCorrelationMath {
             selectPrimaryTrack(
                 matches:
                     matchedObservations
-                        .compactMap(
-                            .primaryMatch
-                        )
+                        .compactMap {
+                            $0.primaryMatch
+                        }
             )
 
         let trackMatches =
@@ -346,38 +346,38 @@ enum SoundVibrationCorrelationMath {
 
         let meanFrequency =
             average(
-                trackMatches.map(
-                    .centerFrequencyHz
-                )
+                trackMatches.map {
+                    $0.centerFrequencyHz
+                }
             )
         let meanDelta =
             averageOptional(
-                trackMatches.map(
-                    .frequencyDeltaHz
-                )
+                trackMatches.map {
+                    $0.frequencyDeltaHz
+                }
             )
         let meanAgreement =
             averageOptional(
-                trackMatches.map(
-                    .frequencyAgreement
-                )
+                trackMatches.map {
+                    $0.frequencyAgreement
+                }
             )
         let amplitudeCorrelation =
             pearsonCorrelation(
                 x:
-                    trackMatches.map(
-                        .soundAmplitudeLinear
-                    ),
+                    trackMatches.map {
+                        $0.soundAmplitudeLinear
+                    },
                 y:
-                    trackMatches.map(
-                        .vibrationAmplitudeG
-                    )
+                    trackMatches.map {
+                        $0.vibrationAmplitudeG
+                    }
             )
 
         let persistentCount =
-            trackMatches.filter(
-                .soundIsPersistent
-            ).count
+            trackMatches.filter {
+                $0.soundIsPersistent
+            }.count
         let persistentRatio =
             trackCount > 0
             ? Double(persistentCount) /
@@ -386,9 +386,9 @@ enum SoundVibrationCorrelationMath {
         let persistenceConfidence =
             trackCount > 0
             ? average(
-                trackMatches.map(
-                    .soundPersistenceConfidence
-                )
+                trackMatches.map {
+                    $0.soundPersistenceConfidence
+                }
             )
             : 0
 
