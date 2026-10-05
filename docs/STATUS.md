@@ -347,4 +347,50 @@ The app and unit-test targets compile successfully in GitHub Actions against the
   - tests cover narrow-tone rejection, static-broadband capping, dynamic-broadband likelihood, low-frequency road-noise rejection, single strong program-tone rejection, changing broadband program-audio detection, and zero flux for identical frames
   - fixed detector occupancy parsing issue found by CI
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #32 Build overall confidence scoring
+- [x] #32 Build overall confidence scoring
+  - new explainable OverallConfidenceMath scoring layer
+  - final result reports both confidence score (0–100) and evidence coverage (%) separately
+  - missing diagnostics reduce evidence coverage instead of being silently treated as failed measurements
+  - assessment levels are Insufficient evidence, Low confidence, Moderate confidence, and High confidence
+  - at least 60% evidence coverage is required before a Low/Moderate/High confidence label can be issued
+  - seven weighted components total exactly 100 points
+  - tone evidence weight 18: uses persistent-tone confidence/presence and discounts non-persistent candidates
+  - measurement-quality weight 16: combines baseline/treatment sample completeness with worst-window target-energy standard deviation
+  - measured-reduction weight 14: scores measured target-band reduction independently from evidence quality
+  - adaptive-stability weight 14: combines treatment variability, rollback behavior, stability holds, and accepted-direction reversal streaks
+  - route-timing weight 14: uses live processing callback jitter on non-Bluetooth routes and #27 Bluetooth jitter classification on Bluetooth routes
+  - sound-vibration weight 12: uses #30 shared-frequency persistence, frequency agreement, and amplitude co-movement
+  - interference/safety weight 12: uses #31 program-audio interference state and live microphone clipping
+  - measured dB reduction is deliberately prevented from dominating confidence by itself
+  - Bluetooth routes require a matching jitter diagnostic snapshot; a jitter result from another profile is not reused
+  - stale baseline/treatment data is excluded when its target frequency no longer matches the current generated tone
+  - hard safety/evidence caps override weighted averages
+  - active clipping caps confidence at 20
+  - treatment amplification of 3 dB or more caps confidence at 20
+  - adaptive controller fail-safe caps confidence at 35
+  - unstable Bluetooth timing caps confidence at 55
+  - likely program-audio interference caps confidence at 60
+  - limiting factors are emitted explicitly so the UI explains why confidence is capped or incomplete
+  - no persistent target tone and no complete baseline/treatment comparison are surfaced as limiting factors
+  - new Overall Confidence card added to Cancellation Lab
+  - card shows score, confidence level, evidence coverage, every component score/weight/detail, and limiting factors
+  - UI explicitly distinguishes confidence from measured dB reduction and from probability that full-car ANC will work
+  - UI explicitly states that physical repeatability across routes, speeds, positions, vehicles, and days is still a separate proof requirement
+  - tests verify component weights sum to 100, sparse evidence produces Insufficient, strong evidence produces High, missing correlation reduces coverage rather than becoming a false zero, and all hard caps behave as documented
+  - fixed Swift main-actor dependency in pure confidence math found by CI
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
+
+
+### Milestone 3 — Reality
+- [x] #23 Add stability protection
+- [x] #24 Measure processing latency
+- [x] #25 Add audio-route testing
+- [x] #26 Characterize Bluetooth behavior
+- [x] #27 Add Bluetooth jitter diagnostics
+- [x] #28 Capture accelerometer data
+- [x] #29 Build vibration-spectrum analysis
+- [x] #30 Correlate vibration and sound
+- [x] #31 Detect music interference
+- [x] #32 Build overall confidence scoring
+
+Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus stability, timing, route, Bluetooth, vibration, correlation, interference, and evidence-quality diagnostics. The next phase is Milestone 4 — Prove it, beginning with calibration.
