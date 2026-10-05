@@ -552,9 +552,9 @@ enum SoundVibrationCorrelationMath {
                     average(
                         tracks[index]
                             .matches
-                            .map(
-                                .centerFrequencyHz
-                            )
+                            map {
+                                $0.centerFrequencyHz
+                            }
                     )
             } else {
                 tracks.append(
@@ -578,15 +578,15 @@ enum SoundVibrationCorrelationMath {
 
             let leftAgreement =
                 average(
-                    $0.matches.map(
-                        .frequencyAgreement
-                    )
+                    $0.matches.map {
+                        $0.frequencyAgreement
+                    }
                 )
             let rightAgreement =
                 average(
-                    $1.matches.map(
-                        .frequencyAgreement
-                    )
+                    $1.matches.map {
+                        $0.frequencyAgreement
+                    }
                 )
 
             return leftAgreement <
