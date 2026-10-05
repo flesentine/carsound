@@ -3962,6 +3962,277 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testMusicInterferenceNarrowToneIsCappedClear() {
+        let score =
+            MusicInterferenceMath.score(
+                programLevelDBFS: -35,
+                lowLevelDBFS: -60,
+                occupiedBinRatio: 0.01,
+                spectralFlatness: 0.001,
+                spectralFlux: 0.9
+            )
+
+        XCTAssertLessThanOrEqual(
+            score,
+            0.25
+        )
+        XCTAssertEqual(
+            MusicInterferenceMath.level(
+                for: score
+            ),
+            .clear
+        )
+    }
+
+    func testMusicInterferenceStaticBroadbandCannotBecomeLikely() {
+        let score =
+            MusicInterferenceMath.score(
+                programLevelDBFS: -40,
+                lowLevelDBFS: -50,
+                occupiedBinRatio: 0.70,
+                spectralFlatness: 0.45,
+                spectralFlux: 0
+            )
+
+        XCTAssertLessThanOrEqual(
+            score,
+            0.58
+        )
+        XCTAssertNotEqual(
+            MusicInterferenceMath.level(
+                for: score
+            ),
+            .likely
+        )
+    }
+
+    func testMusicInterferenceDynamicBroadbandCanBecomeLikely() {
+        let score =
+            MusicInterferenceMath.score(
+                programLevelDBFS: -42,
+                lowLevelDBFS: -60,
+                occupiedBinRatio: 0.65,
+                spectralFlatness: 0.40,
+                spectralFlux: 0.70
+            )
+
+        XCTAssertGreaterThanOrEqual(
+            score,
+            MusicInterferenceMath
+                .likelyThreshold
+        )
+        XCTAssertEqual(
+            MusicInterferenceMath.level(
+                for: score
+            ),
+            .likely
+        )
+    }
+
+    func testMusicInterferenceDetectorKeepsRoadNoiseClear() {
+        let detector =
+            MusicInterferenceDetector(
+                smoothingAlpha: 0.5
+            )
+
+        let bins = stride(
+            from: 0.0,
+            through: 5_000.0,
+            by: 20.0
+        ).map { frequency in
+            let level: Double
+
+            if
+                frequency >= 30,
+                frequency <= 200
+            {
+                level =
+                    abs(frequency - 80) < 10
+                    ? -28
+                    : -55
+            } else {
+                level = -105
+            }
+
+            return SpectrumBin(
+                frequencyHz: frequency,
+                magnitudeDBFS: level
+            )
+        }
+
+        let snapshot =
+            detector.process(bins)
+
+        XCTAssertEqual(
+            snapshot.level,
+            .clear
+        )
+        XCTAssertLessThan(
+            snapshot.smoothedScore,
+            MusicInterferenceMath
+                .possibleThreshold
+        )
+        XCTAssertLessThan(
+            snapshot.programBandLevelDBFS,
+            -90
+        )
+    }
+
+    func testMusicInterferenceDetectorKeepsSingleProgramToneClear() {
+        let detector =
+            MusicInterferenceDetector(
+                smoothingAlpha: 0.5
+            )
+
+        func frame(
+            toneLevel: Double
+        ) -> [SpectrumBin] {
+            stride(
+                from: 0.0,
+                through: 5_000.0,
+                by: 20.0
+            ).map { frequency in
+                SpectrumBin(
+                    frequencyHz: frequency,
+                    magnitudeDBFS:
+                        abs(
+                            frequency -
+                            1_000
+                        ) < 1
+                        ? toneLevel
+                        : -105
+                )
+            }
+        }
+
+        _ = detector.process(
+            frame(toneLevel: -35)
+        )
+        let snapshot =
+            detector.process(
+                frame(toneLevel: -15)
+            )
+
+        XCTAssertEqual(
+            snapshot.level,
+            .clear
+        )
+        XCTAssertLessThanOrEqual(
+            snapshot.instantaneousScore,
+            0.25
+        )
+        XCTAssertLessThan(
+            snapshot.occupiedBinRatio,
+            0.05
+        )
+    }
+
+    func testMusicInterferenceDetectorFindsChangingBroadbandProgramAudio() {
+        let detector =
+            MusicInterferenceDetector(
+                smoothingAlpha: 0.5
+            )
+
+        func frame(
+            phase: Int
+        ) -> [SpectrumBin] {
+            stride(
+                from: 0.0,
+                through: 5_000.0,
+                by: 20.0
+            ).enumerated().map {
+                index,
+                frequency in
+                let level: Double
+
+                if
+                    frequency >= 200,
+                    frequency <= 4_000
+                {
+                    let alternating =
+                        (
+                            index + phase
+                        ).isMultiple(of: 2)
+                    level =
+                        alternating
+                        ? -42
+                        : -58
+                } else if
+                    frequency >= 30,
+                    frequency < 200
+                {
+                    level = -65
+                } else {
+                    level = -100
+                }
+
+                return SpectrumBin(
+                    frequencyHz: frequency,
+                    magnitudeDBFS: level
+                )
+            }
+        }
+
+        let first =
+            detector.process(
+                frame(phase: 0)
+            )
+        let second =
+            detector.process(
+                frame(phase: 1)
+            )
+
+        XCTAssertNotEqual(
+            first.level,
+            .likely
+        )
+        XCTAssertEqual(
+            second.level,
+            .likely
+        )
+        XCTAssertGreaterThan(
+            second.occupiedBinRatio,
+            0.5
+        )
+        XCTAssertGreaterThan(
+            second.spectralFlux,
+            0.5
+        )
+        XCTAssertGreaterThanOrEqual(
+            second.smoothedScore,
+            MusicInterferenceMath
+                .likelyThreshold
+        )
+    }
+
+    func testMusicInterferenceSpectralFluxIsZeroForIdenticalFrames() {
+        let bins = [
+            SpectrumBin(
+                frequencyHz: 200,
+                magnitudeDBFS: -50
+            ),
+            SpectrumBin(
+                frequencyHz: 400,
+                magnitudeDBFS: -45
+            ),
+            SpectrumBin(
+                frequencyHz: 800,
+                magnitudeDBFS: -55
+            )
+        ]
+
+        XCTAssertEqual(
+            MusicInterferenceMath
+                .spectralFlux(
+                    current: bins,
+                    previous: bins,
+                    range: 200...4_000
+                ),
+            0,
+            accuracy: 0.0001
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
