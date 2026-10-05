@@ -30,6 +30,7 @@ struct CancellationLabView: View {
                 accelerometerCard
                 vibrationSpectrumCard
                 soundVibrationCorrelationCard
+                musicInterferenceCard
                 targetCard
                 targetEnergyCard
                 beforeAfterCard
@@ -1484,6 +1485,156 @@ struct CancellationLabView: View {
                 .foregroundStyle(.secondary)
         }
         .cancellationCard()
+    }
+
+    private var musicInterferenceCard: some View {
+        let interference =
+            microphoneCapture.snapshot
+                .musicInterference
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label(
+                    "Music / Program Interference",
+                    systemImage: "music.note.list"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                Text(interference.level.rawValue)
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(
+                        musicInterferenceColor(
+                            interference.level
+                        )
+                    )
+            }
+
+            Text("Automatically scores whether the microphone spectrum looks like broad, changing program audio rather than a narrow cabin/engine tone. The detector uses the full 200–4000 Hz spectrum even while ANC Focus is selected.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            if interference.updateCount == 0 {
+                Text("Start microphone capture and wait for the FFT to populate.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                LabeledContent(
+                    "Interference score",
+                    value: String(
+                        format: "%.0f%%",
+                        interference.smoothedScore *
+                            100
+                    )
+                )
+
+                LabeledContent(
+                    "Instantaneous score",
+                    value: String(
+                        format: "%.0f%%",
+                        interference.instantaneousScore *
+                            100
+                    )
+                )
+
+                Divider()
+
+                LabeledContent(
+                    "Program band (200–4000 Hz)",
+                    value: String(
+                        format: "%.1f dBFS",
+                        interference.programBandLevelDBFS
+                    )
+                )
+
+                LabeledContent(
+                    "Low band (30–200 Hz)",
+                    value: String(
+                        format: "%.1f dBFS",
+                        interference.lowBandLevelDBFS
+                    )
+                )
+
+                LabeledContent(
+                    "Program vs low",
+                    value: String(
+                        format: "%+.1f dB",
+                        interference.programToLowRatioDB
+                    )
+                )
+
+                LabeledContent(
+                    "Broadband occupancy",
+                    value: String(
+                        format: "%.0f%%",
+                        interference.occupiedBinRatio *
+                            100
+                    )
+                )
+
+                LabeledContent(
+                    "Spectral flatness",
+                    value: String(
+                        format: "%.3f",
+                        interference.spectralFlatness
+                    )
+                )
+
+                LabeledContent(
+                    "Spectral change",
+                    value: String(
+                        format: "%.0f%%",
+                        interference.spectralFlux *
+                            100
+                    )
+                )
+
+                LabeledContent(
+                    "FFT updates",
+                    value: "\(interference.updateCount)"
+                )
+            }
+
+            switch interference.level {
+            case .clear:
+                Text("No strong program-audio-like contamination is currently detected.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+            case .possible:
+                Text("Broadband or program-like energy is present, but the evidence is not strong enough to call it likely music. Treat acoustic measurements with some caution.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+            case .likely:
+                Text("Likely program-audio interference is contaminating the microphone spectrum. #32 will discount confidence while this condition is active.")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("A single QuietDrive sine tone is intentionally not enough to trigger the detector: narrow spectra are capped as Clear, and broad-but-static spectra cannot reach Likely without temporal change.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            Text("This is a spectral interference detector, not a content recognizer. It cannot identify a song or prove that the source is music; speech and other changing broadband audio may also register as interference.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
+    private func musicInterferenceColor(
+        _ level: MusicInterferenceLevel
+    ) -> Color {
+        switch level {
+        case .clear:
+            return .green
+        case .possible:
+            return .orange
+        case .likely:
+            return .red
+        }
     }
 
     private var targetCard: some View {
