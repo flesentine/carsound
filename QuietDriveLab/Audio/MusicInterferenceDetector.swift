@@ -87,9 +87,9 @@ enum MusicInterferenceMath {
 
         guard
             let peak =
-                band.map(
-                    .magnitudeDBFS
-                ).max(),
+                band.map {
+                    $0.magnitudeDBFS
+                }.max(),
             !band.isEmpty
         else {
             return 0
