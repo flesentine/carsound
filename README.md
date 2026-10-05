@@ -4,69 +4,68 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#32 — overall confidence scoring** is implemented. This completes **Milestone 3 — Reality (#23–#32)**.
+Development effort **#33 — calibration** is implemented. This begins **Milestone 4 — Prove it**.
 
-QuietDrive now combines the independent evidence streams built across the project into one **explainable confidence score** while keeping the actual measured dB reduction separate.
+QuietDrive can now create durable, route-specific calibration profiles before controlled vehicle experiments.
 
-The score uses seven weighted components:
+A calibration run captures a **5-second quiet reference** from 50 fresh paired microphone and accelerometer observations. Calibration requires the audio session, microphone, and accelerometer to be active, and QuietDrive's generated tone must be stopped or muted. Clipping, likely program-audio interference, capture loss, or an audio-route change aborts the run instead of saving a compromised profile.
 
-- **Tone evidence — 18 points**
-- **Measurement quality — 16 points**
-- **Measured reduction — 14 points**
-- **Adaptive stability — 14 points**
-- **Route timing — 14 points**
-- **Sound/vibration evidence — 12 points**
-- **Interference / safety — 12 points**
+Each saved calibration profile records:
 
-The component weights total 100, but the UI also reports **evidence coverage** separately. Missing diagnostics do not become fake zero scores; they reduce coverage. QuietDrive requires at least **60% evidence coverage** before it will label the result Low, Moderate, or High confidence.
+- route family, route signature, and route revision
+- input/output route descriptions
+- sample rate and I/O buffer duration
+- iOS-reported input/output latency
+- average microphone RMS in dBFS
+- microphone RMS variability
+- low-frequency and wideband noise floors
+- current target-band reference energy when available
+- accelerometer X/Y/Z orientation/gravity baseline
+- dynamic vibration RMS
+- observed accelerometer sample rate and timing jitter
+- microphone callback jitter
+- estimated spectrum-center age
+- maximum program-audio interference score seen during calibration
 
-This design deliberately prevents one impressive-looking measurement from dominating the conclusion. A one-off 6 dB reduction cannot produce High confidence if the target tone is unstable, measurements are noisy, Bluetooth timing is unresolved, the adaptive controller is oscillating, or music is contaminating the microphone.
+QuietDrive averages dB measurements in **linear power** before converting them back to dB.
 
-Hard red flags also cap the final score:
+### Optional external SPL reference
 
-- microphone clipping → maximum 20
-- target amplification of 3 dB or more → maximum 20
-- adaptive fail-safe → maximum 35
-- unstable Bluetooth timing → maximum 55
-- likely program-audio interference → maximum 60
+The Calibration card accepts an optional simultaneous reading from an external sound meter.
 
-The Cancellation Lab now shows the overall score, evidence coverage, confidence level, every weighted component with its detail, and the specific factors limiting the result.
+When provided, QuietDrive stores an approximate offset between the phone's measured RMS dBFS and that external reference. That offset is only used when the **same route signature** is active.
 
-The score is **confidence in the current experimental evidence**. It is not the measured cancellation itself, and it is not a probability that full-car active noise cancellation will work.
+This is deliberately labeled **approximate SPL**, not calibrated dBA. QuietDrive does not apply certified A/C weighting, microphone sensitivity certification, or laboratory traceability.
 
-## Milestone 3 complete
+Without an external reference, absolute SPL remains unavailable and the native acoustic measurements stay in dBFS.
 
-QuietDrive now includes:
+### Route matching
 
-- bounded adaptive phase/amplitude control
-- adaptive stability protection
-- processing-latency diagnostics
-- route-specific testing
-- Bluetooth profile characterization
-- live Bluetooth timing/jitter diagnostics
-- accelerometer capture
-- vibration-spectrum analysis
-- sound/vibration correlation
-- music/program-audio interference detection
-- overall evidence confidence scoring
+Calibration profiles are never blindly reused.
 
-The software is now substantially better at telling us **when a result is trustworthy and when it is not**.
+A profile is considered a live match only when:
+
+- the route signature is identical
+- the active sample rate is within 1 Hz of the saved profile
+
+Changing the input/output path therefore removes the active calibration match instead of applying the wrong reference.
+
+Calibration profiles are stored locally as atomic JSON and can be individually deleted or cleared.
 
 ## Verification status
 
 The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so tests compile but are not executed there.
 
-Confidence scoring has deterministic coverage for high-quality evidence, sparse evidence, missing optional diagnostics, clipping, target amplification, adaptive fail-safe, unstable Bluetooth timing, and likely music interference.
+Calibration math/persistence coverage includes linear-power dB averaging, external SPL offsets, route guarding, sample-rate matching, external-reference validation, and durable save/reload/delete.
 
-Physical vehicle testing is still mandatory. High confidence in one controlled run does not establish repeatability across vehicles, road surfaces, speeds, phone mounting positions, temperatures, routes, head units, or days.
+Useful calibration values still require a physical iPhone and the actual audio route that will be used for the vehicle experiment.
 
 ## What comes next
 
-**Milestone 4 — Prove it** starts with **#33 calibration**.
+**#34 — structured logs** is next.
 
-The remaining roadmap is:
+The remaining Milestone 4 roadmap is:
 
-- #33 calibration
 - #34 structured logs
 - #35 CSV/JSON export
 - #36 test dashboard
@@ -77,7 +76,7 @@ The remaining roadmap is:
 
 ## Privacy principle
 
-Raw microphone audio is not stored. Raw accelerometer samples remain in memory only. Confidence scoring uses only derived diagnostic measurements already produced locally by the Lab.
+Raw microphone audio is not stored. Raw accelerometer samples remain in memory only. Calibration stores derived route, timing, acoustic, and motion summary values locally.
 
 ## Generate the Xcode project
 
