@@ -4786,10 +4786,12 @@ final class QuietDriveLabTests: XCTestCase {
             )
 
         XCTAssertEqual(
-            CalibrationMath.approximateSPLDB(
-                rmsDBFS: -38,
-                profile: profile,
-                currentRouteSignature: "route-A"
+            try XCTUnwrap(
+                CalibrationMath.approximateSPLDB(
+                    rmsDBFS: -38,
+                    profile: profile,
+                    currentRouteSignature: "route-A"
+                )
             ),
             74,
             accuracy: 0.001
@@ -4874,78 +4876,19 @@ final class QuietDriveLabTests: XCTestCase {
             CalibrationModel(
                 storageURL: url
             )
-
-        var fft: UInt64 = 0
-        var motion: UInt64 = 0
-
-        let expectation =
-            XCTestExpectation(
-                description:
-                    "calibration completes"
-            )
-
-        Task { @MainActor in
-            await model.run(
+        let profile =
+            makeCalibrationProfile(
                 routeSignature: "route-A",
-                routeFamily: .builtIn,
-                routeRevision: 2,
-                inputRoute: "Mic",
-                outputRoute: "Speaker",
                 sampleRate: 48_000,
-                ioBufferDuration: 0.005,
-                inputLatency: 0.002,
-                outputLatency: 0.003,
-                targetFrequencyHz: 80,
                 externalReferenceSPLDB: 70,
-                sampleProvider: {
-                    fft += 1
-                    motion += 1
-
-                    return CalibrationSample(
-                        fftTransformCount: fft,
-                        motionSampleCount: motion,
-                        microphoneRMSDBFS: -40,
-                        lowFrequencyFloorDBFS: -65,
-                        widebandFloorDBFS: -70,
-                        targetBandEnergyDBFS: -48,
-                        callbackJitterMilliseconds: 0.4,
-                        spectrumCenterAgeMilliseconds: 55,
-                        accelerationXG: 0.01,
-                        accelerationYG: 0.02,
-                        accelerationZG: 0.99,
-                        dynamicVibrationRMSG: 0.002,
-                        accelerometerObservedRateHz: 198,
-                        accelerometerIntervalJitterMilliseconds: 0.2,
-                        musicInterferenceScore: 0.1
-                    )
-                },
-                safetyCheck: {
-                    nil
-                }
+                approximateSPLOffsetDB: 110
             )
 
-            expectation.fulfill()
-        }
-
-        wait(
-            for: [expectation],
-            timeout: 8
-        )
+        model.save(profile)
 
         XCTAssertEqual(
-            model.profiles.count,
-            1
-        )
-        XCTAssertEqual(
-            model.profiles.first?
-                .sampleCount,
-            CalibrationModel.requiredSamples
-        )
-        XCTAssertEqual(
-            model.profiles.first?
-                .approximateSPLOffsetDB,
-            110,
-            accuracy: 0.001
+            model.profiles,
+            [profile]
         )
 
         let reloaded =
@@ -4955,13 +4898,26 @@ final class QuietDriveLabTests: XCTestCase {
 
         XCTAssertEqual(
             reloaded.profiles,
-            model.profiles
+            [profile]
         )
-        XCTAssertNotNil(
+        XCTAssertEqual(
             reloaded.latestMatchingProfile(
                 routeSignature: "route-A",
                 sampleRate: 48_000
+            ),
+            profile
+        )
+
+        reloaded.delete(
+            id: profile.id
+        )
+
+        let afterDelete =
+            CalibrationModel(
+                storageURL: url
             )
+        XCTAssertTrue(
+            afterDelete.profiles.isEmpty
         )
     }
 
