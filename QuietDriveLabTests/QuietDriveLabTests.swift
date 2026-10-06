@@ -5263,6 +5263,282 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testStructuredLogJSONExportRoundTripsTypedSchema() throws {
+        let eventID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000040"
+            )!
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000041"
+            )!
+        let calibrationID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000042"
+            )!
+
+        let event =
+            StructuredLogEvent(
+                id: eventID,
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            100
+                    ),
+                sessionID: sessionID,
+                sequence: 7,
+                kind: .comparisonSaved,
+                context:
+                    StructuredLogContext(
+                        routeSignature:
+                            "route-export",
+                        routeRevision: 9,
+                        calibrationProfileID:
+                            calibrationID,
+                        targetFrequencyHz: 82,
+                        phaseDegrees: 145,
+                        outputPercent: 24,
+                        confidenceScorePercent:
+                            88,
+                        evidenceCoveragePercent:
+                            91,
+                        confidenceLevel:
+                            "High confidence"
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        4.25
+                ],
+                text: [
+                    "input_route":
+                        "Built-in microphone"
+                ],
+                flags: [
+                    "success": true
+                ],
+                references: [
+                    "experiment_record_id":
+                        "record-export"
+                ]
+            )
+
+        let data = try
+            StructuredLogExporter
+                .data(
+                    for: .json,
+                    events: [event]
+                )
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy =
+            .iso8601
+
+        let decoded = try
+            decoder.decode(
+                [StructuredLogEvent].self,
+                from: data
+            )
+
+        XCTAssertEqual(
+            decoded,
+            [event]
+        )
+    }
+
+    func testStructuredLogCSVExportFlattensDynamicFieldsDeterministically() {
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000043"
+            )!
+
+        let first =
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            200
+                    ),
+                sessionID: sessionID,
+                sequence: 1,
+                kind: .confidenceSnapshot,
+                metrics: [
+                    "zeta": 2,
+                    "alpha": 1
+                ],
+                text: [
+                    "note": "first"
+                ],
+                flags: [
+                    "ok": true
+                ],
+                references: [
+                    "record": "one"
+                ]
+            )
+
+        let second =
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            201
+                    ),
+                sessionID: sessionID,
+                sequence: 2,
+                kind: .toneStopped,
+                metrics: [
+                    "alpha": 3
+                ],
+                text: [
+                    "note": "second"
+                ],
+                flags: [
+                    "ok": false
+                ],
+                references: [
+                    "record": "two"
+                ]
+            )
+
+        let csv =
+            StructuredLogExporter
+                .csvString(
+                    events: [
+                        first,
+                        second
+                    ]
+                )
+        let header =
+            csv.components(
+                separatedBy: "\r\n"
+            )[0]
+
+        XCTAssertTrue(
+            header.hasSuffix(
+                "metrics.alpha,metrics.zeta,text.note,flags.ok,references.record"
+            )
+        )
+        XCTAssertTrue(
+            csv.contains(
+                ",1,2,first,true,one\r\n"
+            )
+        )
+        XCTAssertTrue(
+            csv.contains(
+                ",3,,second,false,two\r\n"
+            )
+        )
+    }
+
+    func testStructuredLogCSVExportQuotesCommasQuotesAndNewlines() {
+        let event =
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            300
+                    ),
+                sessionID:
+                    UUID(
+                        uuidString:
+                            "00000000-0000-0000-0000-000000000044"
+                    )!,
+                sequence: 1,
+                kind: .workflowFailed,
+                text: [
+                    "message":
+                        "route, \"A\"\nnext"
+                ]
+            )
+
+        let csv =
+            StructuredLogExporter
+                .csvString(
+                    events: [event]
+                )
+
+        XCTAssertTrue(
+            csv.contains(
+                "\"route, \"\"A\"\"\nnext\""
+            )
+        )
+    }
+
+    func testStructuredLogExportScopeAndFilename() {
+        let firstSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000045"
+            )!
+        let secondSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000046"
+            )!
+        let events = [
+            StructuredLogEvent(
+                sessionID: firstSession,
+                sequence: 1,
+                kind: .sessionStarted
+            ),
+            StructuredLogEvent(
+                sessionID: secondSession,
+                sequence: 1,
+                kind: .sessionStarted
+            )
+        ]
+
+        let current =
+            StructuredLogExporter
+                .selectedEvents(
+                    from: events,
+                    scope:
+                        .currentSession,
+                    currentSessionID:
+                        secondSession
+                )
+
+        XCTAssertEqual(
+            current.count,
+            1
+        )
+        XCTAssertEqual(
+            current.first?
+                .sessionID,
+            secondSession
+        )
+        XCTAssertEqual(
+            StructuredLogExporter
+                .selectedEvents(
+                    from: events,
+                    scope:
+                        .allEvents,
+                    currentSessionID:
+                        secondSession
+                )
+                .count,
+            2
+        )
+        XCTAssertEqual(
+            StructuredLogExporter
+                .suggestedFilename(
+                    format: .csv,
+                    scope:
+                        .currentSession,
+                    exportedAt:
+                        Date(
+                            timeIntervalSince1970:
+                                0
+                        )
+                ),
+            "quietdrive-structured-events-session-19700101T000000Z.csv"
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
