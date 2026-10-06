@@ -17,6 +17,7 @@ struct QuietDriveLabApp: App {
     @State private var accelerometerCapture = AccelerometerCaptureModel()
     @State private var soundVibrationCorrelation = SoundVibrationCorrelationModel()
     @State private var calibration = CalibrationModel()
+    @State private var structuredLog = StructuredLogModel()
 
     var body: some Scene {
         WindowGroup {
@@ -36,9 +37,31 @@ struct QuietDriveLabApp: App {
                 .environment(accelerometerCapture)
                 .environment(soundVibrationCorrelation)
                 .environment(calibration)
+                .environment(structuredLog)
                 .task {
                     microphonePermission.refresh()
                     audioSession.refreshRoute()
+
+                    structuredLog.startSession(
+                        context:
+                            StructuredLogContext(
+                                routeSignature:
+                                    audioSession.routeSignature,
+                                routeRevision:
+                                    audioSession.routeRevision,
+                                calibrationProfileID: nil,
+                                targetFrequencyHz: nil,
+                                phaseDegrees: nil,
+                                outputPercent: nil,
+                                confidenceScorePercent: nil,
+                                evidenceCoveragePercent: nil,
+                                confidenceLevel: nil
+                            ),
+                        text: [
+                            "app_build":
+                                "3.3"
+                        ]
+                    )
                 }
         }
     }
