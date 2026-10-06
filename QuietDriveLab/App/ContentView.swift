@@ -1195,4 +1195,5 @@ private extension View {
         .environment(AccelerometerCaptureModel())
         .environment(SoundVibrationCorrelationModel())
         .environment(CalibrationModel(storageURL: nil))
+        .environment(StructuredLogModel(storageURL: nil))
 }
