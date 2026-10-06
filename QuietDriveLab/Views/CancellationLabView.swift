@@ -4055,6 +4055,498 @@ struct CancellationLabView: View {
         )
     }
 
+    private func logWorkflowFailure(
+        workflow: String,
+        message: String
+    ) {
+        _ = structuredLog.record(
+            kind: .workflowFailed,
+            context: structuredLogContext,
+            text: [
+                "workflow": workflow,
+                "message": message
+            ],
+            flags: [
+                "success": false
+            ]
+        )
+    }
+
+    private func logRouteTest(
+        _ record: AudioRouteTestRecord
+    ) {
+        _ = structuredLog.record(
+            kind: .routeTestCaptured,
+            context: structuredLogContext,
+            metrics: [
+                "sample_rate_hz":
+                    record.sampleRate,
+                "io_buffer_ms":
+                    record.ioBufferMilliseconds,
+                "input_latency_ms":
+                    record.inputLatencyMilliseconds,
+                "output_latency_ms":
+                    record.outputLatencyMilliseconds,
+                "callback_jitter_ms":
+                    record.callbackJitterMilliseconds,
+                "spectrum_center_age_ms":
+                    record
+                        .estimatedSpectrumCenterAgeMilliseconds
+            ],
+            text: [
+                "route_family":
+                    record.family.rawValue,
+                "input_route":
+                    routePortSummary(
+                        record.inputs
+                    ),
+                "output_route":
+                    routePortSummary(
+                        record.outputs
+                    )
+            ],
+            references: [
+                "route_test_id":
+                    record.id.uuidString
+            ]
+        )
+    }
+
+    private func logCalibrationOutcome() {
+        switch calibration.state {
+        case .completed:
+            guard
+                let profile =
+                    calibration.lastCapturedProfile
+            else {
+                return
+            }
+
+            var metrics: [String: Double] = [
+                "microphone_rms_dbfs":
+                    profile.microphoneRMSDBFS,
+                "microphone_rms_stddev_db":
+                    profile
+                        .microphoneRMSStandardDeviationDB,
+                "low_frequency_floor_dbfs":
+                    profile.lowFrequencyFloorDBFS,
+                "wideband_floor_dbfs":
+                    profile.widebandFloorDBFS,
+                "dynamic_vibration_rms_g":
+                    profile.dynamicVibrationRMSG,
+                "accelerometer_rate_hz":
+                    profile.accelerometerObservedRateHz,
+                "callback_jitter_ms":
+                    profile.callbackJitterMilliseconds,
+                "spectrum_center_age_ms":
+                    profile.spectrumCenterAgeMilliseconds
+            ]
+
+            if
+                let target =
+                    profile.targetBandEnergyDBFS
+            {
+                metrics[
+                    "target_band_energy_dbfs"
+                ] = target
+            }
+
+            if
+                let reference =
+                    profile.externalReferenceSPLDB
+            {
+                metrics[
+                    "external_reference_spl_db"
+                ] = reference
+            }
+
+            if
+                let offset =
+                    profile.approximateSPLOffsetDB
+            {
+                metrics[
+                    "approximate_spl_offset_db"
+                ] = offset
+            }
+
+            _ = structuredLog.record(
+                kind: .calibrationCompleted,
+                context: structuredLogContext,
+                metrics: metrics,
+                text: [
+                    "route_family":
+                        profile.routeFamily.rawValue
+                ],
+                flags: [
+                    "has_external_spl_reference":
+                        profile
+                            .hasExternalSPLReference
+                ],
+                references: [
+                    "calibration_profile_id":
+                        profile.id.uuidString
+                ]
+            )
+
+        case let .failed(message):
+            _ = structuredLog.record(
+                kind: .calibrationFailed,
+                context: structuredLogContext,
+                text: [
+                    "message": message
+                ],
+                flags: [
+                    "success": false
+                ]
+            )
+
+        case .idle, .capturing:
+            break
+        }
+    }
+
+    private func logPhaseSweepOutcome() {
+        if
+            phaseSweep.state == .completed,
+            let best = phaseSweep.bestResult
+        {
+            _ = structuredLog.record(
+                kind: .phaseSweepCompleted,
+                context: structuredLogContext,
+                metrics: [
+                    "result_count":
+                        Double(
+                            phaseSweep.results.count
+                        ),
+                    "best_phase_degrees":
+                        best.phaseDegrees,
+                    "best_treatment_dbfs":
+                        best
+                            .treatment
+                            .averageBandEnergyDBFS,
+                    "best_reduction_db":
+                        best
+                            .comparison
+                            .measuredReductionDB
+                ],
+                flags: [
+                    "success": true
+                ]
+            )
+        } else if
+            case let .failed(message) =
+                phaseSweep.state
+        {
+            logWorkflowFailure(
+                workflow: "phase_sweep",
+                message: message
+            )
+        }
+    }
+
+    private func logPhaseRefinementOutcome() {
+        if
+            phaseRefinement.state == .completed,
+            let best =
+                phaseRefinement.bestResult
+        {
+            _ = structuredLog.record(
+                kind: .phaseRefinementCompleted,
+                context: structuredLogContext,
+                metrics: [
+                    "stage_count":
+                        Double(
+                            phaseRefinement.stages.count
+                        ),
+                    "best_phase_degrees":
+                        best.phaseDegrees,
+                    "best_treatment_dbfs":
+                        best
+                            .treatment
+                            .averageBandEnergyDBFS,
+                    "best_reduction_db":
+                        best
+                            .comparison
+                            .measuredReductionDB
+                ],
+                flags: [
+                    "success": true
+                ]
+            )
+        } else if
+            case let .failed(message) =
+                phaseRefinement.state
+        {
+            logWorkflowFailure(
+                workflow:
+                    "phase_refinement",
+                message: message
+            )
+        }
+    }
+
+    private func logAmplitudeSearchOutcome() {
+        if
+            amplitudeSearch.state == .completed,
+            let best =
+                amplitudeSearch.bestResult
+        {
+            _ = structuredLog.record(
+                kind: .amplitudeSearchCompleted,
+                context: structuredLogContext,
+                metrics: [
+                    "stage_count":
+                        Double(
+                            amplitudeSearch.stages.count
+                        ),
+                    "search_ceiling_percent":
+                        amplitudeSearch
+                            .searchCeilingPercent,
+                    "best_output_percent":
+                        best.outputPercent,
+                    "best_phase_degrees":
+                        best.phaseDegrees,
+                    "best_treatment_dbfs":
+                        best
+                            .treatment
+                            .averageBandEnergyDBFS,
+                    "best_reduction_db":
+                        best
+                            .comparison
+                            .measuredReductionDB
+                ],
+                flags: [
+                    "success": true
+                ]
+            )
+        } else if
+            case let .failed(message) =
+                amplitudeSearch.state
+        {
+            logWorkflowFailure(
+                workflow:
+                    "amplitude_search",
+                message: message
+            )
+        }
+    }
+
+    private func logBluetoothJitterOutcome() {
+        switch bluetoothJitterDiagnostics.state {
+        case .completed:
+            guard
+                let snapshot =
+                    bluetoothJitterDiagnostics.snapshot
+            else {
+                return
+            }
+
+            _ = structuredLog.record(
+                kind: .bluetoothJitterCompleted,
+                context: structuredLogContext,
+                metrics: [
+                    "sample_count":
+                        Double(
+                            snapshot.sampleCount
+                        ),
+                    "elapsed_seconds":
+                        snapshot.elapsedSeconds,
+                    "callback_jitter_ms":
+                        snapshot
+                            .callbackJitterMilliseconds,
+                    "spectrum_center_age_jitter_ms":
+                        snapshot
+                            .spectrumCenterAgeJitterMilliseconds,
+                    "output_latency_jitter_ms":
+                        snapshot
+                            .outputLatencyJitterMilliseconds,
+                    "route_revision_changes":
+                        Double(
+                            snapshot
+                                .routeRevisionChangeCount
+                        ),
+                    "profile_changes":
+                        Double(
+                            snapshot
+                                .profileChangeCount
+                        )
+                ],
+                text: [
+                    "profile":
+                        snapshot.profile.rawValue,
+                    "stability":
+                        snapshot.stability.rawValue
+                ],
+                flags: [
+                    "success": true
+                ]
+            )
+
+        case let .failed(message):
+            logWorkflowFailure(
+                workflow:
+                    "bluetooth_jitter",
+                message: message
+            )
+
+        case .idle, .running:
+            break
+        }
+    }
+
+    private func logCorrelationOutcome() {
+        switch soundVibrationCorrelation.state {
+        case .completed:
+            let summary =
+                soundVibrationCorrelation.summary
+
+            var metrics: [String: Double] = [
+                "opportunity_count":
+                    Double(
+                        summary.opportunityCount
+                    ),
+                "primary_track_count":
+                    Double(
+                        summary
+                            .primaryTrackObservationCount
+                    ),
+                "match_presence_ratio":
+                    summary.matchPresenceRatio,
+                "persistent_sound_ratio":
+                    summary.persistentSoundRatio
+            ]
+
+            if
+                let frequency =
+                    summary.primarySharedFrequencyHz
+            {
+                metrics[
+                    "primary_shared_frequency_hz"
+                ] = frequency
+            }
+
+            if
+                let delta =
+                    summary.averageFrequencyDeltaHz
+            {
+                metrics[
+                    "average_frequency_delta_hz"
+                ] = delta
+            }
+
+            if
+                let correlation =
+                    summary.amplitudeCorrelation
+            {
+                metrics[
+                    "amplitude_correlation_r"
+                ] = correlation
+            }
+
+            _ = structuredLog.record(
+                kind:
+                    .soundVibrationCorrelationCompleted,
+                context: structuredLogContext,
+                metrics: metrics,
+                text: [
+                    "level":
+                        summary.level.rawValue
+                ],
+                flags: [
+                    "success": true
+                ]
+            )
+
+        case let .failed(message):
+            logWorkflowFailure(
+                workflow:
+                    "sound_vibration_correlation",
+                message: message
+            )
+
+        case .idle, .running:
+            break
+        }
+    }
+
+    private func logAdaptiveFailure(
+        _ message: String
+    ) {
+        _ = structuredLog.record(
+            kind: .adaptiveFailed,
+            context: structuredLogContext,
+            metrics: [
+                "iterations":
+                    Double(
+                        adaptiveController
+                            .iterationCount
+                    ),
+                "accepted_adjustments":
+                    Double(
+                        adaptiveController
+                            .acceptedAdjustmentCount
+                    ),
+                "rollbacks":
+                    Double(
+                        adaptiveController
+                            .rollbackCount
+                    ),
+                "stability_holds":
+                    Double(
+                        adaptiveController
+                            .stabilityHoldCount
+                    )
+            ],
+            text: [
+                "message": message,
+                "last_action":
+                    adaptiveController.lastAction
+            ],
+            flags: [
+                "success": false
+            ]
+        )
+    }
+
+    private func logAdaptiveStopped() {
+        if case .failed =
+            adaptiveController.state
+        {
+            return
+        }
+
+        _ = structuredLog.record(
+            kind: .adaptiveStopped,
+            context: structuredLogContext,
+            metrics: [
+                "iterations":
+                    Double(
+                        adaptiveController
+                            .iterationCount
+                    ),
+                "accepted_adjustments":
+                    Double(
+                        adaptiveController
+                            .acceptedAdjustmentCount
+                    ),
+                "rollbacks":
+                    Double(
+                        adaptiveController
+                            .rollbackCount
+                    ),
+                "stability_holds":
+                    Double(
+                        adaptiveController
+                            .stabilityHoldCount
+                    )
+            ],
+            text: [
+                "last_action":
+                    adaptiveController.lastAction
+            ]
+        )
+    }
+
     private var canStartSoundVibrationCorrelation: Bool {
         microphoneCapture.state ==
             .capturing &&
