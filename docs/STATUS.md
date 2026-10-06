@@ -402,7 +402,40 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
   - 5-second quiet-reference capture from fresh paired microphone + accelerometer observations
   - optional external SPL reference remains approximate and route-specific
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #34 structured logs
+- [x] #34 structured logs
+  - new durable StructuredLogModel provides a versioned machine-readable event schema
+  - every event stores schema version, UUID, timestamp, session UUID, per-session sequence, event kind, reusable context, numeric metrics, text fields, boolean flags, and reference IDs
+  - a new session UUID is created on each app launch
+  - session-start logging is idempotent within one launch
+  - session events use monotonic per-session sequence numbers beginning at 1
+  - reusable event context captures current route signature/revision, matching calibration profile ID, target frequency, phase, output level, overall confidence score, evidence coverage, and confidence label
+  - structured events are stored locally as atomic JSON under Application Support
+  - event store is capped at 10,000 records and prunes the oldest events first
+  - raw microphone audio is never written to structured logs
+  - raw accelerometer samples are never written to structured logs
+  - app launch/session start is logged
+  - route-test captures are logged with route timing and processing metrics plus the route-test record ID
+  - calibration completion is logged with acoustic, vibration, timing, external-reference metrics, and calibration profile ID
+  - calibration failure is logged with the failure reason
+  - every saved A/B experiment record is logged with baseline/treatment energy, measured reduction, variability, sample counts, route summaries, and the durable experiment record ID
+  - automatic phase sweep completion logs best phase, best treatment energy/reduction, and result count
+  - fine phase refinement completion logs stage count and best phase/reduction
+  - amplitude search completion logs search ceiling and best phase/output/reduction
+  - workflow failures use a generic typed workflow-failure event with workflow name and message
+  - adaptive accepted adjustments are logged in addition to their saved experiment records
+  - adaptive fail-safe events log failure reason, iterations, accepted adjustments, rollbacks, stability holds, and last action
+  - adaptive stop events log controller outcome counters
+  - Bluetooth jitter completion logs sample count, elapsed time, timing-jitter metrics, route/profile changes, profile, and stability classification
+  - sound-vibration correlation completion logs opportunity count, primary-track count, shared frequency, match presence, delta, correlation, and assessment level
+  - microphone capture start/stop and tone start/stop lifecycle events are logged
+  - MUTE NOW creates a dedicated safety-mute event
+  - Stop All records tone/capture stop events with a stop-all reason
+  - every structured event automatically carries the current confidence/evidence context
+  - explicit Log Confidence Snapshot action saves the current confidence score, coverage, label, limiting factors, clipping, and interference state
+  - new Structured Logs card shows event count, current session ID/count, saved-session count, recent events, storage errors, manual confidence snapshot, and clear-all control
+  - clearing logs starts a fresh session-start event instead of leaving the store contextless
+  - tests cover session-start idempotence, per-session sequencing, schema version, dictionary/context persistence, cross-launch session separation, 10,000-event retention pruning, and clear/restart behavior
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #35 CSV/JSON export
 - [ ] #36 test dashboard
 - [ ] #37 repeatability
