@@ -13,6 +13,7 @@ enum StructuredLogEventKind: String, Codable, CaseIterable, Equatable, Sendable 
     case adaptiveAdjustmentAccepted = "adaptive_adjustment_accepted"
     case adaptiveStopped = "adaptive_stopped"
     case adaptiveFailed = "adaptive_failed"
+    case workflowFailed = "workflow_failed"
     case bluetoothJitterCompleted = "bluetooth_jitter_completed"
     case soundVibrationCorrelationCompleted = "sound_vibration_correlation_completed"
     case confidenceSnapshot = "confidence_snapshot"
