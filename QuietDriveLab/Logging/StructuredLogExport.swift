@@ -339,7 +339,7 @@ enum StructuredLogExporter {
     ) -> String {
         let needsQuotes =
             value.contains(",") ||
-            value.contains(""") ||
+            value.contains("\"") ||
             value.contains("\n") ||
             value.contains("\r")
 
