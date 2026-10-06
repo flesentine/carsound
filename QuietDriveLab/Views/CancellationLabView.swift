@@ -802,7 +802,7 @@ struct CancellationLabView: View {
                 .buttonStyle(.bordered)
 
                 Button("Capture Route Test") {
-                    _ = audioRouteTesting.capture(
+                    let record = audioRouteTesting.capture(
                         inputs: audioSession.inputs,
                         outputs: audioSession.outputs,
                         routeRevision:
@@ -818,6 +818,7 @@ struct CancellationLabView: View {
                         microphoneSnapshot:
                             microphoneCapture.snapshot
                     )
+                    logRouteTest(record)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(!canCaptureRouteTest)
@@ -2809,7 +2810,10 @@ struct CancellationLabView: View {
                     )
                     lastSavedComparisonKey = comparisonKey(comparison)
 
-                    _ = record
+                    logExperimentRecord(
+                        record,
+                        kind: .comparisonSaved
+                    )
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(
@@ -5097,10 +5101,14 @@ struct CancellationLabView: View {
                     return nil
                 },
                 onAcceptedComparison: { comparison in
-                    _ = experimentRecorder.record(
+                    let record = experimentRecorder.record(
                         comparison: comparison,
                         inputRoute: inputRoute,
                         outputRoute: outputRoute
+                    )
+                    logExperimentRecord(
+                        record,
+                        kind: .comparisonSaved
                     )
                 },
                 onFailSafe: { _ in
@@ -5159,10 +5167,14 @@ struct CancellationLabView: View {
                     measurementForTarget(target)
                 },
                 onComparison: { comparison in
-                    _ = experimentRecorder.record(
+                    let record = experimentRecorder.record(
                         comparison: comparison,
                         inputRoute: inputRoute,
                         outputRoute: outputRoute
+                    )
+                    logExperimentRecord(
+                        record,
+                        kind: .comparisonSaved
                     )
                 },
                 onProgress: {
@@ -5258,10 +5270,14 @@ struct CancellationLabView: View {
                     measurementForTarget(target)
                 },
                 onComparison: { comparison in
-                    _ = experimentRecorder.record(
+                    let record = experimentRecorder.record(
                         comparison: comparison,
                         inputRoute: inputRoute,
                         outputRoute: outputRoute
+                    )
+                    logExperimentRecord(
+                        record,
+                        kind: .comparisonSaved
                     )
                 },
                 onProgress: {
@@ -5388,10 +5404,14 @@ struct CancellationLabView: View {
                     measurementForTarget(target)
                 },
                 onComparison: { comparison in
-                    _ = experimentRecorder.record(
+                    let record = experimentRecorder.record(
                         comparison: comparison,
                         inputRoute: inputRoute,
                         outputRoute: outputRoute
+                    )
+                    logExperimentRecord(
+                        record,
+                        kind: .comparisonSaved
                     )
                 }
             )
