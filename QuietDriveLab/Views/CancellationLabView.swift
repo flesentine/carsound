@@ -15,6 +15,7 @@ struct CancellationLabView: View {
     @Environment(AccelerometerCaptureModel.self) private var accelerometerCapture
     @Environment(SoundVibrationCorrelationModel.self) private var soundVibrationCorrelation
     @Environment(CalibrationModel.self) private var calibration
+    @Environment(StructuredLogModel.self) private var structuredLog
 
     @State private var lastSavedComparisonKey: String?
     @State private var phaseRefinementProgressText: String?
@@ -26,6 +27,7 @@ struct CancellationLabView: View {
             VStack(spacing: 16) {
                 readinessCard
                 calibrationCard
+                structuredLogCard
                 processingLatencyCard
                 audioRouteTestingCard
                 bluetoothBehaviorCard
@@ -410,6 +412,128 @@ struct CancellationLabView: View {
             }
 
             Text("A calibration profile is valid only for the same route signature and sample rate. Changing the microphone/output route intentionally removes the live match instead of reusing the wrong reference.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
+    private var structuredLogCard: some View {
+        let recent =
+            Array(
+                structuredLog.events
+                    .suffix(12)
+                    .reversed()
+            )
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Label(
+                    "Structured Logs",
+                    systemImage: "list.bullet.rectangle"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                Text("\(structuredLog.events.count) events")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
+
+            Text("Versioned, machine-readable experiment events saved locally for export, dashboards, and repeatability analysis. Raw microphone audio and raw accelerometer streams are never written to this log.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+
+            LabeledContent(
+                "Current session",
+                value: String(
+                    structuredLog
+                        .currentSessionID
+                        .uuidString
+                        .prefix(8)
+                )
+            )
+
+            LabeledContent(
+                "Current session events",
+                value:
+                    "\(structuredLog.currentSessionEvents.count)"
+            )
+
+            LabeledContent(
+                "Saved sessions",
+                value:
+                    "\(structuredLog.distinctSessionCount)"
+            )
+
+            HStack {
+                Button("Log Confidence Snapshot") {
+                    logConfidenceSnapshot()
+                }
+                .buttonStyle(.borderedProminent)
+
+                if !structuredLog.events.isEmpty {
+                    Button(
+                        "Clear Logs",
+                        role: .destructive
+                    ) {
+                        structuredLog.clearAll()
+                        structuredLog.startSession(
+                            context:
+                                structuredLogContext,
+                            text: [
+                                "app_build":
+                                    "3.3"
+                            ]
+                        )
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+
+            if let error = structuredLog.lastError {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+
+            if recent.isEmpty {
+                Text("No structured events saved yet.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else {
+                Divider()
+
+                Text("Recent events")
+                    .font(.subheadline.weight(.semibold))
+
+                ForEach(recent) { event in
+                    HStack(alignment: .firstTextBaseline) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(event.kind.rawValue)
+                                .font(.caption.monospaced())
+
+                            Text(
+                                event.recordedAt.formatted(
+                                    date: .omitted,
+                                    time: .standard
+                                )
+                            )
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Text("#\(event.sequence)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            Text("The event store is capped at \(StructuredLogModel.maximumEventCount) records. Oldest events are pruned first.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -3804,6 +3928,131 @@ struct CancellationLabView: View {
             )
         }
         .cancellationCard()
+    }
+
+    private var structuredLogContext:
+        StructuredLogContext
+    {
+        let confidence =
+            overallConfidenceSnapshot
+        let matchingCalibration =
+            calibration.latestMatchingProfile(
+                routeSignature:
+                    audioSession.routeSignature,
+                sampleRate:
+                    audioSession.sampleRate
+            )
+
+        return StructuredLogContext(
+            routeSignature:
+                audioSession.routeSignature,
+            routeRevision:
+                audioSession.routeRevision,
+            calibrationProfileID:
+                matchingCalibration?.id,
+            targetFrequencyHz:
+                toneGenerator.frequencyHz,
+            phaseDegrees:
+                toneGenerator.phaseDegrees,
+            outputPercent:
+                toneGenerator.outputPercent,
+            confidenceScorePercent:
+                confidence.scorePercent,
+            evidenceCoveragePercent:
+                confidence
+                    .evidenceCoveragePercent,
+            confidenceLevel:
+                confidence.level.rawValue
+        )
+    }
+
+    private func logConfidenceSnapshot() {
+        let confidence =
+            overallConfidenceSnapshot
+
+        _ = structuredLog.record(
+            kind: .confidenceSnapshot,
+            context:
+                structuredLogContext,
+            metrics: [
+                "score_percent":
+                    confidence.scorePercent,
+                "evidence_coverage_percent":
+                    confidence
+                        .evidenceCoveragePercent
+            ],
+            text: [
+                "level":
+                    confidence.level.rawValue,
+                "limiting_factors":
+                    confidence
+                        .limitingFactors
+                        .joined(
+                            separator: " | "
+                        )
+            ],
+            flags: [
+                "microphone_clipping":
+                    microphoneCapture
+                        .snapshot
+                        .isClipping,
+                "likely_program_interference":
+                    microphoneCapture
+                        .snapshot
+                        .musicInterference
+                        .level == .likely
+            ]
+        )
+    }
+
+    private func logExperimentRecord(
+        _ record: ExperimentRecord,
+        kind: StructuredLogEventKind
+    ) {
+        _ = structuredLog.record(
+            kind: kind,
+            context:
+                structuredLogContext,
+            metrics: [
+                "baseline_band_energy_dbfs":
+                    record
+                        .baselineBandEnergyDBFS,
+                "treatment_band_energy_dbfs":
+                    record
+                        .treatmentBandEnergyDBFS,
+                "treatment_minus_baseline_db":
+                    record
+                        .treatmentMinusBaselineDB,
+                "measured_reduction_db":
+                    record.measuredReductionDB,
+                "baseline_stddev_db":
+                    record
+                        .baselineStandardDeviationDB,
+                "treatment_stddev_db":
+                    record
+                        .treatmentStandardDeviationDB,
+                "baseline_sample_count":
+                    Double(
+                        record
+                            .baselineSampleCount
+                    ),
+                "treatment_sample_count":
+                    Double(
+                        record
+                            .treatmentSampleCount
+                    )
+            ],
+            text: [
+                "input_route":
+                    record.inputRoute,
+                "output_route":
+                    record.outputRoute
+            ],
+            references: [
+                "experiment_record_id":
+                    record.id.uuidString
+            ]
+        )
     }
 
     private var canStartSoundVibrationCorrelation: Bool {
