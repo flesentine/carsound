@@ -3756,8 +3756,16 @@ struct CancellationLabView: View {
                 ) {
                     if microphoneCapture.state == .capturing {
                         microphoneCapture.stopCapture()
+                        _ = structuredLog.record(
+                            kind: .captureStopped,
+                            context: structuredLogContext
+                        )
                     } else {
                         microphoneCapture.startCapture()
+                        _ = structuredLog.record(
+                            kind: .captureStarted,
+                            context: structuredLogContext
+                        )
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -3776,11 +3784,20 @@ struct CancellationLabView: View {
                         : "Start Tone"
                 ) {
                     if toneGenerator.state == .playing {
-                        Task {
+                        Task { @MainActor in
                             await toneGenerator.stop()
+                            _ = structuredLog.record(
+                                kind: .toneStopped,
+                                context:
+                                    structuredLogContext
+                            )
                         }
                     } else {
                         toneGenerator.start()
+                        _ = structuredLog.record(
+                            kind: .toneStarted,
+                            context: structuredLogContext
+                        )
                     }
                 }
                 .buttonStyle(.borderedProminent)
@@ -3797,10 +3814,18 @@ struct CancellationLabView: View {
             Button("Start Capture + Tone") {
                 if microphoneCapture.state != .capturing {
                     microphoneCapture.startCapture()
+                    _ = structuredLog.record(
+                        kind: .captureStarted,
+                        context: structuredLogContext
+                    )
                 }
 
                 if toneGenerator.state != .playing {
                     toneGenerator.start()
+                    _ = structuredLog.record(
+                        kind: .toneStarted,
+                        context: structuredLogContext
+                    )
                 }
             }
             .buttonStyle(.borderedProminent)
@@ -3824,6 +3849,21 @@ struct CancellationLabView: View {
                 adaptiveController.cancel()
                 toneGenerator.stopImmediately()
                 microphoneCapture.stopCapture()
+
+                _ = structuredLog.record(
+                    kind: .toneStopped,
+                    context: structuredLogContext,
+                    text: [
+                        "reason": "stop_all"
+                    ]
+                )
+                _ = structuredLog.record(
+                    kind: .captureStopped,
+                    context: structuredLogContext,
+                    text: [
+                        "reason": "stop_all"
+                    ]
+                )
             }
             .buttonStyle(.bordered)
 
@@ -3906,6 +3946,13 @@ struct CancellationLabView: View {
             ) {
                 if toneGenerator.isMuted {
                     toneGenerator.unmute()
+                    _ = structuredLog.record(
+                        kind: .toneStarted,
+                        context: structuredLogContext,
+                        text: [
+                            "action": "resume_from_mute"
+                        ]
+                    )
                 } else {
                     phaseSweep.cancel()
                     phaseRefinement.cancel()
@@ -3914,6 +3961,13 @@ struct CancellationLabView: View {
                     amplitudeSearchProgressText = nil
                     adaptiveController.cancel()
                     toneGenerator.muteImmediately()
+                    _ = structuredLog.record(
+                        kind: .safetyMute,
+                        context: structuredLogContext,
+                        text: [
+                            "action": "mute_now"
+                        ]
+                    )
                 }
             }
             .buttonStyle(.borderedProminent)
