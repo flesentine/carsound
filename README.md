@@ -4,69 +4,93 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#33 — calibration** is implemented. This begins **Milestone 4 — Prove it**.
+Development effort **#34 — structured logs** is implemented.
 
-QuietDrive can now create durable, route-specific calibration profiles before controlled vehicle experiments.
+QuietDrive now has a common, durable event stream for the remaining **Milestone 4 — Prove it** work. Instead of each experiment feature keeping isolated UI state, important actions and outcomes can now be analyzed as one ordered machine-readable history.
 
-A calibration run captures a **5-second quiet reference** from 50 fresh paired microphone and accelerometer observations. Calibration requires the audio session, microphone, and accelerometer to be active, and QuietDrive's generated tone must be stopped or muted. Clipping, likely program-audio interference, capture loss, or an audio-route change aborts the run instead of saving a compromised profile.
+## Structured event schema
 
-Each saved calibration profile records:
+Every saved event includes:
 
-- route family, route signature, and route revision
-- input/output route descriptions
-- sample rate and I/O buffer duration
-- iOS-reported input/output latency
-- average microphone RMS in dBFS
-- microphone RMS variability
-- low-frequency and wideband noise floors
-- current target-band reference energy when available
-- accelerometer X/Y/Z orientation/gravity baseline
-- dynamic vibration RMS
-- observed accelerometer sample rate and timing jitter
-- microphone callback jitter
-- estimated spectrum-center age
-- maximum program-audio interference score seen during calibration
+- schema version
+- event UUID
+- timestamp
+- app-session UUID
+- per-session sequence number
+- typed event kind
+- current route signature/revision
+- matching calibration-profile ID when available
+- current target frequency, phase, and output level
+- current overall-confidence score
+- current evidence coverage
+- current confidence label
+- event-specific numeric metrics
+- event-specific text fields
+- boolean flags
+- reference IDs linking events to durable calibration, route-test, or experiment records
 
-QuietDrive averages dB measurements in **linear power** before converting them back to dB.
+Each app launch starts a new session UUID. Sequence numbers restart at 1 for that session, while older sessions remain available in the same local event history.
 
-### Optional external SPL reference
+The store is capped at **10,000 events**; oldest events are removed first.
 
-The Calibration card accepts an optional simultaneous reading from an external sound meter.
+## What is logged
 
-When provided, QuietDrive stores an approximate offset between the phone's measured RMS dBFS and that external reference. That offset is only used when the **same route signature** is active.
+Structured logging now covers:
 
-This is deliberately labeled **approximate SPL**, not calibrated dBA. QuietDrive does not apply certified A/C weighting, microphone sensitivity certification, or laboratory traceability.
+- app/session start
+- audio route-test capture
+- calibration completion/failure
+- saved baseline/treatment comparisons
+- automatic phase-sweep completion/failure
+- fine phase-refinement completion/failure
+- amplitude-search completion/failure
+- adaptive accepted adjustments
+- adaptive fail-safe/stop outcomes
+- Bluetooth jitter completion/failure
+- sound-vibration correlation completion/failure
+- microphone capture start/stop
+- generated-tone start/stop
+- emergency **MUTE NOW**
+- explicit overall-confidence snapshots
 
-Without an external reference, absolute SPL remains unavailable and the native acoustic measurements stay in dBFS.
+A/B measurement events preserve derived energy, reduction, variability, and sample-count metrics and link back to the existing durable experiment record.
 
-### Route matching
+The Cancellation Lab now includes a **Structured Logs** card showing the current session, total event/session counts, recent event names and sequence numbers, persistence errors, a manual **Log Confidence Snapshot** control, and a clear-all action.
 
-Calibration profiles are never blindly reused.
+## Privacy and storage
 
-A profile is considered a live match only when:
+Structured logging stores **derived experiment metadata only**.
 
-- the route signature is identical
-- the active sample rate is within 1 Hz of the saved profile
+It does **not** store:
 
-Changing the input/output path therefore removes the active calibration match instead of applying the wrong reference.
+- raw microphone audio
+- raw microphone PCM buffers
+- raw accelerometer sample streams
+- song fingerprints or recognized content
 
-Calibration profiles are stored locally as atomic JSON and can be individually deleted or cleared.
+The log is stored locally as atomic JSON under Application Support.
+
+## Why this matters
+
+#34 is the data foundation for the next work:
+
+- **#35 CSV/JSON export** can serialize one consistent event schema
+- **#36 test dashboard** can aggregate sessions and workflows
+- **#37 repeatability** can compare matched runs across sessions/conditions
+- **#40 go/no-go report** can use a traceable evidence history instead of manually reconstructed results
 
 ## Verification status
 
 The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so tests compile but are not executed there.
 
-Calibration math/persistence coverage includes linear-power dB averaging, external SPL offsets, route guarding, sample-rate matching, external-reference validation, and durable save/reload/delete.
-
-Useful calibration values still require a physical iPhone and the actual audio route that will be used for the vehicle experiment.
+Structured-log coverage includes schema/version persistence, metrics/text/flags/reference round-trip, session sequencing, cross-launch session separation, retention pruning, and clear/restart behavior.
 
 ## What comes next
 
-**#34 — structured logs** is next.
+**#35 — CSV/JSON export** is next.
 
 The remaining Milestone 4 roadmap is:
 
-- #34 structured logs
 - #35 CSV/JSON export
 - #36 test dashboard
 - #37 repeatability
@@ -74,13 +98,9 @@ The remaining Milestone 4 roadmap is:
 - #39 multiple frequencies
 - #40 Lab go/no-go report
 
-## Privacy principle
-
-Raw microphone audio is not stored. Raw accelerometer samples remain in memory only. Calibration stores derived route, timing, acoustic, and motion summary values locally.
-
 ## Generate the Xcode project
 
-This repository uses [XcodeGen](https://github.com/yonaskolb/XcodeGen) so the project definition stays reviewable as text.
+This repository uses XcodeGen so the project definition stays reviewable as text.
 
 ```sh
 brew install xcodegen
@@ -90,4 +110,4 @@ open QuietDriveLab.xcodeproj
 
 ## Current backlog
 
-See [`docs/STATUS.md`](docs/STATUS.md).
+See `docs/STATUS.md`.
