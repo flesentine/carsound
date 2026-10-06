@@ -4,9 +4,9 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#34 — structured logs** is implemented.
+Development effort **#35 — CSV/JSON export** is implemented.
 
-QuietDrive now has a common, durable event stream for the remaining **Milestone 4 — Prove it** work. Instead of each experiment feature keeping isolated UI state, important actions and outcomes can now be analyzed as one ordered machine-readable history.
+QuietDrive's durable structured event stream can now be exported from the Cancellation Lab as portable **JSON** or **CSV**, either for the current app session or for the complete retained log history. This turns the #34 event foundation into a dataset that can feed dashboards, repeatability analysis, and the final go/no-go report.
 
 ## Structured event schema
 
@@ -70,12 +70,21 @@ It does **not** store:
 
 The log is stored locally as atomic JSON under Application Support.
 
+## CSV/JSON export
+
+The Structured Logs card now lets the researcher choose **All saved** or **Current session** and save either format through the native iOS file exporter.
+
+- **JSON** exports the typed `StructuredLogEvent` array with pretty printing, stable key ordering, and ISO-8601 timestamps.
+- **CSV** keeps stable event/context columns and adds deterministic columns for every observed numeric metric, text field, boolean flag, and reference ID.
+- CSV values use locale-independent numeric formatting and standard quote escaping for commas, quotes, and line breaks.
+- Export filenames include the selected scope and a UTC timestamp.
+- Exporting does not add raw microphone audio, raw PCM buffers, or raw accelerometer streams; those data were never part of the structured log.
+
 ## Why this matters
 
-#34 is the data foundation for the next work:
+#35 makes the evidence history portable for the remaining work:
 
-- **#35 CSV/JSON export** can serialize one consistent event schema
-- **#36 test dashboard** can aggregate sessions and workflows
+- **#36 test dashboard** can aggregate exported sessions and workflows
 - **#37 repeatability** can compare matched runs across sessions/conditions
 - **#40 go/no-go report** can use a traceable evidence history instead of manually reconstructed results
 
@@ -85,13 +94,14 @@ The app and unit-test targets compile successfully in GitHub Actions using the i
 
 Structured-log coverage includes schema/version persistence, metrics/text/flags/reference round-trip, session sequencing, cross-launch session separation, retention pruning, and clear/restart behavior.
 
+The unit-test target now also covers JSON export round-trip fidelity, deterministic CSV field flattening, CSV quote/comma/newline escaping, current-session filtering, all-events filtering, and timestamped export filenames. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
+
 ## What comes next
 
-**#35 — CSV/JSON export** is next.
+**#36 — test dashboard** is next.
 
 The remaining Milestone 4 roadmap is:
 
-- #35 CSV/JSON export
 - #36 test dashboard
 - #37 repeatability
 - #38 head-position sensitivity
