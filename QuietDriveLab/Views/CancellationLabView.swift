@@ -21,6 +21,13 @@ struct CancellationLabView: View {
     @State private var phaseRefinementProgressText: String?
     @State private var amplitudeSearchProgressText: String?
     @State private var externalSPLReferenceText = ""
+    @State private var structuredLogExportScope: StructuredLogExportScope = .allEvents
+    @State private var structuredLogExportFormat: StructuredLogExportFormat = .json
+    @State private var structuredLogExportDocument: StructuredLogExportDocument?
+    @State private var structuredLogExportFilename = "quietdrive-structured-events.json"
+    @State private var structuredLogExportEventCount = 0
+    @State private var isStructuredLogExporterPresented = false
+    @State private var structuredLogExportFeedback: String?
 
     var body: some View {
         ScrollView {
@@ -53,6 +60,21 @@ struct CancellationLabView: View {
         }
         .navigationTitle("Cancellation Lab")
         .navigationBarTitleDisplayMode(.inline)
+        .fileExporter(
+            isPresented:
+                $isStructuredLogExporterPresented,
+            document:
+                structuredLogExportDocument,
+            contentType:
+                structuredLogExportFormat
+                    .contentType,
+            defaultFilename:
+                structuredLogExportFilename
+        ) { result in
+            handleStructuredLogExportCompletion(
+                result
+            )
+        }
     }
 
     private var readinessCard: some View {
@@ -425,6 +447,18 @@ struct CancellationLabView: View {
                     .suffix(12)
                     .reversed()
             )
+        let exportEventCount =
+            StructuredLogExporter
+                .selectedEvents(
+                    from:
+                        structuredLog.events,
+                    scope:
+                        structuredLogExportScope,
+                    currentSessionID:
+                        structuredLog
+                            .currentSessionID
+                )
+                .count
 
         return VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -467,6 +501,78 @@ struct CancellationLabView: View {
                     "\(structuredLog.distinctSessionCount)"
             )
 
+            Divider()
+
+            Text("Export")
+                .font(.subheadline.weight(.semibold))
+
+            Picker(
+                "Export scope",
+                selection:
+                    $structuredLogExportScope
+            ) {
+                ForEach(
+                    StructuredLogExportScope
+                        .allCases
+                ) { scope in
+                    Text(scope.title)
+                        .tag(scope)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            LabeledContent(
+                "Selected events",
+                value:
+                    "\(exportEventCount)"
+            )
+
+            HStack {
+                Button {
+                    prepareStructuredLogExport(
+                        .json
+                    )
+                } label: {
+                    Label(
+                        "Export JSON",
+                        systemImage:
+                            "doc.text"
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(
+                    exportEventCount == 0
+                )
+
+                Button {
+                    prepareStructuredLogExport(
+                        .csv
+                    )
+                } label: {
+                    Label(
+                        "Export CSV",
+                        systemImage:
+                            "tablecells"
+                    )
+                }
+                .buttonStyle(.bordered)
+                .disabled(
+                    exportEventCount == 0
+                )
+            }
+
+            Text("JSON preserves the typed event schema. CSV flattens context plus every metric, text field, flag, and reference ID into analysis-friendly columns.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+            if let feedback =
+                structuredLogExportFeedback
+            {
+                Text(feedback)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             HStack {
                 Button("Log Confidence Snapshot") {
                     logConfidenceSnapshot()
@@ -484,7 +590,7 @@ struct CancellationLabView: View {
                                 structuredLogContext,
                             text: [
                                 "app_build":
-                                    "3.3"
+                                    "3.5"
                             ]
                         )
                     }
@@ -4022,6 +4128,85 @@ struct CancellationLabView: View {
             confidenceLevel:
                 confidence.level.rawValue
         )
+    }
+
+    private func prepareStructuredLogExport(
+        _ format: StructuredLogExportFormat
+    ) {
+        let selectedEvents =
+            StructuredLogExporter
+                .selectedEvents(
+                    from:
+                        structuredLog.events,
+                    scope:
+                        structuredLogExportScope,
+                    currentSessionID:
+                        structuredLog
+                            .currentSessionID
+                )
+
+        guard !selectedEvents.isEmpty else {
+            structuredLogExportFeedback =
+                "No structured events are available for the selected scope."
+            return
+        }
+
+        do {
+            let data = try
+                StructuredLogExporter
+                    .data(
+                        for: format,
+                        events:
+                            selectedEvents
+                    )
+
+            structuredLogExportFormat =
+                format
+            structuredLogExportDocument =
+                StructuredLogExportDocument(
+                    data: data
+                )
+            structuredLogExportFilename =
+                StructuredLogExporter
+                    .suggestedFilename(
+                        format: format,
+                        scope:
+                            structuredLogExportScope
+                    )
+            structuredLogExportEventCount =
+                selectedEvents.count
+            structuredLogExportFeedback = nil
+            isStructuredLogExporterPresented =
+                true
+        } catch {
+            structuredLogExportFeedback =
+                "Could not prepare " +
+                format.title +
+                " export: " +
+                error.localizedDescription
+        }
+    }
+
+    private func handleStructuredLogExportCompletion(
+        _ result: Result<URL, Error>
+    ) {
+        switch result {
+        case .success:
+            structuredLogExportFeedback =
+                "Exported " +
+                String(
+                    structuredLogExportEventCount
+                ) +
+                " events as " +
+                structuredLogExportFormat
+                    .title +
+                "."
+
+        case .failure(let error):
+            structuredLogExportFeedback =
+                "Export failed: " +
+                error.localizedDescription
+        }
     }
 
     private func logConfidenceSnapshot() {
