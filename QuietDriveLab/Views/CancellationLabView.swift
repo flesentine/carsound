@@ -4641,6 +4641,8 @@ struct CancellationLabView: View {
                     return nil
                 }
             )
+
+            logCorrelationOutcome()
         }
     }
 
@@ -4842,6 +4844,8 @@ struct CancellationLabView: View {
                     return nil
                 }
             )
+
+            logCalibrationOutcome()
         }
     }
 
@@ -4931,6 +4935,8 @@ struct CancellationLabView: View {
                     return nil
                 }
             )
+
+            logBluetoothJitterOutcome()
         }
     }
 
@@ -5110,11 +5116,18 @@ struct CancellationLabView: View {
                         record,
                         kind: .comparisonSaved
                     )
+                    logExperimentRecord(
+                        record,
+                        kind: .adaptiveAdjustmentAccepted
+                    )
                 },
-                onFailSafe: { _ in
+                onFailSafe: { message in
+                    logAdaptiveFailure(message)
                     toneGenerator.muteImmediately()
                 }
             )
+
+            logAdaptiveStopped()
         }
     }
 
@@ -5213,6 +5226,8 @@ struct CancellationLabView: View {
                     }
                 }
             )
+
+            logAmplitudeSearchOutcome()
 
             if amplitudeSearch.state == .completed {
                 amplitudeSearchProgressText =
@@ -5317,6 +5332,8 @@ struct CancellationLabView: View {
                 }
             )
 
+            logPhaseRefinementOutcome()
+
             if phaseRefinement.state == .completed {
                 phaseRefinementProgressText =
                     "Fine phase search complete"
@@ -5415,6 +5432,8 @@ struct CancellationLabView: View {
                     )
                 }
             )
+
+            logPhaseSweepOutcome()
 
             if phaseSweep.state == .completed {
                 toneGenerator.muteImmediately()
