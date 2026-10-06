@@ -4967,6 +4967,302 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    @MainActor
+    func testStructuredLogSessionStartIsIdempotentAndSequenced() {
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000034"
+            )!
+        let model =
+            StructuredLogModel(
+                storageURL: nil,
+                sessionID: sessionID
+            )
+
+        model.startSession(
+            text: [
+                "app_build": "3.3"
+            ]
+        )
+        model.startSession()
+
+        _ = model.record(
+            kind: .captureStarted
+        )
+
+        XCTAssertEqual(
+            model.events.count,
+            2
+        )
+        XCTAssertEqual(
+            model.events[0].kind,
+            .sessionStarted
+        )
+        XCTAssertEqual(
+            model.events[0].sequence,
+            1
+        )
+        XCTAssertEqual(
+            model.events[1].sequence,
+            2
+        )
+        XCTAssertEqual(
+            model.events[0].sessionID,
+            sessionID
+        )
+        XCTAssertEqual(
+            model.currentSessionEvents.count,
+            2
+        )
+    }
+
+    @MainActor
+    func testStructuredLogPersistsMetricsFlagsReferencesAndContext() throws {
+        let url =
+            FileManager.default
+                .temporaryDirectory
+                .appendingPathComponent(
+                    "quietdrive-structured-log-\(UUID().uuidString).json"
+                )
+        defer {
+            try? FileManager.default
+                .removeItem(at: url)
+        }
+
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000035"
+            )!
+        let calibrationID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000036"
+            )!
+        let model =
+            StructuredLogModel(
+                storageURL: url,
+                sessionID: sessionID
+            )
+        let context =
+            StructuredLogContext(
+                routeSignature: "route-A",
+                routeRevision: 4,
+                calibrationProfileID:
+                    calibrationID,
+                targetFrequencyHz: 80,
+                phaseDegrees: 140,
+                outputPercent: 30,
+                confidenceScorePercent: 82,
+                evidenceCoveragePercent: 90,
+                confidenceLevel:
+                    "High confidence"
+            )
+
+        let event =
+            model.record(
+                kind: .comparisonSaved,
+                context: context,
+                metrics: [
+                    "measured_reduction_db":
+                        4.5
+                ],
+                text: [
+                    "input_route":
+                        "Built-in microphone"
+                ],
+                flags: [
+                    "success": true
+                ],
+                references: [
+                    "experiment_record_id":
+                        "record-1"
+                ],
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            34
+                    )
+            )
+
+        XCTAssertEqual(
+            event.schemaVersion,
+            StructuredLogEvent
+                .currentSchemaVersion
+        )
+
+        let reloaded =
+            StructuredLogModel(
+                storageURL: url,
+                sessionID: UUID()
+            )
+
+        XCTAssertEqual(
+            reloaded.events,
+            [event]
+        )
+        XCTAssertEqual(
+            reloaded.events.first?
+                .context
+                .calibrationProfileID,
+            calibrationID
+        )
+        XCTAssertEqual(
+            reloaded.events.first?
+                .metrics[
+                    "measured_reduction_db"
+                ],
+            4.5
+        )
+        XCTAssertEqual(
+            reloaded.events.first?
+                .flags["success"],
+            true
+        )
+        XCTAssertEqual(
+            reloaded.events.first?
+                .references[
+                    "experiment_record_id"
+                ],
+            "record-1"
+        )
+    }
+
+    @MainActor
+    func testStructuredLogSeparatesSessionsAcrossLaunches() throws {
+        let url =
+            FileManager.default
+                .temporaryDirectory
+                .appendingPathComponent(
+                    "quietdrive-structured-sessions-\(UUID().uuidString).json"
+                )
+        defer {
+            try? FileManager.default
+                .removeItem(at: url)
+        }
+
+        let first =
+            StructuredLogModel(
+                storageURL: url,
+                sessionID:
+                    UUID(
+                        uuidString:
+                            "00000000-0000-0000-0000-000000000037"
+                    )!
+            )
+        first.startSession()
+        _ = first.record(
+            kind: .captureStarted
+        )
+
+        let second =
+            StructuredLogModel(
+                storageURL: url,
+                sessionID:
+                    UUID(
+                        uuidString:
+                            "00000000-0000-0000-0000-000000000038"
+                    )!
+            )
+        second.startSession()
+
+        XCTAssertEqual(
+            second.events.count,
+            3
+        )
+        XCTAssertEqual(
+            second.distinctSessionCount,
+            2
+        )
+        XCTAssertEqual(
+            second.currentSessionEvents.count,
+            1
+        )
+        XCTAssertEqual(
+            second.currentSessionEvents
+                .first?
+                .sequence,
+            1
+        )
+    }
+
+    @MainActor
+    func testStructuredLogRetentionPrunesOldestEvents() {
+        let model =
+            StructuredLogModel(
+                storageURL: nil,
+                sessionID:
+                    UUID(
+                        uuidString:
+                            "00000000-0000-0000-0000-000000000039"
+                    )!
+            )
+
+        for index in 0..<(StructuredLogModel.maximumEventCount + 5) {
+            _ = model.record(
+                kind: .confidenceSnapshot,
+                metrics: [
+                    "index":
+                        Double(index)
+                ],
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            Double(index)
+                    )
+            )
+        }
+
+        XCTAssertEqual(
+            model.events.count,
+            StructuredLogModel
+                .maximumEventCount
+        )
+        XCTAssertEqual(
+            model.events.first?
+                .metrics["index"],
+            5
+        )
+        XCTAssertEqual(
+            model.events.last?
+                .metrics["index"],
+            Double(
+                StructuredLogModel
+                    .maximumEventCount +
+                4
+            )
+        )
+    }
+
+    @MainActor
+    func testStructuredLogClearAllowsFreshSessionStartSequence() {
+        let model =
+            StructuredLogModel(
+                storageURL: nil
+            )
+
+        model.startSession()
+        _ = model.record(
+            kind: .toneStarted
+        )
+        model.clearAll()
+        model.startSession()
+
+        XCTAssertEqual(
+            model.events.count,
+            1
+        )
+        XCTAssertEqual(
+            model.events.first?.kind,
+            .sessionStarted
+        )
+        XCTAssertEqual(
+            model.events.first?.sequence,
+            1
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
