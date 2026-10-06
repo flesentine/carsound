@@ -436,7 +436,21 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
   - clearing logs starts a fresh session-start event instead of leaving the store contextless
   - tests cover session-start idempotence, per-session sequencing, schema version, dictionary/context persistence, cross-launch session separation, 10,000-event retention pruning, and clear/restart behavior
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #35 CSV/JSON export
+- [x] #35 CSV/JSON export
+  - new reusable StructuredLogExporter serializes the #34 event stream without creating a parallel data model
+  - export scope can be All saved events or only the current app-session UUID
+  - JSON export preserves the typed StructuredLogEvent array with pretty printing, stable key ordering, and ISO-8601 timestamps
+  - CSV export uses stable event/context columns plus deterministic sorted columns for every observed metrics, text, flags, and references key
+  - CSV numeric values use POSIX locale-independent formatting
+  - CSV values containing commas, quotes, carriage returns, or newlines are quoted and embedded quotes are doubled
+  - native SwiftUI FileDocument/fileExporter flow lets the user choose the destination from iOS
+  - export filenames include all/session scope plus a UTC timestamp and the correct .json/.csv extension
+  - Structured Logs card shows export scope, selected event count, JSON and CSV actions, and completion/error feedback
+  - raw microphone audio, raw PCM buffers, and raw accelerometer streams remain excluded because the exporter only serializes StructuredLogEvent records
+  - Lab build bumped to 3.5
+  - clear-log session restart now uses the current 3.5 build tag instead of the stale 3.3 tag
+  - unit-test target covers JSON round-trip fidelity, deterministic CSV flattening, CSV escaping, scope filtering, and filename generation
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #36 test dashboard
 - [ ] #37 repeatability
 - [ ] #38 head-position sensitivity
