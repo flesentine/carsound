@@ -674,7 +674,7 @@ struct CancellationLabView: View {
                 Spacer()
 
                 Text(
-                    "\\(dashboard.sessionCount) sessions"
+                    "\(dashboard.sessionCount) sessions"
                 )
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -690,19 +690,19 @@ struct CancellationLabView: View {
                 LabeledContent(
                     "A/B",
                     value:
-                        "\\(dashboard.comparisonCount)"
+                        "\(dashboard.comparisonCount)"
                 )
 
                 LabeledContent(
                     "Routes",
                     value:
-                        "\\(dashboard.distinctRouteCount)"
+                        "\(dashboard.distinctRouteCount)"
                 )
 
                 LabeledContent(
                     "Failures",
                     value:
-                        "\\(dashboard.failureCount)"
+                        "\(dashboard.failureCount)"
                 )
             }
             .font(.caption)
