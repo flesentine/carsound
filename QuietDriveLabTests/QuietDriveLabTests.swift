@@ -7842,6 +7842,296 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testLabGoNoGoCountsOnlySessionsWithComparisonsForEvidenceVolume() {
+        let source =
+            makeLabDecisionEvents()
+        let measurementSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000073"
+            )!
+        let launchOnlyA =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000074"
+            )!
+        let launchOnlyB =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000075"
+            )!
+
+        var events =
+            source.enumerated()
+                .map {
+                    index,
+                    event in
+
+                    StructuredLogEvent(
+                        recordedAt:
+                            event.recordedAt,
+                        sessionID:
+                            measurementSession,
+                        sequence:
+                            UInt64(index + 1),
+                        kind:
+                            event.kind,
+                        context:
+                            event.context,
+                        metrics:
+                            event.metrics,
+                        text:
+                            event.text,
+                        flags:
+                            event.flags,
+                        references:
+                            event.references
+                    )
+                }
+
+        events.append(
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            100
+                    ),
+                sessionID:
+                    launchOnlyA,
+                sequence: 1,
+                kind:
+                    .sessionStarted
+            )
+        )
+        events.append(
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            101
+                    ),
+                sessionID:
+                    launchOnlyB,
+                sequence: 1,
+                kind:
+                    .sessionStarted
+            )
+        )
+
+        let snapshot =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events: events,
+                    currentSessionID:
+                        measurementSession
+                )
+        let evidenceGate =
+            snapshot.gates
+                .first {
+                    $0.id ==
+                        "evidence_volume"
+                }
+
+        XCTAssertEqual(
+            snapshot.sessionCount,
+            3
+        )
+        XCTAssertEqual(
+            snapshot.comparisonSessionCount,
+            1
+        )
+        XCTAssertEqual(
+            evidenceGate?.status,
+            .needsEvidence
+        )
+    }
+
+    func testFrequencyCoverageRepeatedPositiveCountRequiresSeparateSessions() {
+        let source =
+            makeLabDecisionEvents()
+        let firstSession =
+            source[0]
+                .sessionID
+        let events =
+            source.filter { event in
+                guard
+                    event.text[
+                        "head_position"
+                    ] ==
+                        HeadPositionPreset
+                            .reference
+                            .rawValue
+                else {
+                    return false
+                }
+
+                guard
+                    let frequency =
+                        event.context
+                            .targetFrequencyHz
+                else {
+                    return false
+                }
+
+                if frequency == 40 {
+                    return true
+                }
+
+                return event.sessionID ==
+                    firstSession
+            }
+
+        let snapshot =
+            FrequencyCoverageAnalytics
+                .snapshot(
+                    events: events
+                )
+        let series =
+            snapshot.series
+                .first {
+                    $0.context
+                        .routeSignature ==
+                        "route-decision" &&
+                    $0.context
+                        .headPosition ==
+                        .reference
+                }
+
+        XCTAssertEqual(
+            series?.assessment,
+            .broad
+        )
+        XCTAssertEqual(
+            series?
+                .positiveFrequencyCount,
+            3
+        )
+        XCTAssertEqual(
+            series?
+                .repeatedPositiveFrequencyCount,
+            1
+        )
+    }
+
+    func testLabGoNoGoDoesNotCombineUnrelatedRouteEvidenceIntoGo() {
+        let source =
+            makeLabDecisionEvents()
+        let base =
+            source.filter {
+                $0.text[
+                    "head_position"
+                ] !=
+                    HeadPositionPreset
+                        .left
+                        .rawValue
+            }
+        let session =
+            base[0].sessionID
+        let context =
+            StructuredLogContext(
+                routeSignature:
+                    "route-head-only",
+                routeRevision: 1,
+                calibrationProfileID: nil,
+                targetFrequencyHz: 40,
+                phaseDegrees: 180,
+                outputPercent: 25,
+                confidenceScorePercent: 65,
+                evidenceCoveragePercent: 80,
+                confidenceLevel:
+                    OverallConfidenceLevel
+                        .moderate
+                        .rawValue
+            )
+        let headOnly = [
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            200
+                    ),
+                sessionID: session,
+                sequence: 50,
+                kind:
+                    .comparisonSaved,
+                context: context,
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ],
+                text: [
+                    "head_position":
+                        HeadPositionPreset
+                            .reference
+                            .rawValue
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            201
+                    ),
+                sessionID: session,
+                sequence: 51,
+                kind:
+                    .comparisonSaved,
+                context: context,
+                metrics: [
+                    "measured_reduction_db":
+                        1.5
+                ],
+                text: [
+                    "head_position":
+                        HeadPositionPreset
+                            .left
+                            .rawValue
+                ]
+            )
+        ]
+
+        let snapshot =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events:
+                        base +
+                        headOnly,
+                    currentSessionID:
+                        session
+                )
+        let frequencyGate =
+            snapshot.gates
+                .first {
+                    $0.id ==
+                        "frequency_coverage"
+                }
+
+        XCTAssertEqual(
+            snapshot.verdict,
+            .hold
+        )
+        XCTAssertEqual(
+            snapshot.consistentReductionCount,
+            3
+        )
+        XCTAssertEqual(
+            snapshot.directionReversalCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.broadFrequencySeriesCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.qualifyingBroadFrequencySeriesCount,
+            0
+        )
+        XCTAssertEqual(
+            frequencyGate?.status,
+            .warning
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
