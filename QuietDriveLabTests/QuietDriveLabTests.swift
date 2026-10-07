@@ -6563,6 +6563,461 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testHeadPositionSensitivityGroupsMatchedSettingsAcrossPositions() {
+        let referenceSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000059"
+            )!
+        let leftSessionA =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000060"
+            )!
+        let leftSessionB =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000061"
+            )!
+
+        func event(
+            sessionID: UUID,
+            sequence: UInt64,
+            position:
+                HeadPositionPreset,
+            reduction: Double
+        ) -> StructuredLogEvent {
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            Double(sequence)
+                    ),
+                sessionID: sessionID,
+                sequence: sequence,
+                kind: .comparisonSaved,
+                context:
+                    StructuredLogContext(
+                        routeSignature:
+                            "route-position",
+                        routeRevision: 1,
+                        calibrationProfileID: nil,
+                        targetFrequencyHz: 80,
+                        phaseDegrees: 180,
+                        outputPercent: 25,
+                        confidenceScorePercent: nil,
+                        evidenceCoveragePercent: nil,
+                        confidenceLevel: nil
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        reduction
+                ],
+                text: [
+                    "head_position":
+                        position.rawValue
+                ]
+            )
+        }
+
+        var events:
+            [StructuredLogEvent] = []
+
+        for index in 0..<10 {
+            events.append(
+                event(
+                    sessionID:
+                        referenceSession,
+                    sequence:
+                        UInt64(index + 1),
+                    position:
+                        .reference,
+                    reduction: 4
+                )
+            )
+        }
+
+        events.append(
+            event(
+                sessionID:
+                    leftSessionA,
+                sequence: 1,
+                position: .left,
+                reduction: 1
+            )
+        )
+        events.append(
+            event(
+                sessionID:
+                    leftSessionB,
+                sequence: 1,
+                position: .left,
+                reduction: 3
+            )
+        )
+
+        let snapshot =
+            HeadPositionSensitivityAnalytics
+                .snapshot(
+                    events: events
+                )
+
+        XCTAssertEqual(
+            snapshot.taggedComparisonCount,
+            12
+        )
+        XCTAssertEqual(
+            snapshot.conditionCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.multiPositionConditionCount,
+            1
+        )
+
+        let group =
+            snapshot.groups[0]
+
+        XCTAssertEqual(
+            group.positionCount,
+            2
+        )
+        XCTAssertEqual(
+            group.comparisonCount,
+            12
+        )
+        XCTAssertEqual(
+            group.spreadDB ??
+                .nan,
+            2,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            group.assessment,
+            .moderate
+        )
+
+        let reference =
+            group.positionResults
+                .first {
+                    $0.position ==
+                        .reference
+                }
+        let left =
+            group.positionResults
+                .first {
+                    $0.position ==
+                        .left
+                }
+
+        XCTAssertEqual(
+            reference?
+                .meanReductionDB,
+            4
+        )
+        XCTAssertEqual(
+            reference?
+                .sessionCount,
+            1
+        )
+        XCTAssertEqual(
+            reference?
+                .comparisonCount,
+            10
+        )
+        XCTAssertEqual(
+            left?
+                .meanReductionDB,
+            2
+        )
+        XCTAssertEqual(
+            left?
+                .sessionCount,
+            2
+        )
+        XCTAssertEqual(
+            left?
+                .comparisonCount,
+            2
+        )
+    }
+
+    func testHeadPositionSensitivityDetectsDirectionReversal() {
+        XCTAssertEqual(
+            HeadPositionSensitivityAnalytics
+                .assessment(
+                    positionMeanReductionsDB: [
+                        2.0,
+                        -1.0
+                    ]
+                ),
+            .directionReversal
+        )
+
+        XCTAssertEqual(
+            HeadPositionSensitivityAnalytics
+                .assessment(
+                    positionMeanReductionsDB: [
+                        2.0,
+                        2.8
+                    ]
+                ),
+            .low
+        )
+
+        XCTAssertEqual(
+            HeadPositionSensitivityAnalytics
+                .assessment(
+                    positionMeanReductionsDB: [
+                        1.0,
+                        3.5
+                    ]
+                ),
+            .moderate
+        )
+
+        XCTAssertEqual(
+            HeadPositionSensitivityAnalytics
+                .assessment(
+                    positionMeanReductionsDB: [
+                        1.0,
+                        4.5
+                    ]
+                ),
+            .high
+        )
+
+        XCTAssertEqual(
+            HeadPositionSensitivityAnalytics
+                .assessment(
+                    positionMeanReductionsDB: [
+                        2.0
+                    ]
+                ),
+            .insufficientCoverage
+        )
+    }
+
+    func testHeadPositionSensitivityExcludesUnlabeledOrIncompleteComparisons() {
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000062"
+            )!
+        let completeContext =
+            StructuredLogContext(
+                routeSignature:
+                    "route-position-exclusion",
+                routeRevision: 1,
+                calibrationProfileID: nil,
+                targetFrequencyHz: 100,
+                phaseDegrees: 90,
+                outputPercent: 30,
+                confidenceScorePercent: nil,
+                evidenceCoveragePercent: nil,
+                confidenceLevel: nil
+            )
+
+        let tagged =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 1,
+                kind: .comparisonSaved,
+                context:
+                    completeContext,
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ],
+                text: [
+                    "head_position":
+                        HeadPositionPreset
+                            .reference
+                            .rawValue
+                ]
+            )
+        let unlabeled =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 2,
+                kind: .comparisonSaved,
+                context:
+                    completeContext,
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ]
+            )
+        let missingPhase =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 3,
+                kind: .comparisonSaved,
+                context:
+                    StructuredLogContext(
+                        routeSignature:
+                            "route-position-exclusion",
+                        routeRevision: 1,
+                        calibrationProfileID: nil,
+                        targetFrequencyHz: 100,
+                        phaseDegrees: nil,
+                        outputPercent: 30,
+                        confidenceScorePercent: nil,
+                        evidenceCoveragePercent: nil,
+                        confidenceLevel: nil
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ],
+                text: [
+                    "head_position":
+                        HeadPositionPreset
+                            .left
+                            .rawValue
+                ]
+            )
+        let unknownLabel =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 4,
+                kind: .comparisonSaved,
+                context:
+                    completeContext,
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ],
+                text: [
+                    "head_position":
+                        "diagonal"
+                ]
+            )
+
+        let snapshot =
+            HeadPositionSensitivityAnalytics
+                .snapshot(
+                    events: [
+                        tagged,
+                        unlabeled,
+                        missingPhase,
+                        unknownLabel
+                    ]
+                )
+
+        XCTAssertEqual(
+            snapshot.comparisonEventCount,
+            4
+        )
+        XCTAssertEqual(
+            snapshot.taggedComparisonCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.excludedComparisonCount,
+            3
+        )
+        XCTAssertEqual(
+            snapshot.conditionCount,
+            1
+        )
+    }
+
+    func testRepeatabilitySeparatesTaggedHeadPositions() {
+        let firstSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000063"
+            )!
+        let secondSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000064"
+            )!
+        let context =
+            StructuredLogContext(
+                routeSignature:
+                    "route-repeat-position",
+                routeRevision: 1,
+                calibrationProfileID: nil,
+                targetFrequencyHz: 85,
+                phaseDegrees: 135,
+                outputPercent: 22,
+                confidenceScorePercent: nil,
+                evidenceCoveragePercent: nil,
+                confidenceLevel: nil
+            )
+
+        let events = [
+            StructuredLogEvent(
+                sessionID:
+                    firstSession,
+                sequence: 1,
+                kind: .comparisonSaved,
+                context: context,
+                metrics: [
+                    "measured_reduction_db":
+                        3
+                ],
+                text: [
+                    "head_position":
+                        HeadPositionPreset
+                            .reference
+                            .rawValue
+                ]
+            ),
+            StructuredLogEvent(
+                sessionID:
+                    secondSession,
+                sequence: 1,
+                kind: .comparisonSaved,
+                context: context,
+                metrics: [
+                    "measured_reduction_db":
+                        1
+                ],
+                text: [
+                    "head_position":
+                        HeadPositionPreset
+                            .left
+                            .rawValue
+                ]
+            )
+        ]
+
+        let snapshot =
+            RepeatabilityAnalytics
+                .snapshot(
+                    events: events
+                )
+
+        XCTAssertEqual(
+            snapshot.matchedConditionCount,
+            2
+        )
+        XCTAssertEqual(
+            snapshot.crossSessionConditionCount,
+            0
+        )
+
+        let positions =
+            Set(
+                snapshot.groups
+                    .compactMap {
+                        $0.condition
+                            .headPosition
+                    }
+            )
+
+        XCTAssertEqual(
+            positions,
+            Set([
+                .reference,
+                .left
+            ])
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
