@@ -34,6 +34,16 @@ struct TestDashboardView: View {
             )
     }
 
+    private var headPositionSensitivity:
+        HeadPositionSensitivitySnapshot
+    {
+        HeadPositionSensitivityAnalytics
+            .snapshot(
+                events:
+                    structuredLog.events
+            )
+    }
+
     private let metricColumns = [
         GridItem(
             .flexible(),
@@ -57,6 +67,7 @@ struct TestDashboardView: View {
                 confidenceCard
                 workflowCard
                 repeatabilityCard
+                headPositionSensitivityCard
                 recentSessionsCard
                 interpretationCard
             }
@@ -488,6 +499,91 @@ struct TestDashboardView: View {
         .dashboardCard()
     }
 
+    private var headPositionSensitivityCard: some View {
+        VStack(
+            alignment: .leading,
+            spacing: 12
+        ) {
+            HStack {
+                Label(
+                    "Head-Position Sensitivity",
+                    systemImage:
+                        "figure.seated.side"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                Text(
+                    "\(headPositionSensitivity.multiPositionConditionCount) tested"
+                )
+                .font(
+                    .caption
+                        .weight(.semibold)
+                )
+                .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(
+                columns: metricColumns,
+                spacing: 12
+            ) {
+                DashboardMetricTile(
+                    title: "Tagged A/B",
+                    value:
+                        "\(headPositionSensitivity.taggedComparisonCount)",
+                    detail:
+                        "position-labeled"
+                )
+                DashboardMetricTile(
+                    title: "2+ positions",
+                    value:
+                        "\(headPositionSensitivity.multiPositionConditionCount)",
+                    detail:
+                        "matched settings"
+                )
+                DashboardMetricTile(
+                    title: "Direction flips",
+                    value:
+                        "\(headPositionSensitivity.directionReversalCount)",
+                    detail:
+                        "benefit ↔ worsening"
+                )
+                DashboardMetricTile(
+                    title: "Max spread",
+                    value:
+                        headPositionSpreadText(
+                            headPositionSensitivity
+                                .maximumSpreadDB
+                        ),
+                    detail:
+                        "position means"
+                )
+            }
+
+            NavigationLink {
+                HeadPositionSensitivityView()
+            } label: {
+                Label(
+                    "Open Head-Position Sensitivity",
+                    systemImage:
+                        "person.2.wave.2"
+                )
+                .frame(
+                    maxWidth: .infinity
+                )
+            }
+            .buttonStyle(.borderedProminent)
+
+            Text(
+                "Each saved A/B run carries the manually selected Reference/Left/Right/Forward/Back label. A fresh baseline is required after changing position."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .dashboardCard()
+    }
+
     private var recentSessionsCard: some View {
         VStack(
             alignment: .leading,
@@ -651,7 +747,7 @@ struct TestDashboardView: View {
             .font(.headline)
 
             Text(
-                "This dashboard is a descriptive view of saved experiment evidence. Repeatability now checks matched settings across separate sessions, but it still cannot control unlogged physical conditions such as head position, speed, road surface, HVAC state, or phone placement. #38 adds head-position sensitivity next."
+                "This dashboard is a descriptive view of saved experiment evidence. Repeatability now keeps labeled head positions separate, and the head-position analysis shows whether the same settings change across Reference/Left/Right/Forward/Back. Vehicle speed, road surface, HVAC state, passenger load, and exact phone placement are still uncontrolled. #39 broadens testing across frequencies next."
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
@@ -687,6 +783,19 @@ struct TestDashboardView: View {
     }
 
     private func reductionText(
+        _ value: Double?
+    ) -> String {
+        guard let value else {
+            return "—"
+        }
+
+        return String(
+            format: "%.2f dB",
+            value
+        )
+    }
+
+    private func headPositionSpreadText(
         _ value: Double?
     ) -> String {
         guard let value else {
