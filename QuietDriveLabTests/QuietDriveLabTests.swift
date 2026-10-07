@@ -5539,6 +5539,610 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testTestDashboardAggregatesSavedEvidenceAndWorkflows() {
+        let firstSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000047"
+            )!
+        let secondSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000048"
+            )!
+
+        func context(
+            route: String,
+            frequency: Double,
+            confidence: Double,
+            coverage: Double,
+            level: String
+        ) -> StructuredLogContext {
+            StructuredLogContext(
+                routeSignature: route,
+                routeRevision: 1,
+                calibrationProfileID: nil,
+                targetFrequencyHz:
+                    frequency,
+                phaseDegrees: 120,
+                outputPercent: 20,
+                confidenceScorePercent:
+                    confidence,
+                evidenceCoveragePercent:
+                    coverage,
+                confidenceLevel:
+                    level
+            )
+        }
+
+        let events = [
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            1
+                    ),
+                sessionID: firstSession,
+                sequence: 1,
+                kind: .sessionStarted,
+                context:
+                    context(
+                        route: "route-A",
+                        frequency: 80,
+                        confidence: 70,
+                        coverage: 80,
+                        level:
+                            "Moderate confidence"
+                    ),
+                text: [
+                    "app_build": "3.5"
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            2
+                    ),
+                sessionID: firstSession,
+                sequence: 2,
+                kind: .calibrationCompleted,
+                context:
+                    context(
+                        route: "route-A",
+                        frequency: 80,
+                        confidence: 70,
+                        coverage: 80,
+                        level:
+                            "Moderate confidence"
+                    )
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            3
+                    ),
+                sessionID: firstSession,
+                sequence: 3,
+                kind: .comparisonSaved,
+                context:
+                    context(
+                        route: "route-A",
+                        frequency: 80,
+                        confidence: 75,
+                        coverage: 85,
+                        level:
+                            "Moderate confidence"
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        3
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            4
+                    ),
+                sessionID: firstSession,
+                sequence: 4,
+                kind: .workflowFailed,
+                context:
+                    context(
+                        route: "route-A",
+                        frequency: 80,
+                        confidence: 75,
+                        coverage: 85,
+                        level:
+                            "Moderate confidence"
+                    ),
+                text: [
+                    "workflow":
+                        "phase_sweep"
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            5
+                    ),
+                sessionID: firstSession,
+                sequence: 5,
+                kind: .safetyMute,
+                context:
+                    context(
+                        route: "route-A",
+                        frequency: 80,
+                        confidence: 75,
+                        coverage: 85,
+                        level:
+                            "Moderate confidence"
+                    )
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            6
+                    ),
+                sessionID: firstSession,
+                sequence: 6,
+                kind: .confidenceSnapshot,
+                context:
+                    context(
+                        route: "route-A",
+                        frequency: 80,
+                        confidence: 75,
+                        coverage: 85,
+                        level:
+                            "Moderate confidence"
+                    ),
+                metrics: [
+                    "score_percent": 75
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            10
+                    ),
+                sessionID: secondSession,
+                sequence: 1,
+                kind: .sessionStarted,
+                context:
+                    context(
+                        route: "route-B",
+                        frequency: 100,
+                        confidence: 55,
+                        coverage: 65,
+                        level:
+                            "Low confidence"
+                    ),
+                text: [
+                    "app_build": "3.6"
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            11
+                    ),
+                sessionID: secondSession,
+                sequence: 2,
+                kind: .routeTestCaptured,
+                context:
+                    context(
+                        route: "route-B",
+                        frequency: 100,
+                        confidence: 55,
+                        coverage: 65,
+                        level:
+                            "Low confidence"
+                    )
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            12
+                    ),
+                sessionID: secondSession,
+                sequence: 3,
+                kind: .comparisonSaved,
+                context:
+                    context(
+                        route: "route-B",
+                        frequency: 100,
+                        confidence: 60,
+                        coverage: 70,
+                        level:
+                            "Low confidence"
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        -1
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            13
+                    ),
+                sessionID: secondSession,
+                sequence: 4,
+                kind: .phaseSweepCompleted,
+                context:
+                    context(
+                        route: "route-B",
+                        frequency: 100,
+                        confidence: 60,
+                        coverage: 70,
+                        level:
+                            "Low confidence"
+                    )
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            14
+                    ),
+                sessionID: secondSession,
+                sequence: 5,
+                kind: .adaptiveFailed,
+                context:
+                    context(
+                        route: "route-B",
+                        frequency: 100,
+                        confidence: 60,
+                        coverage: 70,
+                        level:
+                            "Low confidence"
+                    )
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            15
+                    ),
+                sessionID: secondSession,
+                sequence: 6,
+                kind: .confidenceSnapshot,
+                context:
+                    context(
+                        route: "route-B",
+                        frequency: 100,
+                        confidence: 60,
+                        coverage: 70,
+                        level:
+                            "Low confidence"
+                    ),
+                metrics: [
+                    "score_percent": 60
+                ]
+            )
+        ]
+
+        let dashboard =
+            TestDashboardAnalytics
+                .snapshot(
+                    events: events,
+                    scope: .allSaved,
+                    currentSessionID:
+                        secondSession
+                )
+
+        XCTAssertEqual(
+            dashboard.eventCount,
+            12
+        )
+        XCTAssertEqual(
+            dashboard.sessionCount,
+            2
+        )
+        XCTAssertEqual(
+            dashboard.distinctRouteCount,
+            2
+        )
+        XCTAssertEqual(
+            dashboard.distinctFrequencyCount,
+            2
+        )
+        XCTAssertEqual(
+            dashboard.comparisonCount,
+            2
+        )
+        XCTAssertEqual(
+            dashboard.positiveReductionCount,
+            1
+        )
+        XCTAssertEqual(
+            dashboard.averageReductionDB,
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            dashboard.bestReductionDB,
+            3,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            dashboard.confidenceSnapshotCount,
+            2
+        )
+        XCTAssertEqual(
+            dashboard.averageConfidenceSnapshotScorePercent,
+            67.5,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            dashboard.latestConfidenceScorePercent,
+            60
+        )
+        XCTAssertEqual(
+            dashboard.latestEvidenceCoveragePercent,
+            70
+        )
+        XCTAssertEqual(
+            dashboard.failureCount,
+            2
+        )
+        XCTAssertEqual(
+            dashboard.safetyMuteCount,
+            1
+        )
+
+        let phase =
+            dashboard
+                .workflowSummaries
+                .first {
+                    $0.id ==
+                        "phase_sweep"
+                }
+
+        XCTAssertEqual(
+            phase?.completedCount,
+            1
+        )
+        XCTAssertEqual(
+            phase?.failedCount,
+            1
+        )
+
+        let adaptive =
+            dashboard
+                .workflowSummaries
+                .first {
+                    $0.id ==
+                        "adaptive"
+                }
+
+        XCTAssertEqual(
+            adaptive?.failedCount,
+            1
+        )
+    }
+
+    func testTestDashboardCurrentSessionScopeFiltersEvidence() {
+        let firstSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000049"
+            )!
+        let currentSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000050"
+            )!
+
+        let events = [
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            1
+                    ),
+                sessionID: firstSession,
+                sequence: 1,
+                kind: .comparisonSaved,
+                metrics: [
+                    "measured_reduction_db":
+                        5
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            2
+                    ),
+                sessionID: currentSession,
+                sequence: 1,
+                kind: .sessionStarted
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            3
+                    ),
+                sessionID: currentSession,
+                sequence: 2,
+                kind: .comparisonSaved,
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            4
+                    ),
+                sessionID: currentSession,
+                sequence: 3,
+                kind: .workflowFailed,
+                text: [
+                    "workflow":
+                        "amplitude_search"
+                ]
+            )
+        ]
+
+        let dashboard =
+            TestDashboardAnalytics
+                .snapshot(
+                    events: events,
+                    scope:
+                        .currentSession,
+                    currentSessionID:
+                        currentSession
+                )
+
+        XCTAssertEqual(
+            dashboard.eventCount,
+            3
+        )
+        XCTAssertEqual(
+            dashboard.sessionCount,
+            1
+        )
+        XCTAssertEqual(
+            dashboard.comparisonCount,
+            1
+        )
+        XCTAssertEqual(
+            dashboard.bestReductionDB,
+            2
+        )
+        XCTAssertEqual(
+            dashboard.failureCount,
+            1
+        )
+        XCTAssertEqual(
+            dashboard.recentSessions.count,
+            1
+        )
+        XCTAssertTrue(
+            dashboard
+                .recentSessions[0]
+                .isCurrentSession
+        )
+    }
+
+    func testTestDashboardBuildsRecentSessionSummariesNewestFirst() {
+        let olderSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000051"
+            )!
+        let currentSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000052"
+            )!
+
+        let events = [
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            10
+                    ),
+                sessionID: olderSession,
+                sequence: 1,
+                kind: .sessionStarted,
+                text: [
+                    "app_build": "3.5"
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            12
+                    ),
+                sessionID: olderSession,
+                sequence: 2,
+                kind: .toneStopped
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            20
+                    ),
+                sessionID: currentSession,
+                sequence: 1,
+                kind: .sessionStarted,
+                text: [
+                    "app_build": "3.6"
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            25
+                    ),
+                sessionID: currentSession,
+                sequence: 2,
+                kind: .comparisonSaved,
+                metrics: [
+                    "measured_reduction_db":
+                        4
+                ]
+            )
+        ]
+
+        let dashboard =
+            TestDashboardAnalytics
+                .snapshot(
+                    events: events,
+                    scope: .allSaved,
+                    currentSessionID:
+                        currentSession
+                )
+
+        XCTAssertEqual(
+            dashboard.recentSessions.count,
+            2
+        )
+        XCTAssertEqual(
+            dashboard.recentSessions[0].id,
+            currentSession
+        )
+        XCTAssertEqual(
+            dashboard.recentSessions[0].appBuild,
+            "3.6"
+        )
+        XCTAssertEqual(
+            dashboard.recentSessions[0].durationSeconds,
+            5,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            dashboard.recentSessions[0].bestReductionDB,
+            4
+        )
+        XCTAssertEqual(
+            dashboard.recentSessions[1].id,
+            olderSession
+        )
+        XCTAssertEqual(
+            dashboard.recentSessions[1].appBuild,
+            "3.5"
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
