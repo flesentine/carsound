@@ -468,7 +468,29 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
   - Lab build bumped to 3.6 and new/cleared sessions are tagged with app_build 3.6
   - unit-test target covers aggregate dashboard statistics, workflow completion/failure accounting, safety mutes, scope filtering, recent-session ordering, build tags, and session duration
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #37 repeatability
+- [x] #37 repeatability
+  - new pure RepeatabilityAnalytics layer derives matched cross-session evidence from existing StructuredLogEvent history
+  - only comparison_saved events with measured_reduction_db plus complete route signature, target frequency, phase, and output context are analyzable
+  - repeatability condition matching uses exact route signature, target frequency rounded to 0.1 Hz, phase rounded to 1 degree, and output rounded to 1 percentage point
+  - route revision and calibration-profile UUID are intentionally not part of the condition key so the same physical route/settings can be compared across later sessions and recalibrations
+  - repeated A/B trials within one app session are averaged before cross-session analysis, preventing automatic phase/amplitude search volume from inflating repeatability evidence
+  - each matched condition retains total comparison count plus per-session comparison count, mean reduction, min/max reduction, and latest timestamp
+  - no-cross-session evidence is used for one-session groups
+  - two-session groups are labeled Early cross-session evidence rather than being called repeatable
+  - mature assessment requires at least three separate sessions
+  - ±0.5 dB is treated as the near-zero deadband for session-mean direction
+  - mature consistency requires session-mean standard deviation <=1.0 dB and total session-mean range <=2.0 dB
+  - mature outcomes distinguish Consistent reduction, Consistent near-zero result, Consistent worsening, Variable result, and Mixed direction
+  - mixed positive/negative session means outside the deadband force Mixed direction even if the average happens to look favorable
+  - dedicated Repeatability screen reports analyzable/excluded comparisons, matched conditions, cross-session conditions, mature conditions, and consistent-reduction conditions
+  - repeatability condition rows show route, frequency, phase, output, session/comparison counts, cross-session mean, sample standard deviation, range, and positive/neutral/negative session counts
+  - expandable per-session detail shows each session mean, trial count, date, and within-session min/max range
+  - one-session conditions are hidden by default but can be shown for planning the next repeated test
+  - Test Dashboard now includes a Repeatability summary card and direct navigation to the detailed repeatability view
+  - UI explicitly states that current matching still does not control head position, vehicle speed, road surface, HVAC state, passenger load, or exact phone placement
+  - Lab build bumped to 3.7 and new/cleared sessions are tagged with app_build 3.7
+  - tests cover normalized condition grouping, per-session averaging, protection against same-session trial-count inflation, mature mixed-direction/worsening/near-zero classification, and exclusion of incomplete comparison context
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #38 head-position sensitivity
 - [ ] #39 multiple frequencies
 - [ ] #40 Lab go/no-go report
