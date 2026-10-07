@@ -5864,12 +5864,14 @@ final class QuietDriveLabTests: XCTestCase {
             1
         )
         XCTAssertEqual(
-            dashboard.averageReductionDB,
+            dashboard.averageReductionDB ??
+                .nan,
             1,
             accuracy: 0.0001
         )
         XCTAssertEqual(
-            dashboard.bestReductionDB,
+            dashboard.bestReductionDB ??
+                .nan,
             3,
             accuracy: 0.0001
         )
@@ -5878,7 +5880,8 @@ final class QuietDriveLabTests: XCTestCase {
             2
         )
         XCTAssertEqual(
-            dashboard.averageConfidenceSnapshotScorePercent,
+            dashboard.averageConfidenceSnapshotScorePercent ??
+                .nan,
             67.5,
             accuracy: 0.0001
         )
