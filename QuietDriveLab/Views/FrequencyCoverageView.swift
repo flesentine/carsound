@@ -315,7 +315,11 @@ struct FrequencyCoverageView: View {
 
             HStack {
                 Text(
-                    "\(series.positiveFrequencyCount) positive-best targets"
+                    "\(series.positiveFrequencyCount) positive-best"
+                )
+                Text("•")
+                Text(
+                    "\(series.repeatedPositiveFrequencyCount) repeated-positive"
                 )
                 Text("•")
                 Text(
