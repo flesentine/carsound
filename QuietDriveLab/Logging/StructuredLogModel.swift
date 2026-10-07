@@ -114,21 +114,27 @@ final class StructuredLogModel {
     private var didRecordSessionStart = false
 
     init(
-        storageURL: URL? = nil,
         fileManager: FileManager = .default,
         sessionID: UUID = UUID()
     ) {
         self.fileManager = fileManager
         self.currentSessionID = sessionID
+        self.storageURL =
+            Self.defaultStorageURL(
+                fileManager: fileManager
+            )
 
-        if let storageURL {
-            self.storageURL = storageURL
-        } else {
-            self.storageURL =
-                Self.defaultStorageURL(
-                    fileManager: fileManager
-                )
-        }
+        load()
+    }
+
+    init(
+        storageURL: URL?,
+        fileManager: FileManager = .default,
+        sessionID: UUID = UUID()
+    ) {
+        self.fileManager = fileManager
+        self.currentSessionID = sessionID
+        self.storageURL = storageURL
 
         load()
     }
@@ -249,8 +255,18 @@ final class StructuredLogModel {
                             $0.recordedAt ==
                                 $1.recordedAt
                         {
-                            return $0.sequence <
-                                $1.sequence
+                            if
+                                $0.sessionID ==
+                                    $1.sessionID
+                            {
+                                return $0.sequence <
+                                    $1.sequence
+                            }
+
+                            return $0.sessionID
+                                .uuidString <
+                                $1.sessionID
+                                    .uuidString
                         }
 
                         return $0.recordedAt <
