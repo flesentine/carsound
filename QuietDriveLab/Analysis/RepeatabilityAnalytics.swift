@@ -41,13 +41,17 @@ struct RepeatabilityCondition:
     let frequencyTenthsHz: Int
     let phaseDegrees: Int
     let outputPercent: Int
+    let headPosition:
+        HeadPositionPreset?
 
     var id: String {
         [
             routeSignature,
             String(frequencyTenthsHz),
             String(phaseDegrees),
-            String(outputPercent)
+            String(outputPercent),
+            headPosition?.rawValue ??
+                "unlabeled"
         ]
         .joined(separator: "|")
     }
@@ -256,7 +260,12 @@ enum RepeatabilityAnalytics {
             outputPercent:
                 Int(
                     output.rounded()
-                )
+                ),
+            headPosition:
+                HeadPositionSensitivityAnalytics
+                    .position(
+                        for: event
+                    )
         )
     }
 
