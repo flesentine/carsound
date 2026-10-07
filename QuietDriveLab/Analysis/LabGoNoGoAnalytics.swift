@@ -151,6 +151,12 @@ struct LabGoNoGoSnapshot:
     }
 }
 
+private struct LabDecisionConfidenceEvidence {
+    let scorePercent: Double?
+    let coveragePercent: Double?
+    let routeSignature: String?
+}
+
 enum LabGoNoGoAnalytics {
     static let minimumComparisonCount =
         10
@@ -254,6 +260,21 @@ enum LabGoNoGoAnalytics {
                     hasSafePositionEvidence
             }
 
+        let coherentRoutes =
+            Set(
+                coherentQualifyingBroad
+                    .map {
+                        $0.context
+                            .routeSignature
+                    }
+            )
+        let confidenceEvidence =
+            latestConfidenceEvidence(
+                events: events,
+                preferredRoutes:
+                    coherentRoutes
+            )
+
         let gates = [
             evidenceVolumeGate(
                 dashboard,
@@ -261,7 +282,9 @@ enum LabGoNoGoAnalytics {
                     comparisonSessionCount
             ),
             confidenceGate(
-                dashboard
+                confidenceEvidence,
+                requiresPreferredRoute:
+                    !coherentRoutes.isEmpty
             ),
             repeatabilityGate(
                 repeatability
@@ -310,11 +333,11 @@ enum LabGoNoGoAnalytics {
             comparisonSessionCount:
                 comparisonSessionCount,
             latestConfidenceScorePercent:
-                dashboard
-                    .latestConfidenceScorePercent,
+                confidenceEvidence?
+                    .scorePercent,
             latestEvidenceCoveragePercent:
-                dashboard
-                    .latestEvidenceCoveragePercent,
+                confidenceEvidence?
+                    .coveragePercent,
             matureRepeatabilityCount:
                 repeatability
                     .matureConditionCount,
@@ -365,13 +388,30 @@ enum LabGoNoGoAnalytics {
     }
 
     private static func confidenceGate(
-        _ dashboard:
-            TestDashboardSnapshot
+        _ evidence:
+            LabDecisionConfidenceEvidence?,
+        requiresPreferredRoute: Bool
     ) -> LabDecisionGate {
+        guard let evidence else {
+            return LabDecisionGate(
+                id: "overall_confidence",
+                title: "Overall confidence",
+                status:
+                    .needsEvidence,
+                summary:
+                    requiresPreferredRoute
+                    ? "No confidence snapshot for the coherent route"
+                    : "No explicit confidence snapshot",
+                detail:
+                    requiresPreferredRoute
+                    ? "Log a Confidence Snapshot while testing the same route that supplies the coherent repeatability, head-position, and frequency evidence."
+                    : "Use Log Confidence Snapshot before making the final Lab decision. Incidental confidence context on other events does not count."
+            )
+        }
+
         guard
             let coverage =
-                dashboard
-                    .latestEvidenceCoveragePercent
+                evidence.coveragePercent
         else {
             return LabDecisionGate(
                 id: "overall_confidence",
@@ -379,9 +419,9 @@ enum LabGoNoGoAnalytics {
                 status:
                     .needsEvidence,
                 summary:
-                    "No saved confidence context",
+                    "Snapshot coverage unavailable",
                 detail:
-                    "Save evidence with an assessed confidence snapshot before making the final Lab decision."
+                    "The selected confidence snapshot does not contain usable evidence-coverage data."
             )
         }
 
@@ -397,7 +437,7 @@ enum LabGoNoGoAnalytics {
                 summary:
                     String(
                         format:
-                            "Evidence coverage %.0f%% • need %.0f%%",
+                            "Snapshot coverage %.0f%% • need %.0f%%",
                         coverage,
                         minimumEvidenceCoveragePercent
                     ),
@@ -408,8 +448,7 @@ enum LabGoNoGoAnalytics {
 
         guard
             let score =
-                dashboard
-                    .latestConfidenceScorePercent
+                evidence.scorePercent
         else {
             return LabDecisionGate(
                 id: "overall_confidence",
@@ -417,15 +456,21 @@ enum LabGoNoGoAnalytics {
                 status:
                     .needsEvidence,
                 summary:
-                    "Confidence score unavailable",
+                    "Snapshot score unavailable",
                 detail:
-                    "Evidence coverage exists, but no usable latest confidence score is available."
+                    "The selected confidence snapshot does not contain a usable confidence score."
             )
         }
 
         let pass =
             score >=
                 minimumConfidenceScorePercent
+        let routeSuffix =
+            evidence.routeSignature
+                .map {
+                    " • route " + $0
+                } ??
+            ""
 
         return LabDecisionGate(
             id: "overall_confidence",
@@ -440,11 +485,92 @@ enum LabGoNoGoAnalytics {
                         "%.0f%% confidence • %.0f%% coverage",
                     score,
                     coverage
-                ),
+                ) +
+                routeSuffix,
             detail:
                 pass
-                ? "The latest assessed confidence meets the existing moderate-confidence threshold."
-                : "With adequate evidence coverage, a confidence score below the existing 55% moderate threshold is a blocker for continuing the current approach unchanged."
+                ? "The explicit confidence snapshot meets the existing moderate-confidence threshold."
+                : "With adequate evidence coverage, an explicit confidence snapshot below the existing 55% moderate threshold is a blocker for continuing the current approach unchanged."
+        )
+    }
+
+    private static func latestConfidenceEvidence(
+        events: [StructuredLogEvent],
+        preferredRoutes: Set<String>
+    ) -> LabDecisionConfidenceEvidence? {
+        let snapshots =
+            events
+                .filter {
+                    guard
+                        $0.kind ==
+                            .confidenceSnapshot
+                    else {
+                        return false
+                    }
+
+                    guard
+                        !preferredRoutes.isEmpty
+                    else {
+                        return true
+                    }
+
+                    guard
+                        let route =
+                            $0.context
+                                .routeSignature
+                    else {
+                        return false
+                    }
+
+                    return preferredRoutes
+                        .contains(route)
+                }
+                .sorted {
+                    if
+                        $0.recordedAt ==
+                            $1.recordedAt
+                    {
+                        if
+                            $0.sessionID ==
+                                $1.sessionID
+                        {
+                            return $0.sequence <
+                                $1.sequence
+                        }
+
+                        return $0.sessionID
+                            .uuidString <
+                            $1.sessionID
+                                .uuidString
+                    }
+
+                    return $0.recordedAt <
+                        $1.recordedAt
+                }
+
+        guard
+            let event =
+                snapshots.last
+        else {
+            return nil
+        }
+
+        return LabDecisionConfidenceEvidence(
+            scorePercent:
+                event.metrics[
+                    "score_percent"
+                ] ??
+                event.context
+                    .confidenceScorePercent,
+            coveragePercent:
+                event.metrics[
+                    "evidence_coverage_percent"
+                ] ??
+                event.context
+                    .evidenceCoveragePercent,
+            routeSignature:
+                event.context
+                    .routeSignature
         )
     }
 
