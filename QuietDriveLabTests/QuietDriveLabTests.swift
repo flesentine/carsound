@@ -7018,6 +7018,487 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testFrequencyCoverageBuildsBroadSeriesAcrossBands() {
+        let sessionA =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000065"
+            )!
+        let sessionB =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000066"
+            )!
+
+        func event(
+            sessionID: UUID,
+            sequence: UInt64,
+            frequency: Double,
+            phase: Double,
+            output: Double,
+            reduction: Double
+        ) -> StructuredLogEvent {
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            Double(sequence)
+                    ),
+                sessionID: sessionID,
+                sequence: sequence,
+                kind: .comparisonSaved,
+                context:
+                    StructuredLogContext(
+                        routeSignature:
+                            "route-frequency",
+                        routeRevision: 1,
+                        calibrationProfileID: nil,
+                        targetFrequencyHz:
+                            frequency,
+                        phaseDegrees:
+                            phase,
+                        outputPercent:
+                            output,
+                        confidenceScorePercent: nil,
+                        evidenceCoveragePercent: nil,
+                        confidenceLevel: nil
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        reduction
+                ],
+                text: [
+                    "head_position":
+                        HeadPositionPreset
+                            .reference
+                            .rawValue
+                ]
+            )
+        }
+
+        var events:
+            [StructuredLogEvent] = []
+
+        for index in 0..<10 {
+            events.append(
+                event(
+                    sessionID: sessionA,
+                    sequence:
+                        UInt64(index + 1),
+                    frequency: 40.2,
+                    phase:
+                        Double(index * 30),
+                    output: 20,
+                    reduction:
+                        index == 9
+                        ? 4
+                        : 0
+                )
+            )
+        }
+
+        events.append(
+            event(
+                sessionID: sessionB,
+                sequence: 1,
+                frequency: 39.8,
+                phase: 120,
+                output: 25,
+                reduction: 2
+            )
+        )
+        events.append(
+            event(
+                sessionID: sessionA,
+                sequence: 20,
+                frequency: 90,
+                phase: 210,
+                output: 30,
+                reduction: 1.5
+            )
+        )
+        events.append(
+            event(
+                sessionID: sessionA,
+                sequence: 21,
+                frequency: 160,
+                phase: 300,
+                output: 35,
+                reduction: 0.8
+            )
+        )
+
+        let snapshot =
+            FrequencyCoverageAnalytics
+                .snapshot(
+                    events: events
+                )
+
+        XCTAssertEqual(
+            snapshot.analyzableComparisonCount,
+            13
+        )
+        XCTAssertEqual(
+            snapshot.distinctFrequencyCount,
+            3
+        )
+        XCTAssertEqual(
+            snapshot.multiFrequencySeriesCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.broadCoverageSeriesCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.maximumFrequencySpanHz ??
+                .nan,
+            120,
+            accuracy: 0.0001
+        )
+
+        let series =
+            snapshot.series[0]
+
+        XCTAssertEqual(
+            series.frequencyCount,
+            3
+        )
+        XCTAssertEqual(
+            series.bandsCovered,
+            Set([
+                .low,
+                .mid,
+                .high
+            ])
+        )
+        XCTAssertEqual(
+            series.assessment,
+            .broad
+        )
+        XCTAssertEqual(
+            series.minimumFrequencyHz,
+            40,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            series.maximumFrequencyHz,
+            160,
+            accuracy: 0.0001
+        )
+
+        let forty =
+            series.frequencyResults
+                .first {
+                    $0.frequencyHz ==
+                        40
+                }
+
+        XCTAssertEqual(
+            forty?
+                .sessionCount,
+            2
+        )
+        XCTAssertEqual(
+            forty?
+                .comparisonCount,
+            11
+        )
+        XCTAssertEqual(
+            forty?
+                .sessionBalancedBestReductionDB,
+            3,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            forty?
+                .bestObservedReductionDB,
+            4,
+            accuracy: 0.0001
+        )
+    }
+
+    func testFrequencyCoverageSeparatesRouteAndHeadPositionSeries() {
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000067"
+            )!
+
+        func event(
+            route: String,
+            position:
+                HeadPositionPreset,
+            frequency: Double,
+            sequence: UInt64
+        ) -> StructuredLogEvent {
+            StructuredLogEvent(
+                sessionID:
+                    sessionID,
+                sequence: sequence,
+                kind: .comparisonSaved,
+                context:
+                    StructuredLogContext(
+                        routeSignature: route,
+                        routeRevision: 1,
+                        calibrationProfileID: nil,
+                        targetFrequencyHz:
+                            frequency,
+                        phaseDegrees: 180,
+                        outputPercent: 25,
+                        confidenceScorePercent: nil,
+                        evidenceCoveragePercent: nil,
+                        confidenceLevel: nil
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ],
+                text: [
+                    "head_position":
+                        position.rawValue
+                ]
+            )
+        }
+
+        let snapshot =
+            FrequencyCoverageAnalytics
+                .snapshot(
+                    events: [
+                        event(
+                            route: "route-a",
+                            position:
+                                .reference,
+                            frequency: 40,
+                            sequence: 1
+                        ),
+                        event(
+                            route: "route-a",
+                            position:
+                                .reference,
+                            frequency: 120,
+                            sequence: 2
+                        ),
+                        event(
+                            route: "route-a",
+                            position: .left,
+                            frequency: 40,
+                            sequence: 3
+                        ),
+                        event(
+                            route: "route-b",
+                            position:
+                                .reference,
+                            frequency: 40,
+                            sequence: 4
+                        )
+                    ]
+                )
+
+        XCTAssertEqual(
+            snapshot.seriesCount,
+            3
+        )
+        XCTAssertEqual(
+            snapshot.multiFrequencySeriesCount,
+            1
+        )
+
+        let referenceRouteA =
+            snapshot.series
+                .first {
+                    $0.context
+                        .routeSignature ==
+                        "route-a" &&
+                    $0.context
+                        .headPosition ==
+                        .reference
+                }
+
+        XCTAssertEqual(
+            referenceRouteA?
+                .frequencyCount,
+            2
+        )
+        XCTAssertEqual(
+            referenceRouteA?
+                .assessment,
+            .partial
+        )
+    }
+
+    func testFrequencyCoverageAssessmentUsesBandCoverage() {
+        XCTAssertEqual(
+            FrequencyCoverageAnalytics
+                .assessment(
+                    frequencyCount: 1,
+                    bandsCovered:
+                        Set([
+                            .low
+                        ])
+                ),
+            .singleTarget
+        )
+
+        XCTAssertEqual(
+            FrequencyCoverageAnalytics
+                .assessment(
+                    frequencyCount: 3,
+                    bandsCovered:
+                        Set([
+                            .low
+                        ])
+                ),
+            .narrow
+        )
+
+        XCTAssertEqual(
+            FrequencyCoverageAnalytics
+                .assessment(
+                    frequencyCount: 3,
+                    bandsCovered:
+                        Set([
+                            .low,
+                            .mid
+                        ])
+                ),
+            .partial
+        )
+
+        XCTAssertEqual(
+            FrequencyCoverageAnalytics
+                .assessment(
+                    frequencyCount: 3,
+                    bandsCovered:
+                        Set([
+                            .low,
+                            .mid,
+                            .high
+                        ])
+                ),
+            .broad
+        )
+    }
+
+    func testFrequencyCoverageExcludesIncompleteAndOutOfBandComparisons() {
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000068"
+            )!
+        let completeContext =
+            StructuredLogContext(
+                routeSignature:
+                    "route-frequency-exclusion",
+                routeRevision: 1,
+                calibrationProfileID: nil,
+                targetFrequencyHz: 80,
+                phaseDegrees: 90,
+                outputPercent: 20,
+                confidenceScorePercent: nil,
+                evidenceCoveragePercent: nil,
+                confidenceLevel: nil
+            )
+
+        let complete =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 1,
+                kind: .comparisonSaved,
+                context:
+                    completeContext,
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ]
+            )
+        let missingRoute =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 2,
+                kind: .comparisonSaved,
+                context:
+                    StructuredLogContext(
+                        routeSignature: nil,
+                        routeRevision: 1,
+                        calibrationProfileID: nil,
+                        targetFrequencyHz: 80,
+                        phaseDegrees: 90,
+                        outputPercent: 20,
+                        confidenceScorePercent: nil,
+                        evidenceCoveragePercent: nil,
+                        confidenceLevel: nil
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ]
+            )
+        let outOfBand =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 3,
+                kind: .comparisonSaved,
+                context:
+                    StructuredLogContext(
+                        routeSignature:
+                            "route-frequency-exclusion",
+                        routeRevision: 1,
+                        calibrationProfileID: nil,
+                        targetFrequencyHz: 250,
+                        phaseDegrees: 90,
+                        outputPercent: 20,
+                        confidenceScorePercent: nil,
+                        evidenceCoveragePercent: nil,
+                        confidenceLevel: nil
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ]
+            )
+        let missingReduction =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 4,
+                kind: .comparisonSaved,
+                context:
+                    completeContext
+            )
+
+        let snapshot =
+            FrequencyCoverageAnalytics
+                .snapshot(
+                    events: [
+                        complete,
+                        missingRoute,
+                        outOfBand,
+                        missingReduction
+                    ]
+                )
+
+        XCTAssertEqual(
+            snapshot.comparisonEventCount,
+            4
+        )
+        XCTAssertEqual(
+            snapshot.analyzableComparisonCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.excludedComparisonCount,
+            3
+        )
+        XCTAssertEqual(
+            snapshot.distinctFrequencyCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.seriesCount,
+            1
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
