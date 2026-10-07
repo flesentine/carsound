@@ -4029,6 +4029,38 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testMusicInterferenceProgramBandExcludesExactTwoHundredHertz() {
+        let bins = [
+            SpectrumBin(
+                frequencyHz: 200,
+                magnitudeDBFS: -20
+            ),
+            SpectrumBin(
+                frequencyHz: 220,
+                magnitudeDBFS: -100
+            ),
+            SpectrumBin(
+                frequencyHz: 240,
+                magnitudeDBFS: -100
+            )
+        ]
+
+        let programLevel =
+            MusicInterferenceMath
+                .bandLevelDBFS(
+                    bins: bins,
+                    range:
+                        MusicInterferenceMath
+                            .programBandHz
+                )
+
+        XCTAssertEqual(
+            programLevel,
+            -100,
+            accuracy: 0.0001
+        )
+    }
+
     func testMusicInterferenceDetectorKeepsRoadNoiseClear() {
         let detector =
             MusicInterferenceDetector(
@@ -7918,7 +7950,19 @@ final class QuietDriveLabTests: XCTestCase {
         )
         XCTAssertEqual(
             snapshot.warningGateCount,
-            1
+            2
+        )
+
+        let frequencyGate =
+            snapshot.gates
+                .first {
+                    $0.id ==
+                        "frequency_coverage"
+                }
+
+        XCTAssertEqual(
+            frequencyGate?.status,
+            .warning
         )
     }
 
