@@ -596,7 +596,7 @@ struct CancellationLabView: View {
                                 structuredLogContext,
                             text: [
                                 "app_build":
-                                    "3.9"
+                                    "4.0"
                             ]
                         )
                     }
@@ -663,6 +663,15 @@ struct CancellationLabView: View {
                         structuredLog
                             .currentSessionID
                 )
+        let decision =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events:
+                        structuredLog.events,
+                    currentSessionID:
+                        structuredLog
+                            .currentSessionID
+                )
 
         return VStack(
             alignment: .leading,
@@ -724,8 +733,25 @@ struct CancellationLabView: View {
             }
             .buttonStyle(.borderedProminent)
 
+            HStack {
+                Text("Final Lab verdict")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text(
+                    decision.verdict
+                        .rawValue
+                )
+                .font(
+                    .caption
+                        .weight(.bold)
+                )
+            }
+
             Text(
-                "Frequency Coverage is available inside the Test Dashboard. It keeps route and head position fixed while allowing each target frequency to use its own optimized phase/output; #40 is the final Lab go/no-go report."
+                "The final report combines evidence volume, overall confidence, cross-session repeatability, head-position robustness, and frequency breadth. GO means continue prototyping — not production-ready ANC."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
