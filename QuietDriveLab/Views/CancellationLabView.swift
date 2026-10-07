@@ -35,6 +35,7 @@ struct CancellationLabView: View {
                 readinessCard
                 calibrationCard
                 structuredLogCard
+                testDashboardCard
                 processingLatencyCard
                 audioRouteTestingCard
                 bluetoothBehaviorCard
@@ -642,6 +643,87 @@ struct CancellationLabView: View {
             Text("The event store is capped at \(StructuredLogModel.maximumEventCount) records. Oldest events are pruned first.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
+    private var testDashboardCard: some View {
+        let dashboard =
+            TestDashboardAnalytics
+                .snapshot(
+                    events:
+                        structuredLog.events,
+                    scope: .allSaved,
+                    currentSessionID:
+                        structuredLog
+                            .currentSessionID
+                )
+
+        return VStack(
+            alignment: .leading,
+            spacing: 12
+        ) {
+            HStack {
+                Label(
+                    "Test Dashboard",
+                    systemImage:
+                        "rectangle.3.group"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                Text(
+                    "\\(dashboard.sessionCount) sessions"
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            }
+
+            Text(
+                "Review saved test coverage, A/B outcomes, confidence evidence, workflow completions and failures, safety mutes, and recent sessions in one place."
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+
+            HStack {
+                LabeledContent(
+                    "A/B",
+                    value:
+                        "\\(dashboard.comparisonCount)"
+                )
+
+                LabeledContent(
+                    "Routes",
+                    value:
+                        "\\(dashboard.distinctRouteCount)"
+                )
+
+                LabeledContent(
+                    "Failures",
+                    value:
+                        "\\(dashboard.failureCount)"
+                )
+            }
+            .font(.caption)
+
+            NavigationLink {
+                TestDashboardView()
+            } label: {
+                Label(
+                    "Open Test Dashboard",
+                    systemImage:
+                        "chart.bar.xaxis"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+
+            Text(
+                "Dashboard summaries are descriptive evidence, not proof that full-car ANC works. Repeatability is evaluated separately in #37."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
         .cancellationCard()
     }
