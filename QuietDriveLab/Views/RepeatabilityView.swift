@@ -446,7 +446,7 @@ struct RepeatabilityView: View {
             .font(.headline)
 
             Text(
-                "Matching here proves only that QuietDrive repeated similar logged settings across app sessions. The current log does not yet encode head position, vehicle speed, road surface, HVAC state, passenger load, or exact phone placement. A consistent reduction is useful evidence, not proof that the result will generalize. #38 adds head-position sensitivity next."
+                "Repeatability now keeps labeled head positions separate, so Reference/Left/Right/Forward/Back runs do not get blended together. A consistent result still does not control vehicle speed, road surface, HVAC state, passenger load, or exact phone placement. #38 analyzes the spread across those labeled head positions."
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
@@ -458,13 +458,26 @@ struct RepeatabilityView: View {
         _ condition:
             RepeatabilityCondition
     ) -> String {
-        String(
-            format:
-                "%.1f Hz • %d° • %d%%",
-            condition.targetFrequencyHz,
-            condition.phaseDegrees,
-            condition.outputPercent
-        )
+        let base =
+            String(
+                format:
+                    "%.1f Hz • %d° • %d%%",
+                condition.targetFrequencyHz,
+                condition.phaseDegrees,
+                condition.outputPercent
+            )
+
+        guard
+            let position =
+                condition.headPosition
+        else {
+            return base +
+                " • unlabeled"
+        }
+
+        return base +
+            " • " +
+            position.title
     }
 
     private func reductionText(
