@@ -451,7 +451,23 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
   - clear-log session restart now uses the current 3.5 build tag instead of the stale 3.3 tag
   - unit-test target covers JSON round-trip fidelity, deterministic CSV flattening, CSV escaping, scope filtering, and filename generation
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #36 test dashboard
+- [x] #36 test dashboard
+  - new pure TestDashboardAnalytics layer summarizes existing StructuredLogEvent history without adding a second persistence model
+  - dashboard scope switches between All saved evidence and Current session only
+  - overview reports event count, session count, distinct route signatures, and distinct target frequencies
+  - A/B outcome summary reports saved comparison count, positive-reduction count, average measured reduction, best measured reduction, and positive-reduction ratio
+  - confidence summary reports latest confidence score/label, latest evidence coverage, explicit confidence-snapshot count, and average explicit snapshot score
+  - failure summary counts calibration failures, adaptive failures, and generic workflow failures separately from emergency safety mutes
+  - workflow rows summarize completion/failure evidence for route tests, calibration, A/B comparisons, phase sweep, fine phase, amplitude search, adaptive control, Bluetooth jitter, and sound/vibration correlation
+  - recent-session summaries include session UUID, app build, start/end timestamps, duration, event count, comparison count, best reduction, failures, safety mutes, distinct routes/frequencies, and latest confidence evidence
+  - recent sessions are ordered newest first and limited to eight for readable in-app review
+  - dashboard calculations explicitly order selected evidence chronologically before deriving latest values
+  - compact Test Dashboard card added to Cancellation Lab with sessions/A-B/routes/failures summary and navigation to the full dashboard
+  - dashboard UI explicitly states that descriptive evidence is not proof that full-car ANC works and points repeatability assessment to #37
+  - opening the dashboard does not record new events or duplicate stored experiment data
+  - Lab build bumped to 3.6 and new/cleared sessions are tagged with app_build 3.6
+  - unit-test target covers aggregate dashboard statistics, workflow completion/failure accounting, safety mutes, scope filtering, recent-session ordering, build tags, and session duration
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #37 repeatability
 - [ ] #38 head-position sensitivity
 - [ ] #39 multiple frequencies
