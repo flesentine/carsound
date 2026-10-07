@@ -4,9 +4,9 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#37 — repeatability** is implemented.
+Development effort **#38 — head-position sensitivity** is implemented.
 
-QuietDrive now performs matched cross-session repeatability analysis on saved A/B evidence. Comparisons are grouped only when route signature, target frequency, phase, and output level match after small display-level normalization, and multiple trials inside one app session are averaged before any cross-session judgment is made.
+QuietDrive now labels saved A/B runs with a manual listener posture — Reference, Left, Right, Forward, or Back — and compares matched settings across those positions. The app also binds each baseline to its selected position so changing posture requires a fresh baseline before treatment or automatic search can continue.
 
 ## Structured event schema
 
@@ -21,6 +21,7 @@ Every saved event includes:
 - current route signature/revision
 - matching calibration-profile ID when available
 - current target frequency, phase, and output level
+- manual head-position label on saved A/B comparisons
 - current overall-confidence score
 - current evidence coverage
 - current confidence label
@@ -40,7 +41,7 @@ Structured logging now covers:
 - app/session start
 - audio route-test capture
 - calibration completion/failure
-- saved baseline/treatment comparisons
+- saved baseline/treatment comparisons, including the selected head-position label
 - automatic phase-sweep completion/failure
 - fine phase-refinement completion/failure
 - amplitude-search completion/failure
@@ -103,7 +104,7 @@ The dashboard is computed from the existing structured log. Opening it does not 
 
 The Test Dashboard now includes a dedicated **Repeatability** view derived from the structured event log.
 
-A saved A/B comparison is eligible only when it has a measured-reduction value plus complete route/frequency/phase/output context. Conditions are matched using:
+A saved A/B comparison is eligible only when it has a measured-reduction value plus complete route/frequency/phase/output context. Position-labeled runs are now kept separate in repeatability, so Reference/Left/Right/Forward/Back data cannot be blended into one repeatability condition. Conditions are matched using:
 
 - exact route signature
 - target frequency rounded to the nearest 0.1 Hz
@@ -116,11 +117,26 @@ Assessment maturity requires at least **3 separate sessions**. Two sessions are 
 
 The Repeatability view reports matched-condition counts, analyzable/excluded A/B records, cross-session/mature groups, consistent-reduction groups, per-condition mean/spread/direction counts, and each session's mean and trial range.
 
+## Head-position sensitivity
+
+Cancellation Lab now includes a **Head Position** selector with five manual posture labels: Reference, Left, Right, Forward, and Back. Selecting a new label after baseline capture invalidates that baseline for treatment/search purposes; a fresh baseline must be captured at the new position.
+
+Each saved A/B event stores `head_position` and a human-readable position title. Historical comparisons without a position label remain valid for earlier analyses but are excluded from head-position sensitivity.
+
+The dedicated **Head-Position Sensitivity** view groups comparisons only when route, target frequency, phase, and output match. Within each position, trials are averaged per session first and then balanced across sessions, preventing one position with many automatic-search trials from dominating the result.
+
+Sensitivity classifications use the spread between position means:
+- **Low sensitivity:** spread ≤1.0 dB
+- **Moderate sensitivity:** spread >1.0 dB and ≤3.0 dB
+- **High sensitivity:** spread >3.0 dB
+- **Direction reversal:** at least one position shows reduction >0.5 dB while another shows worsening below −0.5 dB
+
+The view reports tagged/excluded A/B records, matched settings tested at 2+ positions, maximum spread, direction reversals, best/worst position, and session-balanced per-position means.
+
 ## Why this matters
 
-#37 prevents repeated search trials from overstating evidence and makes disagreement across days/sessions visible before the final decision:
+#38 exposes whether a promising cancellation setting works only in a narrow listening spot or changes sign when the listener moves:
 
-- **#38 head-position sensitivity** can add physical-position context that repeatability currently cannot control
 - **#39 multiple frequencies** can broaden target coverage using the same evidence structure
 - **#40 go/no-go report** can combine confidence, repeatability, position sensitivity, and frequency coverage
 
@@ -134,15 +150,16 @@ The unit-test target also covers JSON export round-trip fidelity, deterministic 
 
 Dashboard analytics coverage verifies aggregate event/session/route/frequency counts, A/B reduction statistics, confidence aggregation, workflow completion/failure accounting, safety-mute accounting, current-session filtering, recent-session ordering, build tags, and session durations.
 
-Repeatability coverage verifies normalized condition grouping, per-session averaging, cross-session maturity, consistent reduction/worsening/near-zero classification, mixed-direction detection, and exclusion of comparisons missing complete match context. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
+Repeatability coverage verifies normalized condition grouping, per-session averaging, cross-session maturity, consistent reduction/worsening/near-zero classification, mixed-direction detection, position separation, and exclusion of comparisons missing complete match context.
+
+Head-position coverage verifies session-balanced position means, sensitivity spread classification, direction reversal detection, exclusion of unlabeled/incomplete comparisons, and protection against mixing labeled positions in repeatability. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
 
 ## What comes next
 
-**#38 — head-position sensitivity** is next.
+**#39 — multiple frequencies** is next.
 
 The remaining Milestone 4 roadmap is:
 
-- #38 head-position sensitivity
 - #39 multiple frequencies
 - #40 Lab go/no-go report
 
