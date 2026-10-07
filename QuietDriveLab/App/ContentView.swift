@@ -32,7 +32,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 3.6 • Test dashboard is available")
+                    Text("Lab build 3.7 • Cross-session repeatability is available")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
