@@ -155,9 +155,12 @@ enum LabGoNoGoAnalytics {
     static let minimumSessionCount =
         3
     static let minimumConfidenceScorePercent =
-        55.0
+        OverallConfidenceMath
+            .moderateThreshold
     static let minimumEvidenceCoveragePercent =
-        60.0
+        OverallConfidenceMath
+            .minimumCoverageForAssessment *
+        100
     static let minimumPositiveFrequenciesForBroadEvidence =
         2
 
