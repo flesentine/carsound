@@ -7631,6 +7631,51 @@ final class QuietDriveLabTests: XCTestCase {
             }
         }
 
+        events.append(
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            timestamp
+                    ),
+                sessionID:
+                    sessions[2],
+                sequence: 10,
+                kind:
+                    .confidenceSnapshot,
+                context:
+                    StructuredLogContext(
+                        routeSignature:
+                            "route-decision",
+                        routeRevision: 1,
+                        calibrationProfileID: nil,
+                        targetFrequencyHz: 40,
+                        phaseDegrees: 180,
+                        outputPercent: 25,
+                        confidenceScorePercent:
+                            confidenceScorePercent,
+                        evidenceCoveragePercent:
+                            evidenceCoveragePercent,
+                        confidenceLevel:
+                            OverallConfidenceLevel
+                                .moderate
+                                .rawValue
+                    ),
+                metrics: [
+                    "score_percent":
+                        confidenceScorePercent,
+                    "evidence_coverage_percent":
+                        evidenceCoveragePercent
+                ],
+                text: [
+                    "level":
+                        OverallConfidenceLevel
+                            .moderate
+                            .rawValue
+                ]
+            )
+        )
+
         return events
     }
 
@@ -7839,6 +7884,96 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(
             snapshot.warningGateCount,
             1
+        )
+    }
+
+    func testLabGoNoGoRequiresConfidenceSnapshotOnCoherentRoute() {
+        let source =
+            makeLabDecisionEvents()
+        let events =
+            source.map { event in
+                guard
+                    event.kind ==
+                        .confidenceSnapshot
+                else {
+                    return event
+                }
+
+                return StructuredLogEvent(
+                    recordedAt:
+                        event.recordedAt,
+                    sessionID:
+                        event.sessionID,
+                    sequence:
+                        event.sequence,
+                    kind:
+                        event.kind,
+                    context:
+                        StructuredLogContext(
+                            routeSignature:
+                                "different-route",
+                            routeRevision:
+                                event.context
+                                    .routeRevision,
+                            calibrationProfileID:
+                                event.context
+                                    .calibrationProfileID,
+                            targetFrequencyHz:
+                                event.context
+                                    .targetFrequencyHz,
+                            phaseDegrees:
+                                event.context
+                                    .phaseDegrees,
+                            outputPercent:
+                                event.context
+                                    .outputPercent,
+                            confidenceScorePercent:
+                                event.context
+                                    .confidenceScorePercent,
+                            evidenceCoveragePercent:
+                                event.context
+                                    .evidenceCoveragePercent,
+                            confidenceLevel:
+                                event.context
+                                    .confidenceLevel
+                        ),
+                    metrics:
+                        event.metrics,
+                    text:
+                        event.text,
+                    flags:
+                        event.flags,
+                    references:
+                        event.references
+                )
+            }
+
+        let snapshot =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events: events,
+                    currentSessionID:
+                        events[0]
+                            .sessionID
+                )
+        let confidenceGate =
+            snapshot.gates
+                .first {
+                    $0.id ==
+                        "overall_confidence"
+                }
+
+        XCTAssertEqual(
+            snapshot.verdict,
+            .hold
+        )
+        XCTAssertEqual(
+            confidenceGate?.status,
+            .needsEvidence
+        )
+        XCTAssertNil(
+            snapshot
+                .latestConfidenceScorePercent
         )
     }
 
