@@ -44,6 +44,16 @@ struct TestDashboardView: View {
             )
     }
 
+    private var frequencyCoverage:
+        FrequencyCoverageSnapshot
+    {
+        FrequencyCoverageAnalytics
+            .snapshot(
+                events:
+                    structuredLog.events
+            )
+    }
+
     private let metricColumns = [
         GridItem(
             .flexible(),
@@ -68,6 +78,7 @@ struct TestDashboardView: View {
                 workflowCard
                 repeatabilityCard
                 headPositionSensitivityCard
+                frequencyCoverageCard
                 recentSessionsCard
                 interpretationCard
             }
@@ -584,6 +595,91 @@ struct TestDashboardView: View {
         .dashboardCard()
     }
 
+    private var frequencyCoverageCard: some View {
+        VStack(
+            alignment: .leading,
+            spacing: 12
+        ) {
+            HStack {
+                Label(
+                    "Frequency Coverage",
+                    systemImage:
+                        "waveform.badge.magnifyingglass"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                Text(
+                    "\(frequencyCoverage.distinctFrequencyCount) targets"
+                )
+                .font(
+                    .caption
+                        .weight(.semibold)
+                )
+                .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(
+                columns: metricColumns,
+                spacing: 12
+            ) {
+                DashboardMetricTile(
+                    title: "Multi-target series",
+                    value:
+                        "\(frequencyCoverage.multiFrequencySeriesCount)",
+                    detail:
+                        "same route + position"
+                )
+                DashboardMetricTile(
+                    title: "Broad",
+                    value:
+                        "\(frequencyCoverage.broadCoverageSeriesCount)",
+                    detail:
+                        "low + mid + high bands"
+                )
+                DashboardMetricTile(
+                    title: "Max span",
+                    value:
+                        frequencySpanText(
+                            frequencyCoverage
+                                .maximumFrequencySpanHz
+                        ),
+                    detail:
+                        "within one series"
+                )
+                DashboardMetricTile(
+                    title: "Excluded",
+                    value:
+                        "\(frequencyCoverage.excludedComparisonCount)",
+                    detail:
+                        "missing route/frequency/result"
+                )
+            }
+
+            NavigationLink {
+                FrequencyCoverageView()
+            } label: {
+                Label(
+                    "Open Frequency Coverage",
+                    systemImage:
+                        "chart.xyaxis.line"
+                )
+                .frame(
+                    maxWidth: .infinity
+                )
+            }
+            .buttonStyle(.borderedProminent)
+
+            Text(
+                "Frequency coverage allows phase and output to optimize independently at each target. Results are grouped by route and head position so different listening conditions are not blended."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .dashboardCard()
+    }
+
     private var recentSessionsCard: some View {
         VStack(
             alignment: .leading,
@@ -747,7 +843,7 @@ struct TestDashboardView: View {
             .font(.headline)
 
             Text(
-                "This dashboard is a descriptive view of saved experiment evidence. Repeatability now keeps labeled head positions separate, and the head-position analysis shows whether the same settings change across Reference/Left/Right/Forward/Back. Vehicle speed, road surface, HVAC state, passenger load, and exact phone placement are still uncontrolled. #39 broadens testing across frequencies next."
+                "This dashboard is a descriptive view of saved experiment evidence. Repeatability, head-position sensitivity, and multi-frequency coverage now expose whether promising results persist across sessions, listener postures, and target frequencies. Vehicle speed, road surface, HVAC state, passenger load, and exact phone placement are still uncontrolled. #40 turns the accumulated evidence into the final Lab go/no-go report."
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
@@ -804,6 +900,19 @@ struct TestDashboardView: View {
 
         return String(
             format: "%.2f dB",
+            value
+        )
+    }
+
+    private func frequencySpanText(
+        _ value: Double?
+    ) -> String {
+        guard let value else {
+            return "—"
+        }
+
+        return String(
+            format: "%.0f Hz",
             value
         )
     }
