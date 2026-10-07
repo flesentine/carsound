@@ -160,11 +160,11 @@ The Test Dashboard now includes a **Final Lab Decision** card and a dedicated **
 
 The report evaluates five explicit gates:
 
-1. **Evidence volume** — at least 10 saved A/B comparisons across at least 3 app sessions.
-2. **Overall confidence** — latest evidence coverage must meet the existing 60% assessment floor and the latest confidence score must meet the existing 55% Moderate threshold.
+1. **Evidence volume** — at least 10 saved A/B comparisons across at least 3 sessions that actually contain A/B measurements; launch-only sessions do not count.
+2. **Overall confidence** — an explicit Confidence Snapshot must meet the existing 60% assessment floor and 55% Moderate threshold. Once a coherent candidate route exists, the snapshot must come from that same route.
 3. **Cross-session repeatability** — at least one mature 3+ session condition must qualify as Consistent reduction. Mature evidence with zero consistent-reduction groups is a blocker.
 4. **Head-position robustness** — at least one matched multi-position condition is required. Any direction reversal is a blocker; >3 dB high sensitivity without reversal is a warning.
-5. **Frequency breadth** — at least one broad low/mid/high route/head-position series must show positive best-per-session evidence at two or more frequencies.
+5. **Frequency breadth** — at least one labeled broad low/mid/high route/head-position series must repeat positive best-per-session evidence at two or more frequencies across separate sessions, and that route/head-position must also have mature repeatable reduction plus safe multi-position evidence.
 
 Verdict logic is intentionally conservative:
 - **GO** — every gate passes.
@@ -181,7 +181,7 @@ A GO verdict means only that the saved Lab evidence justifies continued prototyp
 
 ## Verification status
 
-The app and unit-test targets compile successfully in GitHub Actions using the iOS simulator SDK. CI uses `build-for-testing`, so tests compile but are not executed there.
+GitHub Actions first compiles the app and unit-test targets with `build-for-testing`, then selects an available iPhone simulator and executes the XCTest suite with `xcodebuild test`. A behavioral test failure now fails CI instead of being hidden by compile-only verification.
 
 Structured-log coverage includes schema/version persistence, metrics/text/flags/reference round-trip, session sequencing, cross-launch session separation, retention pruning, and clear/restart behavior.
 
@@ -193,9 +193,11 @@ Repeatability coverage verifies normalized condition grouping, per-session avera
 
 Head-position coverage verifies session-balanced position means, sensitivity spread classification, direction reversal detection, exclusion of unlabeled/incomplete comparisons, and protection against mixing labeled positions in repeatability.
 
-Frequency-coverage tests verify route/head-position series separation, 1 Hz target normalization, session-balanced best-result aggregation, low/mid/high band coverage, single/narrow/partial/broad classification, maximum span, and exclusion of incomplete/out-of-band comparisons.
+Frequency-coverage tests verify route/head-position series separation, 1 Hz target normalization, session-balanced best-result aggregation, repeated-positive cross-session support, low/mid/high band coverage, single/narrow/partial/broad classification, maximum span, and exclusion of incomplete/out-of-band comparisons.
 
-Final-decision coverage verifies the all-gates-pass GO path, incomplete-evidence HOLD behavior, head-position direction-reversal NO-GO, adequate-coverage/low-confidence NO-GO, and high-position-sensitivity HOLD behavior. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
+Final-decision coverage verifies the all-gates-pass GO path, comparison-bearing session requirements, unrelated-route evidence rejection, explicit route-coherent confidence snapshots, incomplete-evidence HOLD behavior, head-position direction-reversal NO-GO, adequate-coverage/low-confidence NO-GO, and high-position-sensitivity HOLD behavior.
+
+Post-roadmap review also covers explicit memory-only structured-log storage and the 200 Hz boundary between ANC/road-noise and program-audio interference analysis.
 
 ## Roadmap status
 
