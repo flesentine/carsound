@@ -4,6 +4,7 @@ enum HeadPositionPreset:
     String,
     CaseIterable,
     Codable,
+    Hashable,
     Identifiable,
     Sendable
 {
@@ -213,21 +214,10 @@ enum HeadPositionSensitivityAnalytics {
 
             tagged += 1
 
-            var taggedEvent =
-                event
-
-            if
-                event.text[
-                    "head_position"
-                ] != position.rawValue
-            {
-                taggedEvent = event
-            }
-
             grouped[
                 condition,
                 default: []
-            ].append(taggedEvent)
+            ].append(event)
         }
 
         let groups =
