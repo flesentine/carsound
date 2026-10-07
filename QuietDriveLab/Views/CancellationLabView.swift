@@ -596,7 +596,7 @@ struct CancellationLabView: View {
                                 structuredLogContext,
                             text: [
                                 "app_build":
-                                    "3.7"
+                                    "3.8"
                             ]
                         )
                     }
@@ -725,7 +725,7 @@ struct CancellationLabView: View {
             .buttonStyle(.borderedProminent)
 
             Text(
-                "Cross-session repeatability is available inside the Test Dashboard. It still does not control physical head position; #38 evaluates that next."
+                "Head-position sensitivity is available inside the Test Dashboard. Position-labeled runs now stay separate in repeatability; #39 broadens testing across multiple frequencies next."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
