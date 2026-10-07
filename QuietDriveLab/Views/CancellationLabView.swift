@@ -28,6 +28,10 @@ struct CancellationLabView: View {
     @State private var structuredLogExportEventCount = 0
     @State private var isStructuredLogExporterPresented = false
     @State private var structuredLogExportFeedback: String?
+    @State private var selectedHeadPosition:
+        HeadPositionPreset = .reference
+    @State private var baselineHeadPosition:
+        HeadPositionPreset?
 
     var body: some View {
         ScrollView {
@@ -47,6 +51,7 @@ struct CancellationLabView: View {
                 overallConfidenceCard
                 targetCard
                 targetEnergyCard
+                headPositionCard
                 beforeAfterCard
                 phaseSweepCard
                 phaseRefinementCard
@@ -2857,6 +2862,101 @@ struct CancellationLabView: View {
         .cancellationCard()
     }
 
+    private var headPositionCard: some View {
+        VStack(
+            alignment: .leading,
+            spacing: 12
+        ) {
+            HStack {
+                Label(
+                    "Head Position",
+                    systemImage:
+                        "figure.seated.side"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                if
+                    beforeAfterMeasurement
+                        .baseline != nil
+                {
+                    Text(
+                        baselineHeadPosition?
+                            .title ??
+                        "Unlabeled baseline"
+                    )
+                    .font(
+                        .caption
+                            .weight(.semibold)
+                    )
+                    .foregroundStyle(.secondary)
+                }
+            }
+
+            Text(
+                "Label the listener posture before capturing a baseline. QuietDrive stores this label with every saved A/B result so the same settings can be compared across positions."
+            )
+            .font(.footnote)
+            .foregroundStyle(.secondary)
+
+            Picker(
+                "Head position",
+                selection:
+                    $selectedHeadPosition
+            ) {
+                ForEach(
+                    HeadPositionPreset
+                        .allCases
+                ) { position in
+                    Text(
+                        position.shortTitle
+                    )
+                    .tag(position)
+                }
+            }
+            .pickerStyle(.segmented)
+            .disabled(
+                headPositionSelectionLocked
+            )
+
+            Text(
+                selectedHeadPosition
+                    .instruction
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            if
+                beforeAfterMeasurement
+                    .baseline != nil,
+                !baselineMatchesCurrentHeadPosition
+            {
+                Text(
+                    "Head position changed after the baseline. Capture a fresh baseline at \(selectedHeadPosition.title) before collecting treatment or running automatic searches."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Text(
+                "These are manual posture labels, not measured coordinates. Keep the phone, seat, route, speed, HVAC, and stereo volume as consistent as possible."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .cancellationCard()
+    }
+
+    private var headPositionSelectionLocked: Bool {
+        beforeAfterMeasurement
+            .state.isBusy ||
+        phaseSweep.state.isRunning ||
+        phaseRefinement.state.isRunning ||
+        amplitudeSearch.state.isRunning ||
+        adaptiveController.state.isRunning
+    }
+
     private var beforeAfterCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
@@ -2907,6 +3007,7 @@ struct CancellationLabView: View {
                     toneGenerator.isMuted ||
                     targetEnergyMeasurement == nil ||
                     !baselineMatchesCurrentTarget ||
+                    !baselineMatchesCurrentHeadPosition ||
                     beforeAfterMeasurement.state.isBusy ||
                     phaseSweep.state.isRunning ||
                     phaseRefinement.state.isRunning ||
@@ -2920,6 +3021,13 @@ struct CancellationLabView: View {
                 !baselineMatchesCurrentTarget
             {
                 Text("The target frequency changed after the baseline. Capture a new baseline before comparing treatment.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if
+                beforeAfterMeasurement.baseline != nil,
+                !baselineMatchesCurrentHeadPosition
+            {
+                Text("The selected head position no longer matches the baseline. Capture a new baseline at the selected position.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if
@@ -3020,6 +3128,7 @@ struct CancellationLabView: View {
                 Button("Reset Comparison") {
                     beforeAfterMeasurement.reset()
                     lastSavedComparisonKey = nil
+                    baselineHeadPosition = nil
                 }
                 .buttonStyle(.bordered)
                 .disabled(
@@ -4371,7 +4480,17 @@ struct CancellationLabView: View {
                 "input_route":
                     record.inputRoute,
                 "output_route":
-                    record.outputRoute
+                    record.outputRoute,
+                "head_position":
+                    (
+                        baselineHeadPosition ??
+                        selectedHeadPosition
+                    ).rawValue,
+                "head_position_title":
+                    (
+                        baselineHeadPosition ??
+                        selectedHeadPosition
+                    ).title
             ],
             references: [
                 "experiment_record_id":
@@ -5325,6 +5444,7 @@ struct CancellationLabView: View {
         amplitudeSearch.bestResult != nil &&
         beforeAfterMeasurement.baseline != nil &&
         baselineMatchesCurrentTarget &&
+        baselineMatchesCurrentHeadPosition &&
         microphoneCapture.state == .capturing &&
         microphoneCapture.analysisMode == .ancFocus &&
         audioSession.state == .active &&
@@ -5456,6 +5576,7 @@ struct CancellationLabView: View {
         phaseRefinement.bestResult != nil &&
         beforeAfterMeasurement.baseline != nil &&
         baselineMatchesCurrentTarget &&
+        baselineMatchesCurrentHeadPosition &&
         microphoneCapture.state == .capturing &&
         toneGenerator.state == .playing &&
         !toneGenerator.isMuted &&
@@ -5562,6 +5683,7 @@ struct CancellationLabView: View {
         phaseSweep.bestResult != nil &&
         beforeAfterMeasurement.baseline != nil &&
         baselineMatchesCurrentTarget &&
+        baselineMatchesCurrentHeadPosition &&
         microphoneCapture.state == .capturing &&
         toneGenerator.state == .playing &&
         !toneGenerator.isMuted &&
@@ -5699,6 +5821,7 @@ struct CancellationLabView: View {
     private var canStartPhaseSweep: Bool {
         beforeAfterMeasurement.baseline != nil &&
         baselineMatchesCurrentTarget &&
+        baselineMatchesCurrentHeadPosition &&
         microphoneCapture.state == .capturing &&
         toneGenerator.state == .playing &&
         !toneGenerator.isMuted &&
@@ -5786,8 +5909,22 @@ struct CancellationLabView: View {
         ) <= 0.5
     }
 
+    private var baselineMatchesCurrentHeadPosition: Bool {
+        guard
+            beforeAfterMeasurement
+                .baseline != nil
+        else {
+            return true
+        }
+
+        return baselineHeadPosition ==
+            selectedHeadPosition
+    }
+
     private func captureBaseline() {
         lastSavedComparisonKey = nil
+        baselineHeadPosition =
+            selectedHeadPosition
 
         if
             toneGenerator.state == .playing,
