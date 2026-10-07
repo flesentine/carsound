@@ -40,7 +40,8 @@ struct MusicInterferenceSnapshot: Equatable, Sendable {
 
 enum MusicInterferenceMath {
     static let lowBandHz = 30.0...200.0
-    static let programBandHz = 200.0...4_000.0
+    static let programBandHz =
+        200.0.nextUp...4_000.0
 
     static let likelyThreshold = 0.62
     static let possibleThreshold = 0.38
