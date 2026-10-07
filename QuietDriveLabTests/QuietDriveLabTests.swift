@@ -5018,6 +5018,41 @@ final class QuietDriveLabTests: XCTestCase {
     }
 
     @MainActor
+    func testStructuredLogExplicitNilStorageIsEphemeral() {
+        let first =
+            StructuredLogModel(
+                storageURL: nil,
+                sessionID:
+                    UUID(
+                        uuidString:
+                            "00000000-0000-0000-0000-000000000076"
+                    )!
+            )
+        first.startSession()
+        _ = first.record(
+            kind: .captureStarted
+        )
+
+        let second =
+            StructuredLogModel(
+                storageURL: nil,
+                sessionID:
+                    UUID(
+                        uuidString:
+                            "00000000-0000-0000-0000-000000000077"
+                    )!
+            )
+
+        XCTAssertEqual(
+            first.events.count,
+            2
+        )
+        XCTAssertTrue(
+            second.events.isEmpty
+        )
+    }
+
+    @MainActor
     func testStructuredLogPersistsMetricsFlagsReferencesAndContext() throws {
         let url =
             FileManager.default
