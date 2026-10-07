@@ -725,7 +725,7 @@ struct CancellationLabView: View {
             .buttonStyle(.borderedProminent)
 
             Text(
-                "Head-position sensitivity is available inside the Test Dashboard. Position-labeled runs now stay separate in repeatability; #39 broadens testing across multiple frequencies next."
+                "Frequency Coverage is available inside the Test Dashboard. It keeps route and head position fixed while allowing each target frequency to use its own optimized phase/output; #40 is the final Lab go/no-go report."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
@@ -2646,6 +2646,44 @@ struct CancellationLabView: View {
                 Text("200 Hz")
             }
             .font(.caption2)
+            .foregroundStyle(.secondary)
+
+            Menu {
+                ForEach(
+                    FrequencyCoverageAnalytics
+                        .recommendedTargetsHz,
+                    id: \.self
+                ) { frequency in
+                    Button(
+                        String(
+                            format:
+                                "%.0f Hz",
+                            frequency
+                        )
+                    ) {
+                        toneGenerator
+                            .setFrequency(
+                                frequency
+                            )
+                    }
+                }
+            } label: {
+                Label(
+                    "Coverage Preset",
+                    systemImage:
+                        "waveform.badge.plus"
+                )
+            }
+            .buttonStyle(.bordered)
+            .disabled(
+                toneGenerator.state ==
+                    .playing
+            )
+
+            Text(
+                "Coverage presets span the ANC band at 40, 60, 80, 100, 120, 160, and 200 Hz. Real detected cabin tones are more important than filling every preset."
+            )
+            .font(.caption)
             .foregroundStyle(.secondary)
 
             Divider()
