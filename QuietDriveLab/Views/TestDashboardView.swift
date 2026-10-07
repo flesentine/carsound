@@ -24,6 +24,16 @@ struct TestDashboardView: View {
             )
     }
 
+    private var repeatability:
+        RepeatabilitySnapshot
+    {
+        RepeatabilityAnalytics
+            .snapshot(
+                events:
+                    structuredLog.events
+            )
+    }
+
     private let metricColumns = [
         GridItem(
             .flexible(),
@@ -46,6 +56,7 @@ struct TestDashboardView: View {
                 measurementCard
                 confidenceCard
                 workflowCard
+                repeatabilityCard
                 recentSessionsCard
                 interpretationCard
             }
@@ -395,6 +406,88 @@ struct TestDashboardView: View {
         .dashboardCard()
     }
 
+    private var repeatabilityCard: some View {
+        VStack(
+            alignment: .leading,
+            spacing: 12
+        ) {
+            HStack {
+                Label(
+                    "Repeatability",
+                    systemImage:
+                        "arrow.triangle.2.circlepath"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                Text(
+                    "\(repeatability.crossSessionConditionCount) cross-session"
+                )
+                .font(
+                    .caption
+                        .weight(.semibold)
+                )
+                .foregroundStyle(.secondary)
+            }
+
+            LazyVGrid(
+                columns: metricColumns,
+                spacing: 12
+            ) {
+                DashboardMetricTile(
+                    title: "Matched conditions",
+                    value:
+                        "\(repeatability.matchedConditionCount)",
+                    detail:
+                        "route + Hz + phase + output"
+                )
+                DashboardMetricTile(
+                    title: "Mature",
+                    value:
+                        "\(repeatability.matureConditionCount)",
+                    detail:
+                        "3+ separate sessions"
+                )
+                DashboardMetricTile(
+                    title: "Consistent reduction",
+                    value:
+                        "\(repeatability.consistentReductionCount)",
+                    detail:
+                        "tight mature groups"
+                )
+                DashboardMetricTile(
+                    title: "Excluded",
+                    value:
+                        "\(repeatability.excludedComparisonCount)",
+                    detail:
+                        "missing match context"
+                )
+            }
+
+            NavigationLink {
+                RepeatabilityView()
+            } label: {
+                Label(
+                    "Open Repeatability",
+                    systemImage:
+                        "repeat"
+                )
+                .frame(
+                    maxWidth: .infinity
+                )
+            }
+            .buttonStyle(.borderedProminent)
+
+            Text(
+                "Repeatability uses per-session means so many search trials inside one session cannot inflate cross-session evidence."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .dashboardCard()
+    }
+
     private var recentSessionsCard: some View {
         VStack(
             alignment: .leading,
@@ -558,7 +651,7 @@ struct TestDashboardView: View {
             .font(.headline)
 
             Text(
-                "This dashboard is a descriptive view of saved experiment evidence. A high confidence score, a strong single A/B reduction, or many completed workflows is not by itself proof that full-car active noise cancellation works. #37 will add matched repeatability analysis across repeated conditions."
+                "This dashboard is a descriptive view of saved experiment evidence. Repeatability now checks matched settings across separate sessions, but it still cannot control unlogged physical conditions such as head position, speed, road surface, HVAC state, or phone placement. #38 adds head-position sensitivity next."
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
