@@ -558,3 +558,16 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
   - Lab build bumped to 4.0 and new/cleared sessions are tagged with app_build 4.0
   - tests cover all-gates-pass GO, incomplete-evidence HOLD, head-position reversal NO-GO, adequately-covered low-confidence NO-GO, and high-position-sensitivity warning/HOLD
   - full app + unit-test simulator build-for-testing green in GitHub Actions
+
+
+## Post-roadmap code review
+
+- [x] evidence-volume gate counts only sessions containing saved A/B comparisons
+- [x] frequency GO evidence requires repeated positive support across separate sessions
+- [x] final frequency evidence must align with repeatability and head-position evidence on the same labeled route/head-position context
+- [x] final confidence requires an explicit route-matched Confidence Snapshot when a coherent candidate route exists
+- [x] fixed the 200 Hz overlap between low-frequency and program-audio interference bands
+- [x] explicit nil StructuredLog storage is memory-only; default initialization retains Application Support persistence
+- [x] structured-log reload ordering is deterministic across equal timestamps
+- [x] GitHub Actions now executes XCTest on an available iPhone simulator after build-for-testing
+- [ ] future performance work: move full structured-log persistence off the main actor and avoid rewriting the entire JSON file on every event
