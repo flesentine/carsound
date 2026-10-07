@@ -4,9 +4,9 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#39 — multiple frequencies** is implemented.
+Development effort **#40 — final Lab go/no-go report** is implemented.
 
-QuietDrive now summarizes saved A/B evidence across multiple target frequencies without pretending one phase/output setting should work everywhere. Frequency coverage is grouped by route and head position, while each target is allowed to use its own optimized settings.
+QuietDrive now combines evidence volume, confidence, cross-session repeatability, head-position robustness, and multi-frequency breadth into a deterministic final Lab verdict: GO, HOLD, or NO-GO.
 
 ## Structured event schema
 
@@ -154,11 +154,30 @@ Coverage assessments are:
 
 The view reports analyzable/excluded comparisons, distinct targets, multi-target series, broad-coverage series, maximum frequency span, positive-best targets, cross-session targets, per-frequency session counts, comparison counts, and best/average reduction evidence.
 
+## Final Lab go/no-go report
+
+The Test Dashboard now includes a **Final Lab Decision** card and a dedicated **Lab Go / No-Go** report.
+
+The report evaluates five explicit gates:
+
+1. **Evidence volume** — at least 10 saved A/B comparisons across at least 3 app sessions.
+2. **Overall confidence** — latest evidence coverage must meet the existing 60% assessment floor and the latest confidence score must meet the existing 55% Moderate threshold.
+3. **Cross-session repeatability** — at least one mature 3+ session condition must qualify as Consistent reduction. Mature evidence with zero consistent-reduction groups is a blocker.
+4. **Head-position robustness** — at least one matched multi-position condition is required. Any direction reversal is a blocker; >3 dB high sensitivity without reversal is a warning.
+5. **Frequency breadth** — at least one broad low/mid/high route/head-position series must show positive best-per-session evidence at two or more frequencies.
+
+Verdict logic is intentionally conservative:
+- **GO** — every gate passes.
+- **HOLD** — there is no blocker, but at least one gate still needs evidence or carries a warning.
+- **NO-GO** — one or more mature evidence gates are blockers for the generalized cancellation approach.
+
+The report also exposes the underlying evidence counts and gate summaries rather than returning a verdict without explanation. A plain-text version can be shared through the native iOS share sheet.
+
+A GO verdict means only that the saved Lab evidence justifies continued prototype engineering. It does **not** mean production-ready ANC, safe unattended operation, regulatory compliance, or reliable performance across unmeasured vehicles, road conditions, phone placements, or occupants.
+
 ## Why this matters
 
-#39 answers whether the lab evidence extends beyond one lucky narrow-band target while still letting each frequency have its own optimized phase/output:
-
-- **#40 go/no-go report** can now combine confidence, repeatability, head-position sensitivity, and frequency coverage into the final decision
+#40 closes the Lab roadmap with a repeatable decision rule instead of relying on the best-looking individual experiment.
 
 ## Verification status
 
@@ -174,15 +193,15 @@ Repeatability coverage verifies normalized condition grouping, per-session avera
 
 Head-position coverage verifies session-balanced position means, sensitivity spread classification, direction reversal detection, exclusion of unlabeled/incomplete comparisons, and protection against mixing labeled positions in repeatability.
 
-Frequency-coverage tests verify route/head-position series separation, 1 Hz target normalization, session-balanced best-result aggregation, low/mid/high band coverage, single/narrow/partial/broad classification, maximum span, and exclusion of incomplete/out-of-band comparisons. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
+Frequency-coverage tests verify route/head-position series separation, 1 Hz target normalization, session-balanced best-result aggregation, low/mid/high band coverage, single/narrow/partial/broad classification, maximum span, and exclusion of incomplete/out-of-band comparisons.
 
-## What comes next
+Final-decision coverage verifies the all-gates-pass GO path, incomplete-evidence HOLD behavior, head-position direction-reversal NO-GO, adequate-coverage/low-confidence NO-GO, and high-position-sensitivity HOLD behavior. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
 
-**#40 — Lab go/no-go report** is next.
+## Roadmap status
 
-The remaining Milestone 4 roadmap is:
+**Milestone 4 is complete through #40.**
 
-- #40 Lab go/no-go report
+The current Lab now covers calibration, structured evidence logging/export, dashboarding, repeatability, head-position sensitivity, multi-frequency coverage, and a final evidence-based go/no-go decision report.
 
 ## Generate the Xcode project
 
