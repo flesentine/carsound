@@ -7206,13 +7206,15 @@ final class QuietDriveLabTests: XCTestCase {
         )
         XCTAssertEqual(
             forty?
-                .sessionBalancedBestReductionDB,
+                .sessionBalancedBestReductionDB ??
+                .nan,
             3,
             accuracy: 0.0001
         )
         XCTAssertEqual(
             forty?
-                .bestObservedReductionDB,
+                .bestObservedReductionDB ??
+                .nan,
             4,
             accuracy: 0.0001
         )
