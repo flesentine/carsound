@@ -201,8 +201,7 @@ enum HeadPositionSensitivityAnalytics {
                 event.metrics[
                     "measured_reduction_db"
                 ] != nil,
-                let position =
-                    position(for: event),
+                position(for: event) != nil,
                 let condition =
                     baseCondition(
                         for: event
@@ -532,7 +531,7 @@ enum HeadPositionSensitivityAnalytics {
                 $0.meanReductionDB <
                     $1.meanReductionDB
             }
-        let spread =
+        let spread: Double? =
             if
                 let minimum =
                     positionMeans.min(),
