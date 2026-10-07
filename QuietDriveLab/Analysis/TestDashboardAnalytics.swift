@@ -81,6 +81,28 @@ enum TestDashboardAnalytics {
                 currentSessionID:
                     currentSessionID
             )
+            .sorted {
+                if
+                    $0.recordedAt ==
+                        $1.recordedAt
+                {
+                    if
+                        $0.sessionID ==
+                            $1.sessionID
+                    {
+                        return $0.sequence <
+                            $1.sequence
+                    }
+
+                    return $0.sessionID
+                        .uuidString <
+                        $1.sessionID
+                            .uuidString
+                }
+
+                return $0.recordedAt <
+                    $1.recordedAt
+            }
 
         let comparisons =
             selected.filter {
