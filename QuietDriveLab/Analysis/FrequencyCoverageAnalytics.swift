@@ -156,6 +156,8 @@ struct FrequencyCoverageSeries:
     let maximumFrequencyHz: Double
     let positiveFrequencyCount: Int
     let crossSessionFrequencyCount: Int
+    let repeatedPositiveFrequencyCount:
+        Int
     let assessment:
         FrequencyCoverageAssessment
     let latestAt: Date
@@ -616,6 +618,17 @@ enum FrequencyCoverageAnalytics {
                 frequencyResults
                     .filter {
                         $0.sessionCount >= 2
+                    }
+                    .count,
+            repeatedPositiveFrequencyCount:
+                frequencyResults
+                    .filter {
+                        $0.sessionCount >= 2 &&
+                        $0.positiveBestSessionCount >=
+                            2 &&
+                        $0.sessionBalancedBestReductionDB >
+                            RepeatabilityAnalytics
+                                .neutralDeadbandDB
                     }
                     .count,
             assessment:
