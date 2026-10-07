@@ -4,9 +4,9 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#38 — head-position sensitivity** is implemented.
+Development effort **#39 — multiple frequencies** is implemented.
 
-QuietDrive now labels saved A/B runs with a manual listener posture — Reference, Left, Right, Forward, or Back — and compares matched settings across those positions. The app also binds each baseline to its selected position so changing posture requires a fresh baseline before treatment or automatic search can continue.
+QuietDrive now summarizes saved A/B evidence across multiple target frequencies without pretending one phase/output setting should work everywhere. Frequency coverage is grouped by route and head position, while each target is allowed to use its own optimized settings.
 
 ## Structured event schema
 
@@ -133,12 +133,32 @@ Sensitivity classifications use the spread between position means:
 
 The view reports tagged/excluded A/B records, matched settings tested at 2+ positions, maximum spread, direction reversals, best/worst position, and session-balanced per-position means.
 
+## Multi-frequency coverage
+
+Cancellation Lab now includes a **Coverage Preset** menu with 40, 60, 80, 100, 120, 160, and 200 Hz targets. These are convenience targets only; detected persistent cabin tones remain more important than filling every preset.
+
+The dedicated **Frequency Coverage** view analyzes saved `comparison_saved` events from 30–200 Hz. Coverage series are separated by exact route signature and head-position label. Phase and output are intentionally allowed to vary by frequency because an effective setting at one wavelength is not expected to transfer unchanged to another.
+
+Target frequencies are rounded to the nearest 1 Hz for coverage grouping. Within each frequency, QuietDrive first finds the best observed reduction in each app session, then averages those per-session best values so a session that generated many search trials cannot dominate the frequency summary. The view also shows the session-balanced all-trial mean and absolute best observed result so search failures are not hidden.
+
+Coverage bands are:
+- **Low:** 30–69 Hz
+- **Mid:** 70–119 Hz
+- **High:** 120–200 Hz
+
+Coverage assessments are:
+- **Single target:** only one tested frequency
+- **Narrow coverage:** multiple frequencies, all in one band
+- **Partial coverage:** frequencies span two bands
+- **Broad coverage:** at least three frequencies spanning all three bands
+
+The view reports analyzable/excluded comparisons, distinct targets, multi-target series, broad-coverage series, maximum frequency span, positive-best targets, cross-session targets, per-frequency session counts, comparison counts, and best/average reduction evidence.
+
 ## Why this matters
 
-#38 exposes whether a promising cancellation setting works only in a narrow listening spot or changes sign when the listener moves:
+#39 answers whether the lab evidence extends beyond one lucky narrow-band target while still letting each frequency have its own optimized phase/output:
 
-- **#39 multiple frequencies** can broaden target coverage using the same evidence structure
-- **#40 go/no-go report** can combine confidence, repeatability, position sensitivity, and frequency coverage
+- **#40 go/no-go report** can now combine confidence, repeatability, head-position sensitivity, and frequency coverage into the final decision
 
 ## Verification status
 
@@ -152,15 +172,16 @@ Dashboard analytics coverage verifies aggregate event/session/route/frequency co
 
 Repeatability coverage verifies normalized condition grouping, per-session averaging, cross-session maturity, consistent reduction/worsening/near-zero classification, mixed-direction detection, position separation, and exclusion of comparisons missing complete match context.
 
-Head-position coverage verifies session-balanced position means, sensitivity spread classification, direction reversal detection, exclusion of unlabeled/incomplete comparisons, and protection against mixing labeled positions in repeatability. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
+Head-position coverage verifies session-balanced position means, sensitivity spread classification, direction reversal detection, exclusion of unlabeled/incomplete comparisons, and protection against mixing labeled positions in repeatability.
+
+Frequency-coverage tests verify route/head-position series separation, 1 Hz target normalization, session-balanced best-result aggregation, low/mid/high band coverage, single/narrow/partial/broad classification, maximum span, and exclusion of incomplete/out-of-band comparisons. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
 
 ## What comes next
 
-**#39 — multiple frequencies** is next.
+**#40 — Lab go/no-go report** is next.
 
 The remaining Milestone 4 roadmap is:
 
-- #39 multiple frequencies
 - #40 Lab go/no-go report
 
 ## Generate the Xcode project
