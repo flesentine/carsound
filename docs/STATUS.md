@@ -535,4 +535,26 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
   - Lab build bumped to 3.9 and new/cleared sessions are tagged with app_build 3.9
   - tests cover broad three-band coverage, 1 Hz normalization, session-balanced best aggregation, series separation by route/head position, coverage classification, span, and invalid/out-of-band exclusion
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #40 Lab go/no-go report
+- [x] #40 Lab go/no-go report
+  - new pure LabGoNoGoAnalytics composes the existing dashboard, repeatability, head-position, frequency-coverage, and confidence evidence into one final Lab decision
+  - verdicts are GO, HOLD, and NO-GO
+  - GO requires every decision gate to pass
+  - HOLD is used when there is no blocker but at least one gate still needs evidence or carries a warning
+  - NO-GO is used when one or more mature evidence gates are blockers for the generalized cancellation approach
+  - Evidence volume gate requires at least 10 saved A/B comparisons across at least 3 app sessions
+  - Overall confidence gate reuses OverallConfidenceMath thresholds rather than duplicating independent criteria: >=60% evidence coverage and >=55% confidence
+  - confidence below 55% becomes a blocker only after the existing evidence-coverage floor is met; incomplete confidence evidence remains HOLD/Needs evidence instead of being treated as negative
+  - Repeatability gate passes with at least one mature Consistent reduction group, needs evidence if no condition is mature, and blocks when mature groups exist but none consistently reduce
+  - Head-position gate needs at least one 2+ position matched condition
+  - any head-position direction reversal is a blocker for a generalized cabin-cancellation GO
+  - >3 dB high position sensitivity without direction reversal is a warning/HOLD rather than an automatic NO-GO
+  - Frequency breadth gate passes when at least one Broad low/mid/high series has positive best-per-session evidence at 2+ target frequencies
+  - partial/narrow multi-frequency coverage remains Needs evidence; broad coverage with weak positive breadth is a Warning
+  - dedicated Lab Go / No-Go screen shows the verdict, pass/need/warn/block counts, evidence metrics, and all five gate summaries/details
+  - Test Dashboard now contains a Final Lab Decision card with direct navigation to the full report
+  - Cancellation Lab Test Dashboard card surfaces the current GO/HOLD/NO-GO verdict without hiding the detailed evidence
+  - the report includes a native Share Report action that exports a plain-text snapshot of the verdict, evidence counts, and gate outcomes
+  - report copy explicitly states that GO means continue prototype engineering, not production-ready ANC, regulatory compliance, safe unattended operation, or validated performance across unmeasured vehicles/occupants
+  - Lab build bumped to 4.0 and new/cleared sessions are tagged with app_build 4.0
+  - tests cover all-gates-pass GO, incomplete-evidence HOLD, head-position reversal NO-GO, adequately-covered low-confidence NO-GO, and high-position-sensitivity warning/HOLD
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
