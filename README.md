@@ -4,9 +4,9 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#36 — test dashboard** is implemented.
+Development effort **#37 — repeatability** is implemented.
 
-QuietDrive now turns its durable structured-event history into an in-app evidence dashboard. The dashboard summarizes saved sessions, routes, target frequencies, A/B measurement outcomes, confidence evidence, workflow completions/failures, safety mutes, and recent-session details without inventing a premature pass/fail score.
+QuietDrive now performs matched cross-session repeatability analysis on saved A/B evidence. Comparisons are grouped only when route signature, target frequency, phase, and output level match after small display-level normalization, and multiple trials inside one app session are averaged before any cross-session judgment is made.
 
 ## Structured event schema
 
@@ -99,14 +99,30 @@ The dashboard can switch between **All saved** evidence and the **Current sessio
 
 The dashboard is computed from the existing structured log. Opening it does not create new experiment records or duplicate persistence.
 
+## Repeatability
+
+The Test Dashboard now includes a dedicated **Repeatability** view derived from the structured event log.
+
+A saved A/B comparison is eligible only when it has a measured-reduction value plus complete route/frequency/phase/output context. Conditions are matched using:
+
+- exact route signature
+- target frequency rounded to the nearest 0.1 Hz
+- phase rounded to the nearest 1°
+- output level rounded to the nearest 1 percentage point
+
+Repeated trials inside one app session are averaged first. Cross-session assessment therefore uses **session means**, preventing a large automatic search in one session from masquerading as many independent repetitions.
+
+Assessment maturity requires at least **3 separate sessions**. Two sessions are labeled **Early cross-session evidence**. Mature groups use a ±0.5 dB near-zero deadband; tight consistency additionally requires session-mean standard deviation ≤1.0 dB and total session-mean range ≤2.0 dB. Mature outcomes are labeled Consistent reduction, Consistent near-zero result, Consistent worsening, Variable result, or Mixed direction.
+
+The Repeatability view reports matched-condition counts, analyzable/excluded A/B records, cross-session/mature groups, consistent-reduction groups, per-condition mean/spread/direction counts, and each session's mean and trial range.
+
 ## Why this matters
 
-#36 makes the accumulated evidence visible enough to guide the remaining proof work without pretending that one strong result proves ANC effectiveness:
+#37 prevents repeated search trials from overstating evidence and makes disagreement across days/sessions visible before the final decision:
 
-- **#37 repeatability** can reuse the same pure analytics layer to compare matched runs across sessions and conditions
-- **#38 head-position sensitivity** can add positional evidence to the same session history
-- **#39 multiple frequencies** can broaden target coverage
-- **#40 go/no-go report** can use a traceable evidence history instead of manually reconstructed results
+- **#38 head-position sensitivity** can add physical-position context that repeatability currently cannot control
+- **#39 multiple frequencies** can broaden target coverage using the same evidence structure
+- **#40 go/no-go report** can combine confidence, repeatability, position sensitivity, and frequency coverage
 
 ## Verification status
 
@@ -116,15 +132,16 @@ Structured-log coverage includes schema/version persistence, metrics/text/flags/
 
 The unit-test target also covers JSON export round-trip fidelity, deterministic CSV field flattening, CSV quote/comma/newline escaping, current-session filtering, all-events filtering, and timestamped export filenames.
 
-Dashboard analytics coverage verifies aggregate event/session/route/frequency counts, A/B reduction statistics, confidence aggregation, workflow completion/failure accounting, safety-mute accounting, current-session filtering, recent-session ordering, build tags, and session durations. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
+Dashboard analytics coverage verifies aggregate event/session/route/frequency counts, A/B reduction statistics, confidence aggregation, workflow completion/failure accounting, safety-mute accounting, current-session filtering, recent-session ordering, build tags, and session durations.
+
+Repeatability coverage verifies normalized condition grouping, per-session averaging, cross-session maturity, consistent reduction/worsening/near-zero classification, mixed-direction detection, and exclusion of comparisons missing complete match context. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
 
 ## What comes next
 
-**#37 — repeatability** is next.
+**#38 — head-position sensitivity** is next.
 
 The remaining Milestone 4 roadmap is:
 
-- #37 repeatability
 - #38 head-position sensitivity
 - #39 multiple frequencies
 - #40 Lab go/no-go report
