@@ -7501,6 +7501,347 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    private func makeLabDecisionEvents(
+        referenceReductionDB:
+            Double = 2.0,
+        leftReductionDB:
+            Double = 1.5,
+        confidenceScorePercent:
+            Double = 65,
+        evidenceCoveragePercent:
+            Double = 80
+    ) -> [StructuredLogEvent] {
+        let sessions = [
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000069"
+            )!,
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000070"
+            )!,
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000071"
+            )!
+        ]
+
+        var events:
+            [StructuredLogEvent] = []
+        var timestamp = 1.0
+
+        func append(
+            sessionID: UUID,
+            sequence: UInt64,
+            frequency: Double,
+            position:
+                HeadPositionPreset,
+            reduction: Double
+        ) {
+            events.append(
+                StructuredLogEvent(
+                    recordedAt:
+                        Date(
+                            timeIntervalSince1970:
+                                timestamp
+                        ),
+                    sessionID:
+                        sessionID,
+                    sequence:
+                        sequence,
+                    kind:
+                        .comparisonSaved,
+                    context:
+                        StructuredLogContext(
+                            routeSignature:
+                                "route-decision",
+                            routeRevision: 1,
+                            calibrationProfileID: nil,
+                            targetFrequencyHz:
+                                frequency,
+                            phaseDegrees: 180,
+                            outputPercent: 25,
+                            confidenceScorePercent:
+                                confidenceScorePercent,
+                            evidenceCoveragePercent:
+                                evidenceCoveragePercent,
+                            confidenceLevel:
+                                OverallConfidenceLevel
+                                    .moderate
+                                    .rawValue
+                        ),
+                    metrics: [
+                        "measured_reduction_db":
+                            reduction
+                    ],
+                    text: [
+                        "head_position":
+                            position.rawValue
+                    ]
+                )
+            )
+            timestamp += 1
+        }
+
+        for
+            (
+                sessionIndex,
+                session
+            )
+            in sessions.enumerated()
+        {
+            append(
+                sessionID: session,
+                sequence: 1,
+                frequency: 40,
+                position:
+                    .reference,
+                reduction:
+                    referenceReductionDB
+            )
+            append(
+                sessionID: session,
+                sequence: 2,
+                frequency: 90,
+                position:
+                    .reference,
+                reduction:
+                    referenceReductionDB
+            )
+            append(
+                sessionID: session,
+                sequence: 3,
+                frequency: 160,
+                position:
+                    .reference,
+                reduction:
+                    referenceReductionDB
+            )
+
+            if sessionIndex == 0 {
+                append(
+                    sessionID:
+                        session,
+                    sequence: 4,
+                    frequency: 40,
+                    position: .left,
+                    reduction:
+                        leftReductionDB
+                )
+            }
+        }
+
+        return events
+    }
+
+    func testLabGoNoGoReturnsGoWhenAllFiveGatesPass() {
+        let events =
+            makeLabDecisionEvents()
+        let currentSessionID =
+            events[0].sessionID
+
+        let snapshot =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events: events,
+                    currentSessionID:
+                        currentSessionID
+                )
+
+        XCTAssertEqual(
+            snapshot.verdict,
+            .go
+        )
+        XCTAssertEqual(
+            snapshot.passedGateCount,
+            5
+        )
+        XCTAssertEqual(
+            snapshot.needsEvidenceGateCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.warningGateCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.blockerGateCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.comparisonCount,
+            10
+        )
+        XCTAssertEqual(
+            snapshot.sessionCount,
+            3
+        )
+        XCTAssertGreaterThanOrEqual(
+            snapshot.consistentReductionCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.directionReversalCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.qualifyingBroadFrequencySeriesCount,
+            1
+        )
+        XCTAssertTrue(
+            snapshot.reportText
+                .contains(
+                    "Verdict: GO"
+                )
+        )
+    }
+
+    func testLabGoNoGoHoldsWhenEvidenceIsIncomplete() {
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000072"
+            )!
+
+        let snapshot =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events: [],
+                    currentSessionID:
+                        sessionID
+                )
+
+        XCTAssertEqual(
+            snapshot.verdict,
+            .hold
+        )
+        XCTAssertGreaterThan(
+            snapshot.needsEvidenceGateCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.blockerGateCount,
+            0
+        )
+    }
+
+    func testLabGoNoGoBlocksOnHeadPositionDirectionReversal() {
+        let events =
+            makeLabDecisionEvents(
+                leftReductionDB: -1.0
+            )
+
+        let snapshot =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events: events,
+                    currentSessionID:
+                        events[0]
+                            .sessionID
+                )
+
+        XCTAssertEqual(
+            snapshot.verdict,
+            .noGo
+        )
+        XCTAssertEqual(
+            snapshot.directionReversalCount,
+            1
+        )
+
+        let headGate =
+            snapshot.gates
+                .first {
+                    $0.id ==
+                        "head_position"
+                }
+
+        XCTAssertEqual(
+            headGate?.status,
+            .blocker
+        )
+    }
+
+    func testLabGoNoGoBlocksOnLowConfidenceWithAdequateCoverage() {
+        let events =
+            makeLabDecisionEvents(
+                confidenceScorePercent:
+                    40,
+                evidenceCoveragePercent:
+                    80
+            )
+
+        let snapshot =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events: events,
+                    currentSessionID:
+                        events[0]
+                            .sessionID
+                )
+
+        XCTAssertEqual(
+            snapshot.verdict,
+            .noGo
+        )
+
+        let confidenceGate =
+            snapshot.gates
+                .first {
+                    $0.id ==
+                        "overall_confidence"
+                }
+
+        XCTAssertEqual(
+            confidenceGate?.status,
+            .blocker
+        )
+    }
+
+    func testLabGoNoGoHoldsOnHighHeadPositionSensitivityWithoutReversal() {
+        let events =
+            makeLabDecisionEvents(
+                referenceReductionDB:
+                    4.0,
+                leftReductionDB:
+                    0.6
+            )
+
+        let snapshot =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events: events,
+                    currentSessionID:
+                        events[0]
+                            .sessionID
+                )
+
+        XCTAssertEqual(
+            snapshot.verdict,
+            .hold
+        )
+
+        let headGate =
+            snapshot.gates
+                .first {
+                    $0.id ==
+                        "head_position"
+                }
+
+        XCTAssertEqual(
+            headGate?.status,
+            .warning
+        )
+        XCTAssertEqual(
+            snapshot.blockerGateCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.warningGateCount,
+            1
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
