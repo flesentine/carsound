@@ -55,6 +55,7 @@ struct LabGoNoGoSnapshot:
         [LabDecisionGate]
     let comparisonCount: Int
     let sessionCount: Int
+    let comparisonSessionCount: Int
     let latestConfidenceScorePercent:
         Double?
     let latestEvidenceCoveragePercent:
@@ -100,6 +101,7 @@ struct LabGoNoGoSnapshot:
             "",
             "Evidence:",
             "- Sessions: \(sessionCount)",
+            "- Sessions with A/B comparisons: \(comparisonSessionCount)",
             "- Saved A/B comparisons: \(comparisonCount)",
             "- Latest confidence: " +
                 optionalPercent(
@@ -191,17 +193,72 @@ enum LabGoNoGoAnalytics {
                 .snapshot(
                     events: events
                 )
+        let comparisonSessionCount =
+            Set(
+                events
+                    .filter {
+                        $0.kind ==
+                            .comparisonSaved
+                    }
+                    .map {
+                        $0.sessionID
+                    }
+            ).count
 
         let qualifyingBroad =
             frequency.series.filter {
                 $0.assessment == .broad &&
-                $0.positiveFrequencyCount >=
+                $0.repeatedPositiveFrequencyCount >=
                     minimumPositiveFrequenciesForBroadEvidence
+            }
+
+        let coherentQualifyingBroad =
+            qualifyingBroad.filter { series in
+                guard
+                    let position =
+                        series.context
+                            .headPosition
+                else {
+                    return false
+                }
+
+                let hasRepeatableReduction =
+                    repeatability.groups
+                        .contains {
+                            $0.assessment ==
+                                .consistentReduction &&
+                            $0.condition
+                                .routeSignature ==
+                                series.context
+                                    .routeSignature &&
+                            $0.condition
+                                .headPosition ==
+                                position
+                        }
+
+                let hasSafePositionEvidence =
+                    headPosition.groups
+                        .contains {
+                            $0.condition
+                                .routeSignature ==
+                                series.context
+                                    .routeSignature &&
+                            $0.positionCount >= 2 &&
+                            $0.assessment !=
+                                .directionReversal &&
+                            $0.assessment !=
+                                .high
+                        }
+
+                return hasRepeatableReduction &&
+                    hasSafePositionEvidence
             }
 
         let gates = [
             evidenceVolumeGate(
-                dashboard
+                dashboard,
+                comparisonSessionCount:
+                    comparisonSessionCount
             ),
             confidenceGate(
                 dashboard
@@ -215,6 +272,8 @@ enum LabGoNoGoAnalytics {
             frequencyCoverageGate(
                 frequency,
                 qualifyingBroadCount:
+                    coherentQualifyingBroad.count,
+                repeatedBroadCount:
                     qualifyingBroad.count
             )
         ]
@@ -248,6 +307,8 @@ enum LabGoNoGoAnalytics {
                 dashboard.comparisonCount,
             sessionCount:
                 dashboard.sessionCount,
+            comparisonSessionCount:
+                comparisonSessionCount,
             latestConfidenceScorePercent:
                 dashboard
                     .latestConfidenceScorePercent,
@@ -270,19 +331,20 @@ enum LabGoNoGoAnalytics {
                 frequency
                     .broadCoverageSeriesCount,
             qualifyingBroadFrequencySeriesCount:
-                qualifyingBroad.count
+                coherentQualifyingBroad.count
         )
     }
 
     private static func evidenceVolumeGate(
         _ dashboard:
-            TestDashboardSnapshot
+            TestDashboardSnapshot,
+        comparisonSessionCount: Int
     ) -> LabDecisionGate {
         let comparisonsReady =
             dashboard.comparisonCount >=
                 minimumComparisonCount
         let sessionsReady =
-            dashboard.sessionCount >=
+            comparisonSessionCount >=
                 minimumSessionCount
         let status:
             LabDecisionGateStatus =
@@ -296,9 +358,9 @@ enum LabGoNoGoAnalytics {
             title: "Evidence volume",
             status: status,
             summary:
-                "\(dashboard.comparisonCount)/\(minimumComparisonCount) A/B comparisons • \(dashboard.sessionCount)/\(minimumSessionCount) sessions",
+                "\(dashboard.comparisonCount)/\(minimumComparisonCount) A/B comparisons • \(comparisonSessionCount)/\(minimumSessionCount) comparison sessions",
             detail:
-                "The final decision needs enough saved comparisons and separate app sessions to avoid treating one tuning run as independent evidence."
+                "The final decision needs enough saved comparisons spread across separate sessions that actually contain A/B measurements. Merely launching the app does not count."
         )
     }
 
@@ -501,7 +563,8 @@ enum LabGoNoGoAnalytics {
     private static func frequencyCoverageGate(
         _ frequency:
             FrequencyCoverageSnapshot,
-        qualifyingBroadCount: Int
+        qualifyingBroadCount: Int,
+        repeatedBroadCount: Int
     ) -> LabDecisionGate {
         if qualifyingBroadCount > 0 {
             return LabDecisionGate(
@@ -509,9 +572,21 @@ enum LabGoNoGoAnalytics {
                 title: "Frequency breadth",
                 status: .pass,
                 summary:
-                    "\(qualifyingBroadCount) broad series with \(minimumPositiveFrequenciesForBroadEvidence)+ positive targets",
+                    "\(qualifyingBroadCount) coherent broad series with \(minimumPositiveFrequenciesForBroadEvidence)+ repeated-positive targets",
                 detail:
-                    "At least one route/head-position series spans low, mid, and high ANC bands and shows positive best-per-session evidence at multiple targets."
+                    "At least one labeled route/head-position series spans low, mid, and high ANC bands, repeats positive best-per-session evidence at multiple targets across sessions, and shares that route/position with mature repeatable reduction plus safe multi-position evidence."
+            )
+        }
+
+        if repeatedBroadCount > 0 {
+            return LabDecisionGate(
+                id: "frequency_coverage",
+                title: "Frequency breadth",
+                status: .warning,
+                summary:
+                    "\(repeatedBroadCount) repeated-positive broad series, but evidence is not coherent",
+                detail:
+                    "Broad repeated-positive frequency evidence exists, but it does not share one labeled route/head-position context with both mature repeatable reduction and safe multi-position evidence."
             )
         }
 
@@ -525,9 +600,9 @@ enum LabGoNoGoAnalytics {
                 title: "Frequency breadth",
                 status: .warning,
                 summary:
-                    "\(frequency.broadCoverageSeriesCount) broad series, but positive breadth is weak",
+                    "\(frequency.broadCoverageSeriesCount) broad series, but repeated positive breadth is weak",
                 detail:
-                    "Three-band coverage exists, but no broad series currently has positive best-per-session evidence at two or more target frequencies."
+                    "Three-band coverage exists, but no broad series repeats positive best-per-session evidence at two or more target frequencies across separate sessions."
             )
         }
 
