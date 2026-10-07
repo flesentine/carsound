@@ -4,9 +4,9 @@ QuietDrive Lab is a native iOS research app for testing whether a phone can dete
 
 ## Current milestone
 
-Development effort **#35 — CSV/JSON export** is implemented.
+Development effort **#36 — test dashboard** is implemented.
 
-QuietDrive's durable structured event stream can now be exported from the Cancellation Lab as portable **JSON** or **CSV**, either for the current app session or for the complete retained log history. This turns the #34 event foundation into a dataset that can feed dashboards, repeatability analysis, and the final go/no-go report.
+QuietDrive now turns its durable structured-event history into an in-app evidence dashboard. The dashboard summarizes saved sessions, routes, target frequencies, A/B measurement outcomes, confidence evidence, workflow completions/failures, safety mutes, and recent-session details without inventing a premature pass/fail score.
 
 ## Structured event schema
 
@@ -80,12 +80,32 @@ The Structured Logs card now lets the researcher choose **All saved** or **Curre
 - Export filenames include the selected scope and a UTC timestamp.
 - Exporting does not add raw microphone audio, raw PCM buffers, or raw accelerometer streams; those data were never part of the structured log.
 
+## Test dashboard
+
+The Cancellation Lab now includes a compact **Test Dashboard** card that opens a dedicated dashboard screen.
+
+The dashboard can switch between **All saved** evidence and the **Current session**. It reports:
+
+- total structured events and app sessions
+- distinct route signatures and target frequencies
+- saved A/B comparison count
+- comparisons with positive measured reduction
+- average and best measured reduction
+- latest confidence score, evidence coverage, and confidence label
+- explicit confidence-snapshot count and average snapshot score
+- total workflow failures and emergency safety mutes
+- completion/failure counts for route tests, calibration, A/B comparisons, phase sweep, fine phase, amplitude search, adaptive control, Bluetooth jitter, and sound/vibration correlation
+- up to eight recent session summaries with build tag, timestamp, event/comparison counts, route/frequency coverage, best reduction, latest confidence, failures, and safety mutes
+
+The dashboard is computed from the existing structured log. Opening it does not create new experiment records or duplicate persistence.
+
 ## Why this matters
 
-#35 makes the evidence history portable for the remaining work:
+#36 makes the accumulated evidence visible enough to guide the remaining proof work without pretending that one strong result proves ANC effectiveness:
 
-- **#36 test dashboard** can aggregate exported sessions and workflows
-- **#37 repeatability** can compare matched runs across sessions/conditions
+- **#37 repeatability** can reuse the same pure analytics layer to compare matched runs across sessions and conditions
+- **#38 head-position sensitivity** can add positional evidence to the same session history
+- **#39 multiple frequencies** can broaden target coverage
 - **#40 go/no-go report** can use a traceable evidence history instead of manually reconstructed results
 
 ## Verification status
@@ -94,15 +114,16 @@ The app and unit-test targets compile successfully in GitHub Actions using the i
 
 Structured-log coverage includes schema/version persistence, metrics/text/flags/reference round-trip, session sequencing, cross-launch session separation, retention pruning, and clear/restart behavior.
 
-The unit-test target now also covers JSON export round-trip fidelity, deterministic CSV field flattening, CSV quote/comma/newline escaping, current-session filtering, all-events filtering, and timestamped export filenames. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
+The unit-test target also covers JSON export round-trip fidelity, deterministic CSV field flattening, CSV quote/comma/newline escaping, current-session filtering, all-events filtering, and timestamped export filenames.
+
+Dashboard analytics coverage verifies aggregate event/session/route/frequency counts, A/B reduction statistics, confidence aggregation, workflow completion/failure accounting, safety-mute accounting, current-session filtering, recent-session ordering, build tags, and session durations. GitHub Actions still uses `build-for-testing`, so these tests compile there but are not executed.
 
 ## What comes next
 
-**#36 — test dashboard** is next.
+**#37 — repeatability** is next.
 
 The remaining Milestone 4 roadmap is:
 
-- #36 test dashboard
 - #37 repeatability
 - #38 head-position sensitivity
 - #39 multiple frequencies
