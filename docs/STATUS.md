@@ -514,5 +514,25 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
   - Lab build bumped to 3.8 and new/cleared sessions are tagged with app_build 3.8
   - tests cover session-balanced position aggregation, spread thresholds, direction reversal, exclusion of unlabeled/incomplete comparisons, and repeatability separation by position
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #39 multiple frequencies
+- [x] #39 multiple frequencies
+  - new pure FrequencyCoverageAnalytics derives target-frequency coverage from existing comparison_saved structured events
+  - coverage accepts only comparisons with measured_reduction_db, a valid route signature, and a finite target frequency inside the 30–200 Hz ANC band
+  - target frequencies are normalized to the nearest 1 Hz for coverage grouping
+  - coverage series are separated by exact route signature and optional head-position label so different routes/listener positions are not blended
+  - phase and output are intentionally not part of the cross-frequency series key because each target frequency may require its own optimized cancellation settings
+  - each frequency groups comparisons by app session first
+  - per-session best observed reduction is calculated before averaging across sessions, preventing one session with many automatic search trials from dominating capability evidence
+  - each target also retains a session-balanced all-trial mean and absolute best-observed reduction so poor search trials are still visible
+  - per-frequency evidence includes session count, comparison count, positive/neutral/negative best-session counts, best/session reduction, all-trial mean, and best observed result
+  - Low coverage band is 30–69 Hz, Mid is 70–119 Hz, and High is 120–200 Hz
+  - Single target means one frequency; Narrow means multiple frequencies in one band; Partial means coverage across two bands; Broad requires at least three targets spanning all three bands
+  - series summaries include frequency count, band count, minimum/maximum target, span, positive-best target count, cross-session target count, session count, and comparison count
+  - dedicated Frequency Coverage screen reports analyzable/excluded comparisons, distinct targets, multi-target series, broad series, maximum span, and expandable per-frequency evidence
+  - Test Dashboard now includes a Frequency Coverage summary card and direct navigation to the detailed screen
+  - Cancellation Lab Target Tone card adds guided 40/60/80/100/120/160/200 Hz coverage presets while retaining detected persistent tones as the preferred real-world targets
+  - selecting a new coverage target still relies on the existing baseline-target mismatch guard, preventing accidental reuse of a baseline captured at another frequency
+  - UI explicitly states that broad coverage does not mean one phase/output setting works across all frequencies and that best-observed evidence is weaker than cross-session repeatability
+  - Lab build bumped to 3.9 and new/cleared sessions are tagged with app_build 3.9
+  - tests cover broad three-band coverage, 1 Hz normalization, session-balanced best aggregation, series separation by route/head position, coverage classification, span, and invalid/out-of-band exclusion
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #40 Lab go/no-go report
