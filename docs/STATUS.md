@@ -491,6 +491,28 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
   - Lab build bumped to 3.7 and new/cleared sessions are tagged with app_build 3.7
   - tests cover normalized condition grouping, per-session averaging, protection against same-session trial-count inflation, mature mixed-direction/worsening/near-zero classification, and exclusion of incomplete comparison context
   - full app + unit-test simulator build-for-testing green in GitHub Actions
-- [ ] #38 head-position sensitivity
+- [x] #38 head-position sensitivity
+  - new HeadPositionPreset defines Reference, Left, Right, Forward, and Back manual listener-posture labels
+  - Cancellation Lab adds a dedicated Head Position card and segmented selector
+  - selected posture is locked while baseline/treatment or automatic phase/amplitude/adaptive workflows are running
+  - baseline capture stores the selected head-position label in view state
+  - treatment capture is blocked if the selected position no longer matches the baseline position
+  - automatic phase sweep, fine phase refinement, amplitude search, and adaptive control also require the current position to match the baseline position
+  - changing position after baseline capture surfaces a clear fresh-baseline warning instead of silently reusing the old baseline
+  - every saved comparison event now stores head_position and head_position_title text fields
+  - structured CSV/JSON export automatically includes those new text fields without a schema fork
+  - historical unlabeled comparison events remain readable but are excluded from head-position sensitivity analysis
+  - RepeatabilityCondition now includes the optional head-position label so new Reference/Left/Right/Forward/Back evidence stays separate instead of being blended together
+  - new pure HeadPositionSensitivityAnalytics groups only complete route/frequency/phase/output matches
+  - position analysis averages repeated trials per session first, then averages session means so one position cannot dominate just because an automatic search generated more trials there
+  - sensitivity groups report position count, comparison count, best/worst position, best/worst mean reduction, spread, and per-position session-balanced means
+  - Low sensitivity is <=1.0 dB spread; Moderate is >1.0 and <=3.0 dB; High is >3.0 dB
+  - Direction reversal overrides spread when one position is >+0.5 dB reduction and another is <-0.5 dB worsening
+  - dedicated Head-Position Sensitivity screen reports tagged/excluded A/B records, matched conditions, 2+ position coverage, direction reversals, maximum spread, and expandable per-position evidence
+  - Test Dashboard now includes a Head-Position Sensitivity summary card and direct navigation to the detailed screen
+  - UI states that posture labels are manual rather than measured coordinates and still depend on consistent phone placement, speed, road, HVAC, seat, and stereo conditions
+  - Lab build bumped to 3.8 and new/cleared sessions are tagged with app_build 3.8
+  - tests cover session-balanced position aggregation, spread thresholds, direction reversal, exclusion of unlabeled/incomplete comparisons, and repeatability separation by position
+  - full app + unit-test simulator build-for-testing green in GitHub Actions
 - [ ] #39 multiple frequencies
 - [ ] #40 Lab go/no-go report
