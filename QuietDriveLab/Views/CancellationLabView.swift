@@ -591,7 +591,7 @@ struct CancellationLabView: View {
                                 structuredLogContext,
                             text: [
                                 "app_build":
-                                    "3.6"
+                                    "3.7"
                             ]
                         )
                     }
@@ -720,7 +720,7 @@ struct CancellationLabView: View {
             .buttonStyle(.borderedProminent)
 
             Text(
-                "Dashboard summaries are descriptive evidence, not proof that full-car ANC works. Repeatability is evaluated separately in #37."
+                "Cross-session repeatability is available inside the Test Dashboard. It still does not control physical head position; #38 evaluates that next."
             )
             .font(.caption)
             .foregroundStyle(.secondary)
