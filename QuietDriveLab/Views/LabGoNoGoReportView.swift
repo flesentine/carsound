@@ -143,7 +143,7 @@ struct LabGoNoGoReportView: View {
                     value:
                         "\(snapshot.sessionCount)",
                     detail:
-                        "saved sessions"
+                        "\(snapshot.comparisonSessionCount) with A/B"
                 )
                 LabDecisionMetricTile(
                     title: "A/B comparisons",
