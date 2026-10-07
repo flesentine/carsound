@@ -54,6 +54,19 @@ struct TestDashboardView: View {
             )
     }
 
+    private var labDecision:
+        LabGoNoGoSnapshot
+    {
+        LabGoNoGoAnalytics
+            .snapshot(
+                events:
+                    structuredLog.events,
+                currentSessionID:
+                    structuredLog
+                        .currentSessionID
+            )
+    }
+
     private let metricColumns = [
         GridItem(
             .flexible(),
@@ -79,6 +92,7 @@ struct TestDashboardView: View {
                 repeatabilityCard
                 headPositionSensitivityCard
                 frequencyCoverageCard
+                labDecisionCard
                 recentSessionsCard
                 interpretationCard
             }
@@ -680,6 +694,101 @@ struct TestDashboardView: View {
         .dashboardCard()
     }
 
+    private var labDecisionCard: some View {
+        VStack(
+            alignment: .leading,
+            spacing: 12
+        ) {
+            HStack {
+                Label(
+                    "Final Lab Decision",
+                    systemImage:
+                        labDecisionSymbol
+                )
+                .font(.headline)
+
+                Spacer()
+
+                Text(
+                    labDecision.verdict
+                        .rawValue
+                )
+                .font(
+                    .title3
+                        .weight(.bold)
+                )
+            }
+
+            Text(
+                labDecision.verdict
+                    .title
+            )
+            .font(
+                .subheadline
+                    .weight(.semibold)
+            )
+
+            HStack {
+                LabeledContent(
+                    "Pass",
+                    value:
+                        "\(labDecision.passedGateCount)"
+                )
+
+                LabeledContent(
+                    "Need",
+                    value:
+                        "\(labDecision.needsEvidenceGateCount)"
+                )
+
+                LabeledContent(
+                    "Warn",
+                    value:
+                        "\(labDecision.warningGateCount)"
+                )
+
+                LabeledContent(
+                    "Block",
+                    value:
+                        "\(labDecision.blockerGateCount)"
+                )
+            }
+            .font(.caption)
+
+            NavigationLink {
+                LabGoNoGoReportView()
+            } label: {
+                Label(
+                    "Open Final Go / No-Go Report",
+                    systemImage:
+                        "doc.text.magnifyingglass"
+                )
+                .frame(
+                    maxWidth: .infinity
+                )
+            }
+            .buttonStyle(.borderedProminent)
+
+            Text(
+                "GO requires every decision gate to pass. Missing evidence or warnings produce HOLD; mature contradictory evidence produces NO-GO."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+        .dashboardCard()
+    }
+
+    private var labDecisionSymbol: String {
+        switch labDecision.verdict {
+        case .go:
+            return "checkmark.seal"
+        case .hold:
+            return "pause.circle"
+        case .noGo:
+            return "xmark.octagon"
+        }
+    }
+
     private var recentSessionsCard: some View {
         VStack(
             alignment: .leading,
@@ -843,7 +952,7 @@ struct TestDashboardView: View {
             .font(.headline)
 
             Text(
-                "This dashboard is a descriptive view of saved experiment evidence. Repeatability, head-position sensitivity, and multi-frequency coverage now expose whether promising results persist across sessions, listener postures, and target frequencies. Vehicle speed, road surface, HVAC state, passenger load, and exact phone placement are still uncontrolled. #40 turns the accumulated evidence into the final Lab go/no-go report."
+                "This dashboard is a descriptive view of saved experiment evidence. Repeatability, head-position sensitivity, multi-frequency coverage, and the final Lab decision now work together. GO means the evidence justifies continued prototype engineering — not production readiness or safe unattended ANC."
             )
             .font(.footnote)
             .foregroundStyle(.secondary)
