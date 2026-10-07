@@ -6146,6 +6146,423 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testRepeatabilityGroupsNormalizedConditionsAcrossSessions() {
+        let sessions = [
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000053"
+            )!,
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000054"
+            )!,
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000055"
+            )!
+        ]
+
+        func context(
+            frequency: Double,
+            phase: Double,
+            output: Double
+        ) -> StructuredLogContext {
+            StructuredLogContext(
+                routeSignature:
+                    "route-repeat",
+                routeRevision: 1,
+                calibrationProfileID: nil,
+                targetFrequencyHz:
+                    frequency,
+                phaseDegrees:
+                    phase,
+                outputPercent:
+                    output,
+                confidenceScorePercent: nil,
+                evidenceCoveragePercent: nil,
+                confidenceLevel: nil
+            )
+        }
+
+        let events = [
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            1
+                    ),
+                sessionID: sessions[0],
+                sequence: 1,
+                kind: .comparisonSaved,
+                context:
+                    context(
+                        frequency: 80.04,
+                        phase: 120.4,
+                        output: 20.4
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        3.8
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            2
+                    ),
+                sessionID: sessions[0],
+                sequence: 2,
+                kind: .comparisonSaved,
+                context:
+                    context(
+                        frequency: 80.04,
+                        phase: 120.4,
+                        output: 20.4
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        4.2
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            3
+                    ),
+                sessionID: sessions[1],
+                sequence: 1,
+                kind: .comparisonSaved,
+                context:
+                    context(
+                        frequency: 79.96,
+                        phase: 119.6,
+                        output: 19.6
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        3.8
+                ]
+            ),
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            4
+                    ),
+                sessionID: sessions[2],
+                sequence: 1,
+                kind: .comparisonSaved,
+                context:
+                    context(
+                        frequency: 80,
+                        phase: 120,
+                        output: 20
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        4.2
+                ]
+            )
+        ]
+
+        let snapshot =
+            RepeatabilityAnalytics
+                .snapshot(
+                    events: events
+                )
+
+        XCTAssertEqual(
+            snapshot.comparisonEventCount,
+            4
+        )
+        XCTAssertEqual(
+            snapshot.analyzableComparisonCount,
+            4
+        )
+        XCTAssertEqual(
+            snapshot.matchedConditionCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.crossSessionConditionCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.matureConditionCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.consistentReductionCount,
+            1
+        )
+
+        let group =
+            snapshot.groups[0]
+
+        XCTAssertEqual(
+            group.sessionCount,
+            3
+        )
+        XCTAssertEqual(
+            group.comparisonCount,
+            4
+        )
+        XCTAssertEqual(
+            group.meanReductionDB,
+            4,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            group.assessment,
+            .consistentReduction
+        )
+        XCTAssertEqual(
+            group.condition
+                .targetFrequencyHz,
+            80,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            group.condition
+                .phaseDegrees,
+            120
+        )
+        XCTAssertEqual(
+            group.condition
+                .outputPercent,
+            20
+        )
+    }
+
+    func testRepeatabilityUsesSessionMeansInsteadOfTrialCount() {
+        let firstSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000056"
+            )!
+        let secondSession =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000057"
+            )!
+        let context =
+            StructuredLogContext(
+                routeSignature:
+                    "route-weighting",
+                routeRevision: 1,
+                calibrationProfileID: nil,
+                targetFrequencyHz: 90,
+                phaseDegrees: 180,
+                outputPercent: 30,
+                confidenceScorePercent: nil,
+                evidenceCoveragePercent: nil,
+                confidenceLevel: nil
+            )
+
+        var events:
+            [StructuredLogEvent] = []
+
+        for index in 0..<10 {
+            events.append(
+                StructuredLogEvent(
+                    recordedAt:
+                        Date(
+                            timeIntervalSince1970:
+                                Double(index)
+                        ),
+                    sessionID:
+                        firstSession,
+                    sequence:
+                        UInt64(
+                            index + 1
+                        ),
+                    kind:
+                        .comparisonSaved,
+                    context: context,
+                    metrics: [
+                        "measured_reduction_db":
+                            6
+                    ]
+                )
+            )
+        }
+
+        events.append(
+            StructuredLogEvent(
+                recordedAt:
+                    Date(
+                        timeIntervalSince1970:
+                            20
+                    ),
+                sessionID:
+                    secondSession,
+                sequence: 1,
+                kind:
+                    .comparisonSaved,
+                context: context,
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ]
+            )
+        )
+
+        let group =
+            RepeatabilityAnalytics
+                .snapshot(
+                    events: events
+                )
+                .groups[0]
+
+        XCTAssertEqual(
+            group.sessionCount,
+            2
+        )
+        XCTAssertEqual(
+            group.comparisonCount,
+            11
+        )
+        XCTAssertEqual(
+            group.meanReductionDB,
+            4,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            group.assessment,
+            .earlyEvidence
+        )
+    }
+
+    func testRepeatabilityDetectsMixedDirectionAcrossMatureSessions() {
+        XCTAssertEqual(
+            RepeatabilityAnalytics
+                .assessment(
+                    sessionMeanReductionsDB: [
+                        2.2,
+                        1.8,
+                        -1.1
+                    ]
+                ),
+            .mixedDirection
+        )
+
+        XCTAssertEqual(
+            RepeatabilityAnalytics
+                .assessment(
+                    sessionMeanReductionsDB: [
+                        -2.0,
+                        -2.3,
+                        -1.8
+                    ]
+                ),
+            .consistentWorsening
+        )
+
+        XCTAssertEqual(
+            RepeatabilityAnalytics
+                .assessment(
+                    sessionMeanReductionsDB: [
+                        0.1,
+                        -0.2,
+                        0.3
+                    ]
+                ),
+            .consistentNeutral
+        )
+    }
+
+    func testRepeatabilityExcludesComparisonsWithoutCompleteMatchContext() {
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000058"
+            )!
+
+        let complete =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 1,
+                kind: .comparisonSaved,
+                context:
+                    StructuredLogContext(
+                        routeSignature:
+                            "route-complete",
+                        routeRevision: 1,
+                        calibrationProfileID: nil,
+                        targetFrequencyHz: 70,
+                        phaseDegrees: 90,
+                        outputPercent: 25,
+                        confidenceScorePercent: nil,
+                        evidenceCoveragePercent: nil,
+                        confidenceLevel: nil
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ]
+            )
+        let missingPhase =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 2,
+                kind: .comparisonSaved,
+                context:
+                    StructuredLogContext(
+                        routeSignature:
+                            "route-complete",
+                        routeRevision: 1,
+                        calibrationProfileID: nil,
+                        targetFrequencyHz: 70,
+                        phaseDegrees: nil,
+                        outputPercent: 25,
+                        confidenceScorePercent: nil,
+                        evidenceCoveragePercent: nil,
+                        confidenceLevel: nil
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        3
+                ]
+            )
+        let missingReduction =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 3,
+                kind: .comparisonSaved,
+                context:
+                    complete.context
+            )
+
+        let snapshot =
+            RepeatabilityAnalytics
+                .snapshot(
+                    events: [
+                        complete,
+                        missingPhase,
+                        missingReduction
+                    ]
+                )
+
+        XCTAssertEqual(
+            snapshot.comparisonEventCount,
+            3
+        )
+        XCTAssertEqual(
+            snapshot.analyzableComparisonCount,
+            1
+        )
+        XCTAssertEqual(
+            snapshot.excludedComparisonCount,
+            2
+        )
+        XCTAssertEqual(
+            snapshot.matchedConditionCount,
+            1
+        )
+    }
+
     func testANCFocusFiltersToThirtyThroughTwoHundredHertz() {
         let bins = [
             SpectrumBin(frequencyHz: 20, magnitudeDBFS: -40),
