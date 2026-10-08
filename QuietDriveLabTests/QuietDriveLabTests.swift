@@ -8445,14 +8445,14 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
-    func testDecisionEvidenceBuildGateRequiresFourPointOneOrNewer() {
+    func testDecisionEvidenceBuildGateRequiresFourPointTwoOrNewer() {
         XCTAssertFalse(
             ExperimentEvidenceQuality
                 .isDecisionBuildEligible(
                     "4.0"
                 )
         )
-        XCTAssertTrue(
+        XCTAssertFalse(
             ExperimentEvidenceQuality
                 .isDecisionBuildEligible(
                     "4.1"
@@ -8549,6 +8549,182 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(
             snapshot.verdict,
             .hold
+        )
+    }
+
+    func testAudioConfigurationFingerprintSeparatesEvidenceSeries() {
+        let sessionA =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000079"
+            )!
+        let sessionB =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000080"
+            )!
+        let context =
+            StructuredLogContext(
+                routeSignature:
+                    "same-route",
+                routeRevision: 1,
+                calibrationProfileID: nil,
+                targetFrequencyHz: 80,
+                phaseDegrees: 180,
+                outputPercent: 25,
+                confidenceScorePercent: nil,
+                evidenceCoveragePercent: nil,
+                confidenceLevel: nil
+            )
+        let configA =
+            ExperimentEvidenceQuality
+                .audioConfigurationID(
+                    routeSignature:
+                        "same-route",
+                    sampleRate: 48_000,
+                    ioBufferDuration:
+                        0.005
+                )
+        let configB =
+            ExperimentEvidenceQuality
+                .audioConfigurationID(
+                    routeSignature:
+                        "same-route",
+                    sampleRate: 48_000,
+                    ioBufferDuration:
+                        0.010
+                )
+
+        func event(
+            sessionID: UUID,
+            sequence: UInt64,
+            config: String,
+            position:
+                HeadPositionPreset
+        ) -> StructuredLogEvent {
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: sequence,
+                kind:
+                    .comparisonSaved,
+                context: context,
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ],
+                text: [
+                    "head_position":
+                        position.rawValue,
+                    ExperimentEvidenceQuality
+                        .audioConfigurationTextKey:
+                        config
+                ]
+            )
+        }
+
+        let events = [
+            event(
+                sessionID: sessionA,
+                sequence: 1,
+                config: configA,
+                position: .reference
+            ),
+            event(
+                sessionID: sessionB,
+                sequence: 1,
+                config: configB,
+                position: .reference
+            )
+        ]
+
+        XCTAssertEqual(
+            RepeatabilityAnalytics
+                .snapshot(
+                    events: events
+                )
+                .matchedConditionCount,
+            2
+        )
+        XCTAssertEqual(
+            HeadPositionSensitivityAnalytics
+                .snapshot(
+                    events: events
+                )
+                .conditionCount,
+            2
+        )
+        XCTAssertEqual(
+            FrequencyCoverageAnalytics
+                .snapshot(
+                    events: events
+                )
+                .seriesCount,
+            2
+        )
+    }
+
+    func testExplicitBuildFourPointTwoDecisionEvidenceRequiresConfigurationFingerprint() {
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000081"
+            )!
+        let start =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 1,
+                kind: .sessionStarted,
+                text: [
+                    "app_build": "4.2"
+                ]
+            )
+        let comparison =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 2,
+                kind:
+                    .comparisonSaved,
+                context:
+                    StructuredLogContext(
+                        routeSignature:
+                            "route-config-required",
+                        routeRevision: 1,
+                        calibrationProfileID:
+                            nil,
+                        targetFrequencyHz: 80,
+                        phaseDegrees: 180,
+                        outputPercent: 25,
+                        confidenceScorePercent:
+                            nil,
+                        evidenceCoveragePercent:
+                            nil,
+                        confidenceLevel:
+                            nil
+                    ),
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ],
+                text: [
+                    "head_position":
+                        HeadPositionPreset
+                            .reference
+                            .rawValue
+                ]
+            )
+
+        let eligible =
+            ExperimentEvidenceQuality
+                .decisionEligibleEvents(
+                    [
+                        start,
+                        comparison
+                    ]
+                )
+
+        XCTAssertEqual(
+            eligible.map(\.kind),
+            [.sessionStarted]
         )
     }
 
