@@ -8041,7 +8041,15 @@ final class QuietDriveLabTests: XCTestCase {
                     "level":
                         OverallConfidenceLevel
                             .moderate
-                            .rawValue
+                            .rawValue,
+                    "head_position":
+                        HeadPositionPreset
+                            .reference
+                            .rawValue,
+                    "head_position_title":
+                        HeadPositionPreset
+                            .reference
+                            .title
                 ]
             )
         )
@@ -8323,6 +8331,84 @@ final class QuietDriveLabTests: XCTestCase {
                         event.metrics,
                     text:
                         event.text,
+                    flags:
+                        event.flags,
+                    references:
+                        event.references
+                )
+            }
+
+        let snapshot =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events: events,
+                    currentSessionID:
+                        events[0]
+                            .sessionID
+                )
+        let confidenceGate =
+            snapshot.gates
+                .first {
+                    $0.id ==
+                        "overall_confidence"
+                }
+
+        XCTAssertEqual(
+            snapshot.verdict,
+            .hold
+        )
+        XCTAssertEqual(
+            confidenceGate?.status,
+            .needsEvidence
+        )
+        XCTAssertNil(
+            snapshot
+                .latestConfidenceScorePercent
+        )
+    }
+
+    func testLabGoNoGoRequiresConfidenceSnapshotAtCoherentHeadPosition() {
+        let source =
+            makeLabDecisionEvents()
+        let events =
+            source.map { event in
+                guard
+                    event.kind ==
+                        .confidenceSnapshot
+                else {
+                    return event
+                }
+
+                var text =
+                    event.text
+                text[
+                    "head_position"
+                ] =
+                    HeadPositionPreset
+                        .left
+                        .rawValue
+                text[
+                    "head_position_title"
+                ] =
+                    HeadPositionPreset
+                        .left
+                        .title
+
+                return StructuredLogEvent(
+                    recordedAt:
+                        event.recordedAt,
+                    sessionID:
+                        event.sessionID,
+                    sequence:
+                        event.sequence,
+                    kind:
+                        event.kind,
+                    context:
+                        event.context,
+                    metrics:
+                        event.metrics,
+                    text:
+                        text,
                     flags:
                         event.flags,
                     references:
