@@ -4567,6 +4567,59 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testOverallConfidenceDSPOverrunCapsBelowModerateThreshold() {
+        let snapshot =
+            OverallConfidenceMath.score(
+                input:
+                    makeOverallConfidenceInput(
+                        persistentToneUpdateCount: 20,
+                        persistentTones: [
+                            makeConfidenceTone(
+                                confidence: 0.95,
+                                persistent: true
+                            )
+                        ],
+                        comparison:
+                            makeConfidenceComparison(
+                                reductionDB: 6,
+                                standardDeviationDB: 0.35
+                            ),
+                        adaptiveEvidencePresent: true,
+                        adaptiveIterations: 12,
+                        adaptiveRollbacks: 1,
+                        adaptiveTreatmentStandardDeviationDB: 0.4,
+                        processingCallbackJitterMilliseconds: 0.2,
+                        processingAnalysisMilliseconds: 24,
+                        processingBufferDurationMilliseconds: 21.33,
+                        soundVibration:
+                            makeConfidenceCorrelation(
+                                level: .coMoving,
+                                presence: 0.9,
+                                correlation: 0.9
+                            ),
+                        musicInterference:
+                            makeConfidenceMusic(
+                                level: .clear,
+                                score: 0.1
+                            )
+                    )
+            )
+
+        XCTAssertLessThan(
+            snapshot.scorePercent,
+            OverallConfidenceMath
+                .moderateThreshold
+        )
+        XCTAssertTrue(
+            snapshot.limitingFactors
+                .contains {
+                    $0.contains(
+                        "slower than the microphone buffer budget"
+                    )
+                }
+        )
+    }
+
     func testOverallConfidenceClippingCapsScoreAtTwenty() {
         let snapshot =
             OverallConfidenceMath.score(
@@ -4716,6 +4769,8 @@ final class QuietDriveLabTests: XCTestCase {
             adaptiveRollbacks: 1,
             adaptiveTreatmentStandardDeviationDB: 0.4,
             processingCallbackJitterMilliseconds: 0.4,
+            processingAnalysisMilliseconds: 5,
+            processingBufferDurationMilliseconds: 21.33,
             bluetoothActive: bluetoothActive,
             bluetoothJitter: bluetoothJitter,
             soundVibration:
@@ -4748,6 +4803,8 @@ final class QuietDriveLabTests: XCTestCase {
         adaptiveAmplitudeReversalStreak: Int = 0,
         adaptiveTreatmentStandardDeviationDB: Double? = nil,
         processingCallbackJitterMilliseconds: Double? = nil,
+        processingAnalysisMilliseconds: Double? = nil,
+        processingBufferDurationMilliseconds: Double? = nil,
         bluetoothActive: Bool = false,
         bluetoothJitter: BluetoothJitterSnapshot? = nil,
         soundVibration: SoundVibrationCorrelationSummary = .empty,
@@ -4779,6 +4836,10 @@ final class QuietDriveLabTests: XCTestCase {
                 adaptiveTreatmentStandardDeviationDB,
             processingCallbackJitterMilliseconds:
                 processingCallbackJitterMilliseconds,
+            processingAnalysisMilliseconds:
+                processingAnalysisMilliseconds,
+            processingBufferDurationMilliseconds:
+                processingBufferDurationMilliseconds,
             bluetoothActive:
                 bluetoothActive,
             bluetoothJitter:
