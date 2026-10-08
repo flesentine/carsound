@@ -7896,8 +7896,41 @@ final class QuietDriveLabTests: XCTestCase {
             )!
         ]
 
+        let audioConfiguration =
+            ExperimentEvidenceQuality
+                .audioConfigurationID(
+                    routeSignature:
+                        "route-decision",
+                    sampleRate: 48_000,
+                    ioBufferDuration:
+                        0.005
+                )
+
         var events:
-            [StructuredLogEvent] = []
+            [StructuredLogEvent] =
+                sessions.enumerated()
+                    .map {
+                        index,
+                        session in
+
+                        StructuredLogEvent(
+                            recordedAt:
+                                Date(
+                                    timeIntervalSince1970:
+                                        -10 -
+                                        Double(index)
+                                ),
+                            sessionID:
+                                session,
+                            sequence: 0,
+                            kind:
+                                .sessionStarted,
+                            text: [
+                                "app_build":
+                                    "4.2"
+                            ]
+                        )
+                    }
         var timestamp = 1.0
 
         func append(
@@ -7946,7 +7979,10 @@ final class QuietDriveLabTests: XCTestCase {
                     ],
                     text: [
                         "head_position":
-                            position.rawValue
+                            position.rawValue,
+                        ExperimentEvidenceQuality
+                            .audioConfigurationTextKey:
+                            audioConfiguration
                     ]
                 )
             )
@@ -8049,7 +8085,10 @@ final class QuietDriveLabTests: XCTestCase {
                     "head_position_title":
                         HeadPositionPreset
                             .reference
-                            .title
+                            .title,
+                    ExperimentEvidenceQuality
+                        .audioConfigurationTextKey:
+                        audioConfiguration
                 ]
             )
         )
@@ -8487,47 +8526,46 @@ final class QuietDriveLabTests: XCTestCase {
     func testLabGoNoGoIgnoresExplicitPreHardeningSessions() {
         let source =
             makeLabDecisionEvents()
-        let sessions =
-            Array(
-                Set(
-                    source.map {
-                        $0.sessionID
-                    }
-                )
-            )
-        let starts =
-            sessions.enumerated()
-                .map {
-                    index,
-                    sessionID in
-
-                    StructuredLogEvent(
-                        recordedAt:
-                            Date(
-                                timeIntervalSince1970:
-                                    -100 -
-                                    Double(index)
-                            ),
-                        sessionID:
-                            sessionID,
-                        sequence: 0,
-                        kind:
-                            .sessionStarted,
-                        text: [
-                            "app_build":
-                                "4.0"
-                        ]
-                    )
+        let events =
+            source.map { event in
+                guard
+                    event.kind ==
+                        .sessionStarted
+                else {
+                    return event
                 }
+
+                return StructuredLogEvent(
+                    recordedAt:
+                        event.recordedAt,
+                    sessionID:
+                        event.sessionID,
+                    sequence:
+                        event.sequence,
+                    kind:
+                        event.kind,
+                    context:
+                        event.context,
+                    metrics:
+                        event.metrics,
+                    text: [
+                        "app_build":
+                            "4.0"
+                    ],
+                    flags:
+                        event.flags,
+                    references:
+                        event.references
+                )
+            }
 
         let snapshot =
             LabGoNoGoAnalytics
                 .snapshot(
-                    events:
-                        starts +
-                        source,
+                    events: events,
                     currentSessionID:
-                        sessions[0]
+                        events[0]
+                            .sessionID
                 )
 
         XCTAssertEqual(
@@ -8992,7 +9030,11 @@ final class QuietDriveLabTests: XCTestCase {
                     launchOnlyA,
                 sequence: 1,
                 kind:
-                    .sessionStarted
+                    .sessionStarted,
+                text: [
+                    "app_build":
+                        "4.2"
+                ]
             )
         )
         events.append(
@@ -9006,7 +9048,11 @@ final class QuietDriveLabTests: XCTestCase {
                     launchOnlyB,
                 sequence: 1,
                 kind:
-                    .sessionStarted
+                    .sessionStarted,
+                text: [
+                    "app_build":
+                        "4.2"
+                ]
             )
         )
 
