@@ -45,6 +45,13 @@ final class AudioSessionModel {
     private let session = AVAudioSession.sharedInstance()
 
     @ObservationIgnored
+    private var revisionSampleRate: Double = 0
+
+    @ObservationIgnored
+    private var revisionIOBufferDuration:
+        TimeInterval = 0
+
+    @ObservationIgnored
     nonisolated(unsafe) private var routeChangeObserver: NSObjectProtocol?
 
     @ObservationIgnored
@@ -109,7 +116,7 @@ final class AudioSessionModel {
         let refreshedOutputs =
             session.currentRoute.outputs.map(Self.makePort)
 
-        let signature =
+        let rawSignature =
             AudioRouteTestingMath.signature(
                 inputs:
                     AudioRouteTestingMath.records(
@@ -120,19 +127,37 @@ final class AudioSessionModel {
                         from: refreshedOutputs
                     )
             )
+        let signature =
+            rawSignature.isEmpty
+                ? "None"
+                : rawSignature
+        let refreshedSampleRate =
+            session.sampleRate
+        let refreshedIOBufferDuration =
+            session.ioBufferDuration
+        let configurationChanged =
+            signature != routeSignature ||
+            refreshedSampleRate !=
+                revisionSampleRate ||
+            abs(
+                refreshedIOBufferDuration -
+                revisionIOBufferDuration
+            ) > 0.000_000_1
 
-        if signature != routeSignature {
+        if configurationChanged {
             routeRevision &+= 1
-            routeSignature =
-                signature.isEmpty
-                    ? "None"
-                    : signature
+            routeSignature = signature
+            revisionSampleRate =
+                refreshedSampleRate
+            revisionIOBufferDuration =
+                refreshedIOBufferDuration
         }
 
         inputs = refreshedInputs
         outputs = refreshedOutputs
-        sampleRate = session.sampleRate
-        ioBufferDuration = session.ioBufferDuration
+        sampleRate = refreshedSampleRate
+        ioBufferDuration =
+            refreshedIOBufferDuration
         inputLatency = session.inputLatency
         outputLatency = session.outputLatency
     }
