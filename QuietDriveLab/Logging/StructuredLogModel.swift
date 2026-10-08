@@ -92,6 +92,63 @@ struct StructuredLogEvent: Codable, Equatable, Identifiable, Sendable {
     }
 }
 
+private actor StructuredLogPersistenceWriter {
+    private let storageURL: URL
+    private var highestSeenRevision: UInt64 = 0
+
+    init(
+        storageURL: URL
+    ) {
+        self.storageURL = storageURL
+    }
+
+    func persist(
+        events: [StructuredLogEvent],
+        revision: UInt64
+    ) -> String? {
+        guard
+            revision >=
+                highestSeenRevision
+        else {
+            return nil
+        }
+
+        highestSeenRevision = revision
+
+        do {
+            let directory =
+                storageURL
+                    .deletingLastPathComponent()
+
+            try FileManager.default
+                .createDirectory(
+                    at: directory,
+                    withIntermediateDirectories:
+                        true
+                )
+
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [
+                .prettyPrinted,
+                .sortedKeys
+            ]
+
+            try encoder
+                .encode(events)
+                .write(
+                    to: storageURL,
+                    options: [.atomic]
+                )
+
+            return nil
+        } catch {
+            return
+                "Could not save structured logs: " +
+                error.localizedDescription
+        }
+    }
+}
+
 @MainActor
 @Observable
 final class StructuredLogModel {
@@ -106,6 +163,17 @@ final class StructuredLogModel {
 
     @ObservationIgnored
     private let fileManager: FileManager
+
+    @ObservationIgnored
+    private let persistenceWriter:
+        StructuredLogPersistenceWriter?
+
+    @ObservationIgnored
+    private var persistenceRevision: UInt64 = 0
+
+    @ObservationIgnored
+    private var persistenceTask:
+        Task<Void, Never>?
 
     @ObservationIgnored
     private var nextSequence: UInt64 = 1
@@ -123,6 +191,12 @@ final class StructuredLogModel {
             Self.defaultStorageURL(
                 fileManager: fileManager
             )
+        self.persistenceWriter =
+            self.storageURL.map {
+                StructuredLogPersistenceWriter(
+                    storageURL: $0
+                )
+            }
 
         load()
     }
@@ -135,6 +209,12 @@ final class StructuredLogModel {
         self.fileManager = fileManager
         self.currentSessionID = sessionID
         self.storageURL = storageURL
+        self.persistenceWriter =
+            storageURL.map {
+                StructuredLogPersistenceWriter(
+                    storageURL: $0
+                )
+            }
 
         load()
     }
@@ -293,42 +373,79 @@ final class StructuredLogModel {
         }
     }
 
-    private func persist() {
-        guard let storageURL else {
+    func flushPersistence() async {
+        guard
+            let persistenceWriter
+        else {
+            lastError = nil
             return
         }
 
-        do {
-            let directory =
-                storageURL
-                    .deletingLastPathComponent()
+        persistenceTask?.cancel()
+        persistenceTask = nil
 
-            try fileManager
-                .createDirectory(
-                    at: directory,
-                    withIntermediateDirectories:
-                        true
+        persistenceRevision &+= 1
+        let revision =
+            persistenceRevision
+        let snapshot = events
+
+        let errorMessage =
+            await persistenceWriter
+                .persist(
+                    events: snapshot,
+                    revision: revision
                 )
 
-            let encoder = JSONEncoder()
-            encoder.outputFormatting = [
-                .prettyPrinted,
-                .sortedKeys
-            ]
-
-            try encoder
-                .encode(events)
-                .write(
-                    to: storageURL,
-                    options: [.atomic]
-                )
-
-            lastError = nil
-        } catch {
-            lastError =
-                "Could not save structured logs: " +
-                error.localizedDescription
+        guard
+            revision ==
+                persistenceRevision
+        else {
+            return
         }
+
+        lastError = errorMessage
+    }
+
+    private func persist() {
+        guard
+            let persistenceWriter
+        else {
+            lastError = nil
+            return
+        }
+
+        persistenceRevision &+= 1
+        let revision =
+            persistenceRevision
+        let snapshot = events
+
+        persistenceTask?.cancel()
+        persistenceTask =
+            Task { @MainActor [weak self] in
+                guard !Task.isCancelled else {
+                    return
+                }
+
+                let errorMessage =
+                    await persistenceWriter
+                        .persist(
+                            events: snapshot,
+                            revision:
+                                revision
+                        )
+
+                guard
+                    !Task.isCancelled,
+                    let self,
+                    revision ==
+                        self.persistenceRevision
+                else {
+                    return
+                }
+
+                self.lastError =
+                    errorMessage
+            }
     }
 
     private static func defaultStorageURL(
