@@ -185,14 +185,17 @@ final class StructuredLogModel {
         fileManager: FileManager = .default,
         sessionID: UUID = UUID()
     ) {
-        self.fileManager = fileManager
-        self.currentSessionID = sessionID
-        self.storageURL =
+        let resolvedStorageURL =
             Self.defaultStorageURL(
                 fileManager: fileManager
             )
+
+        self.fileManager = fileManager
+        self.currentSessionID = sessionID
+        self.storageURL =
+            resolvedStorageURL
         self.persistenceWriter =
-            self.storageURL.map {
+            resolvedStorageURL.map {
                 StructuredLogPersistenceWriter(
                     storageURL: $0
                 )
