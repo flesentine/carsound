@@ -146,11 +146,11 @@ struct LabGoNoGoReportView: View {
                         "\(snapshot.comparisonSessionCount) with A/B"
                 )
                 LabDecisionMetricTile(
-                    title: "A/B comparisons",
+                    title: "Eligible A/B",
                     value:
                         "\(snapshot.comparisonCount)",
                     detail:
-                        "saved comparisons"
+                        "decision-quality comparisons"
                 )
                 LabDecisionMetricTile(
                     title: "Confidence",
