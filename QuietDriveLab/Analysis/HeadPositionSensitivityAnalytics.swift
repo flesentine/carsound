@@ -200,11 +200,10 @@ enum HeadPositionSensitivityAnalytics {
 
         for event in comparisons {
             guard
-                !ExperimentEvidenceQuality
-                    .isContaminated(event),
-                event.metrics[
-                    "measured_reduction_db"
-                ] != nil,
+                ExperimentEvidenceQuality
+                    .isEligibleComparison(
+                        event
+                    ),
                 position(for: event) != nil,
                 let condition =
                     baseCondition(
