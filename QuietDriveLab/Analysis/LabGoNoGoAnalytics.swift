@@ -212,7 +212,9 @@ enum LabGoNoGoAnalytics {
         let eligibleComparisons =
             decisionEvents.filter {
                 ExperimentEvidenceQuality
-                    .isEligibleComparison($0)
+                    .isEligibleDecisionComparison(
+                        $0
+                    )
             }
         let comparisonSessionCount =
             Set(
