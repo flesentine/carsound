@@ -2,7 +2,9 @@ import Foundation
 
 enum ExperimentEvidenceQuality {
     static let minimumDecisionBuildMajor = 4
-    static let minimumDecisionBuildMinor = 1
+    static let minimumDecisionBuildMinor = 2
+    static let audioConfigurationTextKey =
+        "audio_configuration"
 
     static func decisionEligibleEvents(
         _ events: [StructuredLogEvent]
@@ -39,10 +41,30 @@ enum ExperimentEvidenceQuality {
                 return true
             }
 
-            return
+            guard
                 isDecisionBuildEligible(
                     build
                 )
+            else {
+                return false
+            }
+
+            if
+                event.kind == .comparisonSaved ||
+                event.kind == .confidenceSnapshot
+            {
+                guard
+                    let configuration =
+                        event.text[
+                            audioConfigurationTextKey
+                        ],
+                    !configuration.isEmpty
+                else {
+                    return false
+                }
+            }
+
+            return true
         }
     }
 
@@ -73,6 +95,58 @@ enum ExperimentEvidenceQuality {
                 minor >=
                     minimumDecisionBuildMinor
             )
+    }
+
+    static func audioConfigurationID(
+        routeSignature: String,
+        sampleRate: Double,
+        ioBufferDuration: TimeInterval
+    ) -> String {
+        let roundedSampleRate =
+            Int(sampleRate.rounded())
+        let bufferTenthsMilliseconds =
+            Int(
+                (
+                    ioBufferDuration *
+                    10_000
+                ).rounded()
+            )
+
+        return
+            routeSignature +
+            "|sr=" +
+            String(roundedSampleRate) +
+            "|buf10ms=" +
+            String(
+                bufferTenthsMilliseconds
+            )
+    }
+
+    static func audioConfigurationID(
+        for event: StructuredLogEvent
+    ) -> String? {
+        if
+            let configuration =
+                event.text[
+                    audioConfigurationTextKey
+                ],
+            !configuration.isEmpty
+        {
+            return configuration
+        }
+
+        guard
+            let route =
+                event.context
+                    .routeSignature,
+            !route.isEmpty
+        else {
+            return nil
+        }
+
+        // Unversioned synthetic/unit-test events use the route
+        // identity as a compatibility fallback.
+        return route
     }
 
     static func isContaminated(
