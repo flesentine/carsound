@@ -202,17 +202,26 @@ enum CalibrationMath {
         return rmsDBFS + offset
     }
 
+    static let maximumIOBufferDifferenceMilliseconds =
+        0.25
+
     static func routeMatches(
         profile: CalibrationProfile,
         routeSignature: String,
-        sampleRate: Double
+        sampleRate: Double,
+        ioBufferDuration: TimeInterval
     ) -> Bool {
         profile.routeSignature ==
             routeSignature &&
         abs(
             profile.sampleRate -
             sampleRate
-        ) <= 1.0
+        ) <= 1.0 &&
+        abs(
+            profile.ioBufferMilliseconds -
+            ioBufferDuration * 1_000
+        ) <=
+            maximumIOBufferDifferenceMilliseconds
     }
 }
 
@@ -293,7 +302,8 @@ final class CalibrationModel {
 
     func latestMatchingProfile(
         routeSignature: String,
-        sampleRate: Double
+        sampleRate: Double,
+        ioBufferDuration: TimeInterval
     ) -> CalibrationProfile? {
         profiles.first {
             CalibrationMath.routeMatches(
@@ -301,7 +311,9 @@ final class CalibrationModel {
                 routeSignature:
                     routeSignature,
                 sampleRate:
-                    sampleRate
+                    sampleRate,
+                ioBufferDuration:
+                    ioBufferDuration
             )
         }
     }
