@@ -8290,6 +8290,12 @@ final class QuietDriveLabTests: XCTestCase {
                     "unknown"
                 )
         )
+        XCTAssertFalse(
+            ExperimentEvidenceQuality
+                .isDecisionBuildEligible(
+                    "4.foo.1"
+                )
+        )
     }
 
     func testLabGoNoGoIgnoresExplicitPreHardeningSessions() {
