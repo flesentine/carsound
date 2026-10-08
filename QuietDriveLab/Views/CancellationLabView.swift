@@ -32,6 +32,10 @@ struct CancellationLabView: View {
         HeadPositionPreset = .reference
     @State private var baselineHeadPosition:
         HeadPositionPreset?
+    @State private var baselineRouteSignature:
+        String?
+    @State private var baselineRouteRevision:
+        UInt64?
 
     var body: some View {
         ScrollView {
@@ -3072,6 +3076,7 @@ struct CancellationLabView: View {
                     targetEnergyMeasurement == nil ||
                     !baselineMatchesCurrentTarget ||
                     !baselineMatchesCurrentHeadPosition ||
+                    !baselineMatchesCurrentRoute ||
                     beforeAfterMeasurement.state.isBusy ||
                     phaseSweep.state.isRunning ||
                     phaseRefinement.state.isRunning ||
@@ -3085,6 +3090,13 @@ struct CancellationLabView: View {
                 !baselineMatchesCurrentTarget
             {
                 Text("The target frequency changed after the baseline. Capture a new baseline before comparing treatment.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if
+                beforeAfterMeasurement.baseline != nil,
+                !baselineMatchesCurrentRoute
+            {
+                Text("The audio route changed after the baseline. Capture a fresh baseline on the current route before comparing treatment.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             } else if
@@ -3193,6 +3205,8 @@ struct CancellationLabView: View {
                     beforeAfterMeasurement.reset()
                     lastSavedComparisonKey = nil
                     baselineHeadPosition = nil
+                    baselineRouteSignature = nil
+                    baselineRouteRevision = nil
                 }
                 .buttonStyle(.bordered)
                 .disabled(
@@ -5509,6 +5523,7 @@ struct CancellationLabView: View {
         beforeAfterMeasurement.baseline != nil &&
         baselineMatchesCurrentTarget &&
         baselineMatchesCurrentHeadPosition &&
+        baselineMatchesCurrentRoute &&
         microphoneCapture.state == .capturing &&
         microphoneCapture.analysisMode == .ancFocus &&
         audioSession.state == .active &&
@@ -5641,6 +5656,7 @@ struct CancellationLabView: View {
         beforeAfterMeasurement.baseline != nil &&
         baselineMatchesCurrentTarget &&
         baselineMatchesCurrentHeadPosition &&
+        baselineMatchesCurrentRoute &&
         microphoneCapture.state == .capturing &&
         toneGenerator.state == .playing &&
         !toneGenerator.isMuted &&
@@ -5748,6 +5764,7 @@ struct CancellationLabView: View {
         beforeAfterMeasurement.baseline != nil &&
         baselineMatchesCurrentTarget &&
         baselineMatchesCurrentHeadPosition &&
+        baselineMatchesCurrentRoute &&
         microphoneCapture.state == .capturing &&
         toneGenerator.state == .playing &&
         !toneGenerator.isMuted &&
@@ -5886,6 +5903,7 @@ struct CancellationLabView: View {
         beforeAfterMeasurement.baseline != nil &&
         baselineMatchesCurrentTarget &&
         baselineMatchesCurrentHeadPosition &&
+        baselineMatchesCurrentRoute &&
         microphoneCapture.state == .capturing &&
         toneGenerator.state == .playing &&
         !toneGenerator.isMuted &&
@@ -5985,10 +6003,29 @@ struct CancellationLabView: View {
             selectedHeadPosition
     }
 
+    private var baselineMatchesCurrentRoute: Bool {
+        guard
+            beforeAfterMeasurement
+                .baseline != nil
+        else {
+            return true
+        }
+
+        return
+            baselineRouteSignature ==
+                audioSession.routeSignature &&
+            baselineRouteRevision ==
+                audioSession.routeRevision
+    }
+
     private func captureBaseline() {
         lastSavedComparisonKey = nil
         baselineHeadPosition =
             selectedHeadPosition
+        baselineRouteSignature =
+            audioSession.routeSignature
+        baselineRouteRevision =
+            audioSession.routeRevision
 
         if
             toneGenerator.state == .playing,
