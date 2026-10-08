@@ -110,6 +110,24 @@ enum ProcessingLatencyMath {
             1_000.0
     }
 
+    static func analysisFitsBufferBudget(
+        analysisProcessingMilliseconds: Double,
+        bufferDurationMilliseconds: Double
+    ) -> Bool {
+        guard
+            analysisProcessingMilliseconds.isFinite,
+            bufferDurationMilliseconds.isFinite,
+            analysisProcessingMilliseconds >= 0,
+            bufferDurationMilliseconds > 0
+        else {
+            return false
+        }
+
+        return
+            analysisProcessingMilliseconds <=
+                bufferDurationMilliseconds
+    }
+
     static func estimatedSpectrumCenterAgeMilliseconds(
         fftWindowMilliseconds: Double,
         analysisProcessingMilliseconds: Double,
