@@ -8552,6 +8552,114 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testFinalDecisionComparisonEligibilityRequiresCompleteFiniteContext() {
+        let sessionID =
+            UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000082"
+            )!
+        let configuration =
+            ExperimentEvidenceQuality
+                .audioConfigurationID(
+                    routeSignature:
+                        "route-eligibility",
+                    sampleRate: 48_000,
+                    ioBufferDuration:
+                        0.005
+                )
+        let context =
+            StructuredLogContext(
+                routeSignature:
+                    "route-eligibility",
+                routeRevision: 1,
+                calibrationProfileID: nil,
+                targetFrequencyHz: 80,
+                phaseDegrees: 180,
+                outputPercent: 25,
+                confidenceScorePercent: nil,
+                evidenceCoveragePercent: nil,
+                confidenceLevel: nil
+            )
+        let complete =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 1,
+                kind:
+                    .comparisonSaved,
+                context: context,
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ],
+                text: [
+                    "head_position":
+                        HeadPositionPreset
+                            .reference
+                            .rawValue,
+                    ExperimentEvidenceQuality
+                        .audioConfigurationTextKey:
+                        configuration
+                ]
+            )
+        let missingPosition =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 2,
+                kind:
+                    .comparisonSaved,
+                context: context,
+                metrics: [
+                    "measured_reduction_db":
+                        2
+                ],
+                text: [
+                    ExperimentEvidenceQuality
+                        .audioConfigurationTextKey:
+                        configuration
+                ]
+            )
+        let nonfinite =
+            StructuredLogEvent(
+                sessionID: sessionID,
+                sequence: 3,
+                kind:
+                    .comparisonSaved,
+                context: context,
+                metrics: [
+                    "measured_reduction_db":
+                        Double.nan
+                ],
+                text: [
+                    "head_position":
+                        HeadPositionPreset
+                            .reference
+                            .rawValue,
+                    ExperimentEvidenceQuality
+                        .audioConfigurationTextKey:
+                        configuration
+                ]
+            )
+
+        XCTAssertTrue(
+            ExperimentEvidenceQuality
+                .isEligibleDecisionComparison(
+                    complete
+                )
+        )
+        XCTAssertFalse(
+            ExperimentEvidenceQuality
+                .isEligibleDecisionComparison(
+                    missingPosition
+                )
+        )
+        XCTAssertFalse(
+            ExperimentEvidenceQuality
+                .isEligibleComparison(
+                    nonfinite
+                )
+        )
+    }
+
     func testAudioConfigurationFingerprintSeparatesEvidenceSeries() {
         let sessionA =
             UUID(
