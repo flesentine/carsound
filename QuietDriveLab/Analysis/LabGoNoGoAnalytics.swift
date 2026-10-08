@@ -199,13 +199,14 @@ enum LabGoNoGoAnalytics {
                 .snapshot(
                     events: events
                 )
+        let eligibleComparisons =
+            events.filter {
+                ExperimentEvidenceQuality
+                    .isEligibleComparison($0)
+            }
         let comparisonSessionCount =
             Set(
-                events
-                    .filter {
-                        $0.kind ==
-                            .comparisonSaved
-                    }
+                eligibleComparisons
                     .map {
                         $0.sessionID
                     }
@@ -277,7 +278,8 @@ enum LabGoNoGoAnalytics {
 
         let gates = [
             evidenceVolumeGate(
-                dashboard,
+                comparisonCount:
+                    eligibleComparisons.count,
                 comparisonSessionCount:
                     comparisonSessionCount
             ),
@@ -327,7 +329,7 @@ enum LabGoNoGoAnalytics {
             verdict: verdict,
             gates: gates,
             comparisonCount:
-                dashboard.comparisonCount,
+                eligibleComparisons.count,
             sessionCount:
                 dashboard.sessionCount,
             comparisonSessionCount:
@@ -359,12 +361,11 @@ enum LabGoNoGoAnalytics {
     }
 
     private static func evidenceVolumeGate(
-        _ dashboard:
-            TestDashboardSnapshot,
+        comparisonCount: Int,
         comparisonSessionCount: Int
     ) -> LabDecisionGate {
         let comparisonsReady =
-            dashboard.comparisonCount >=
+            comparisonCount >=
                 minimumComparisonCount
         let sessionsReady =
             comparisonSessionCount >=
@@ -381,9 +382,9 @@ enum LabGoNoGoAnalytics {
             title: "Evidence volume",
             status: status,
             summary:
-                "\(dashboard.comparisonCount)/\(minimumComparisonCount) A/B comparisons • \(comparisonSessionCount)/\(minimumSessionCount) comparison sessions",
+                "\(comparisonCount)/\(minimumComparisonCount) eligible A/B comparisons • \(comparisonSessionCount)/\(minimumSessionCount) comparison sessions",
             detail:
-                "The final decision needs enough saved comparisons spread across separate sessions that actually contain A/B measurements. Merely launching the app does not count."
+                "The final decision counts only saved A/B comparisons that have a measured reduction and are not flagged for microphone clipping or likely program interference. Those comparisons must also span separate measurement sessions."
         )
     }
 
