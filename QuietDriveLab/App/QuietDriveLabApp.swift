@@ -81,7 +81,7 @@ struct QuietDriveLabApp: App {
                 .onChange(
                     of:
                         audioSession
-                            .interruptionRevision
+                            .audioSafetyRevision
                 ) { oldValue, newValue in
                     guard newValue != oldValue else {
                         return
@@ -90,7 +90,7 @@ struct QuietDriveLabApp: App {
                     stopSafetyCriticalActivity(
                         reason:
                             audioSession
-                                .lastInterruptionReason,
+                                .lastAudioSafetyReason,
                         deactivateSession:
                             false
                     )
