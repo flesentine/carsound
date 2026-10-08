@@ -4621,11 +4621,13 @@ struct CancellationLabView: View {
                     ).title
             ],
             flags: [
-                "microphone_clipping":
+                "quality_filtered_samples_only":
+                    true,
+                "microphone_clipping_at_log":
                     microphoneCapture
                         .snapshot
                         .isClipping,
-                "likely_program_interference":
+                "likely_program_interference_at_log":
                     microphoneCapture
                         .snapshot
                         .musicInterference
