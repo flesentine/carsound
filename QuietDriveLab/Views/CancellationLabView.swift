@@ -2524,7 +2524,9 @@ struct CancellationLabView: View {
                     .condition
                     .targetFrequencyHz -
                 toneGenerator.frequencyHz
-            ) <= 0.5
+            ) <= 0.5,
+            baselineMatchesCurrentHeadPosition,
+            baselineMatchesCurrentRoute
         {
             comparison = current
         } else {
@@ -4562,7 +4564,13 @@ struct CancellationLabView: View {
                         .limitingFactors
                         .joined(
                             separator: " | "
-                        )
+                        ),
+                "head_position":
+                    selectedHeadPosition
+                        .rawValue,
+                "head_position_title":
+                    selectedHeadPosition
+                        .title
             ],
             flags: [
                 "microphone_clipping":
