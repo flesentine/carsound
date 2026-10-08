@@ -8259,6 +8259,107 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testDecisionEvidenceBuildGateRequiresFourPointOneOrNewer() {
+        XCTAssertFalse(
+            ExperimentEvidenceQuality
+                .isDecisionBuildEligible(
+                    "4.0"
+                )
+        )
+        XCTAssertTrue(
+            ExperimentEvidenceQuality
+                .isDecisionBuildEligible(
+                    "4.1"
+                )
+        )
+        XCTAssertTrue(
+            ExperimentEvidenceQuality
+                .isDecisionBuildEligible(
+                    "4.2"
+                )
+        )
+        XCTAssertTrue(
+            ExperimentEvidenceQuality
+                .isDecisionBuildEligible(
+                    "5.0"
+                )
+        )
+        XCTAssertFalse(
+            ExperimentEvidenceQuality
+                .isDecisionBuildEligible(
+                    "unknown"
+                )
+        )
+    }
+
+    func testLabGoNoGoIgnoresExplicitPreHardeningSessions() {
+        let source =
+            makeLabDecisionEvents()
+        let sessions =
+            Array(
+                Set(
+                    source.map {
+                        $0.sessionID
+                    }
+                )
+            )
+        let starts =
+            sessions.enumerated()
+                .map {
+                    index,
+                    sessionID in
+
+                    StructuredLogEvent(
+                        recordedAt:
+                            Date(
+                                timeIntervalSince1970:
+                                    -100 -
+                                    Double(index)
+                            ),
+                        sessionID:
+                            sessionID,
+                        sequence: 0,
+                        kind:
+                            .sessionStarted,
+                        text: [
+                            "app_build":
+                                "4.0"
+                        ]
+                    )
+                }
+
+        let snapshot =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events:
+                        starts +
+                        source,
+                    currentSessionID:
+                        sessions[0]
+                )
+
+        XCTAssertEqual(
+            snapshot.comparisonCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.comparisonSessionCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.matureRepeatabilityCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.broadFrequencySeriesCount,
+            0
+        )
+        XCTAssertEqual(
+            snapshot.verdict,
+            .hold
+        )
+    }
+
     func testContaminatedComparisonIsExcludedFromDecisionAnalytics() {
         let source =
             makeLabDecisionEvents()
