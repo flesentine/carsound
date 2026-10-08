@@ -256,21 +256,23 @@ final class CalibrationModel {
     private var generation: UInt64 = 0
 
     init(
-        storageURL: URL? = nil,
         fileManager: FileManager = .default
     ) {
         self.fileManager = fileManager
+        self.storageURL =
+            Self.defaultStorageURL(
+                fileManager: fileManager
+            )
 
-        if let storageURL {
-            self.storageURL =
-                storageURL
-        } else {
-            self.storageURL =
-                Self.defaultStorageURL(
-                    fileManager:
-                        fileManager
-                )
-        }
+        load()
+    }
+
+    init(
+        storageURL: URL?,
+        fileManager: FileManager = .default
+    ) {
+        self.fileManager = fileManager
+        self.storageURL = storageURL
 
         load()
     }
