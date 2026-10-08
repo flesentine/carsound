@@ -80,11 +80,14 @@ struct FrequencyCoverageContext:
     Sendable
 {
     let routeSignature: String
+    let audioConfigurationID: String
     let headPosition:
         HeadPositionPreset?
 
     var id: String {
         routeSignature +
+            "|" +
+            audioConfigurationID +
             "|" +
             (
                 headPosition?
@@ -355,13 +358,20 @@ enum FrequencyCoverageAnalytics {
             let route =
                 event.context
                     .routeSignature,
-            !route.isEmpty
+            !route.isEmpty,
+            let audioConfigurationID =
+                ExperimentEvidenceQuality
+                    .audioConfigurationID(
+                        for: event
+                    )
         else {
             return nil
         }
 
         return FrequencyCoverageContext(
             routeSignature: route,
+            audioConfigurationID:
+                audioConfigurationID,
             headPosition:
                 HeadPositionSensitivityAnalytics
                     .position(
