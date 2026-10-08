@@ -9181,6 +9181,15 @@ final class QuietDriveLabTests: XCTestCase {
                         .moderate
                         .rawValue
             )
+        let headOnlyConfiguration =
+            ExperimentEvidenceQuality
+                .audioConfigurationID(
+                    routeSignature:
+                        "route-head-only",
+                    sampleRate: 48_000,
+                    ioBufferDuration:
+                        0.005
+                )
         let headOnly = [
             StructuredLogEvent(
                 recordedAt:
@@ -9201,7 +9210,10 @@ final class QuietDriveLabTests: XCTestCase {
                     "head_position":
                         HeadPositionPreset
                             .reference
-                            .rawValue
+                            .rawValue,
+                    ExperimentEvidenceQuality
+                        .audioConfigurationTextKey:
+                        headOnlyConfiguration
                 ]
             ),
             StructuredLogEvent(
@@ -9223,7 +9235,10 @@ final class QuietDriveLabTests: XCTestCase {
                     "head_position":
                         HeadPositionPreset
                             .left
-                            .rawValue
+                            .rawValue,
+                    ExperimentEvidenceQuality
+                        .audioConfigurationTextKey:
+                        headOnlyConfiguration
                 ]
             )
         ]
