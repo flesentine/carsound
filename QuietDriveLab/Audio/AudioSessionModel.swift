@@ -35,6 +35,9 @@ final class AudioSessionModel {
     private(set) var routeRevision: UInt64 = 0
     private(set) var routeSignature = "None"
     private(set) var lastRouteChangeReason = "None"
+    private(set) var interruptionRevision: UInt64 = 0
+    private(set) var isInterrupted = false
+    private(set) var lastInterruptionReason = "None"
 
     @ObservationIgnored
     private let session = AVAudioSession.sharedInstance()
@@ -44,6 +47,9 @@ final class AudioSessionModel {
 
     @ObservationIgnored
     nonisolated(unsafe) private var mediaResetObserver: NSObjectProtocol?
+
+    @ObservationIgnored
+    nonisolated(unsafe) private var interruptionObserver: NSObjectProtocol?
 
     init() {
         installObservers()
@@ -56,6 +62,9 @@ final class AudioSessionModel {
         }
         if let mediaResetObserver {
             NotificationCenter.default.removeObserver(mediaResetObserver)
+        }
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
         }
     }
 
@@ -73,6 +82,7 @@ final class AudioSessionModel {
             try session.setPreferredIOBufferDuration(0.005)
             try session.setActive(true)
 
+            isInterrupted = false
             state = .active
             refreshRoute()
         } catch {
@@ -151,6 +161,64 @@ final class AudioSessionModel {
                 self.state = .inactive
                 self.lastRouteChangeReason = "Media services reset"
                 self.refreshRoute()
+            }
+        }
+
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: session,
+            queue: nil
+        ) { [weak self] notification in
+            let typeRaw =
+                notification.userInfo?[
+                    AVAudioSessionInterruptionTypeKey
+                ] as? UInt
+            let type =
+                typeRaw.flatMap(
+                    AVAudioSession.InterruptionType.init(
+                        rawValue:
+                            )
+                )
+            let optionsRaw =
+                notification.userInfo?[
+                    AVAudioSessionInterruptionOptionKey
+                ] as? UInt
+            let options =
+                AVAudioSession.InterruptionOptions(
+                    rawValue:
+                        optionsRaw ?? 0
+                )
+
+            Task { @MainActor [weak self] in
+                guard let self else { return }
+
+                switch type {
+                case .began:
+                    self.isInterrupted = true
+                    self.interruptionRevision &+= 1
+                    self.lastInterruptionReason =
+                        "Audio interruption began"
+                    self.state = .inactive
+                    self.refreshRoute()
+
+                case .ended:
+                    self.isInterrupted = false
+                    self.lastInterruptionReason =
+                        options.contains(
+                            .shouldResume
+                        )
+                        ? "Interruption ended — reactivate manually"
+                        : "Interruption ended"
+                    self.refreshRoute()
+
+                case .none:
+                    self.lastInterruptionReason =
+                        "Unknown audio interruption"
+
+                @unknown default:
+                    self.lastInterruptionReason =
+                        "Unknown audio interruption"
+                }
             }
         }
     }
