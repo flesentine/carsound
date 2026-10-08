@@ -5198,6 +5198,7 @@ final class QuietDriveLabTests: XCTestCase {
         _ = first.record(
             kind: .captureStarted
         )
+        await first.flushPersistence()
 
         let second =
             StructuredLogModel(
@@ -5219,7 +5220,7 @@ final class QuietDriveLabTests: XCTestCase {
     }
 
     @MainActor
-    func testStructuredLogPersistsMetricsFlagsReferencesAndContext() throws {
+    func testStructuredLogPersistsMetricsFlagsReferencesAndContext() async throws {
         let url =
             FileManager.default
                 .temporaryDirectory
@@ -5293,6 +5294,8 @@ final class QuietDriveLabTests: XCTestCase {
                 .currentSchemaVersion
         )
 
+        await model.flushPersistence()
+
         let reloaded =
             StructuredLogModel(
                 storageURL: url,
@@ -5331,7 +5334,7 @@ final class QuietDriveLabTests: XCTestCase {
     }
 
     @MainActor
-    func testStructuredLogSeparatesSessionsAcrossLaunches() throws {
+    func testStructuredLogSeparatesSessionsAcrossLaunches() async throws {
         let url =
             FileManager.default
                 .temporaryDirectory
@@ -5385,6 +5388,58 @@ final class QuietDriveLabTests: XCTestCase {
                 .first?
                 .sequence,
             1
+        )
+    }
+
+    @MainActor
+    func testStructuredLogFlushPersistsLatestSnapshot() async throws {
+        let url =
+            FileManager.default
+                .temporaryDirectory
+                .appendingPathComponent(
+                    "quietdrive-structured-flush-\(UUID().uuidString).json"
+                )
+        defer {
+            try? FileManager.default
+                .removeItem(at: url)
+        }
+
+        let model =
+            StructuredLogModel(
+                storageURL: url,
+                sessionID:
+                    UUID(
+                        uuidString:
+                            "00000000-0000-0000-0000-000000000078"
+                    )!
+            )
+
+        for index in 0..<20 {
+            _ = model.record(
+                kind: .confidenceSnapshot,
+                metrics: [
+                    "index":
+                        Double(index)
+                ]
+            )
+        }
+
+        await model.flushPersistence()
+
+        let reloaded =
+            StructuredLogModel(
+                storageURL: url,
+                sessionID: UUID()
+            )
+
+        XCTAssertEqual(
+            reloaded.events.count,
+            20
+        )
+        XCTAssertEqual(
+            reloaded.events.last?
+                .metrics["index"],
+            19
         )
     }
 
