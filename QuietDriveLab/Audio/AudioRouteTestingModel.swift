@@ -171,18 +171,23 @@ final class AudioRouteTestingModel {
     private let fileManager: FileManager
 
     init(
-        storageURL: URL? = nil,
         fileManager: FileManager = .default
     ) {
         self.fileManager = fileManager
-
-        if let storageURL {
-            self.storageURL = storageURL
-        } else {
-            self.storageURL = Self.defaultStorageURL(
+        self.storageURL =
+            Self.defaultStorageURL(
                 fileManager: fileManager
             )
-        }
+
+        load()
+    }
+
+    init(
+        storageURL: URL?,
+        fileManager: FileManager = .default
+    ) {
+        self.fileManager = fileManager
+        self.storageURL = storageURL
 
         load()
     }
