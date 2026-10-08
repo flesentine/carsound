@@ -571,3 +571,24 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] structured-log reload ordering is deterministic across equal timestamps
 - [x] GitHub Actions now executes XCTest on an available iPhone simulator after build-for-testing
 - [ ] future performance work: move full structured-log persistence off the main actor and avoid rewriting the entire JSON file on every event
+
+
+## Second post-roadmap review — Lab build 4.1
+
+- [x] bind A/B baselines to route signature and route/configuration revision
+- [x] block treatment, automatic searches, and Save Run after the baseline route/configuration changes
+- [x] treat sample-rate and I/O-buffer changes as route/configuration revisions
+- [x] handle AVAudioSession interruptions explicitly and require manual reactivation after interruption
+- [x] propagate media-services resets through the same app-level audio fail-safe path
+- [x] stop tone, microphone capture, measurement/search workflows, calibration, motion capture, and active diagnostics when the app leaves the foreground
+- [x] cancel active Cancellation Lab experiment workflows and mute generated output when navigating away from the Lab
+- [x] resynchronize the rendered tone buffer to the current phase before Resume after emergency mute
+- [x] reject clipped and likely program-contaminated samples from A/B measurement windows
+- [x] record clipping/program-interference audit flags on saved comparison events
+- [x] exclude flagged contaminated comparisons from repeatability, head-position, frequency-coverage, and final-decision analytics
+- [x] final evidence-volume gate counts eligible decision-quality A/B comparisons only
+- [x] move structured-log JSON persistence to a serialized actor off the main actor
+- [x] add explicit structured-log flush when the app leaves the foreground
+- [x] add regression coverage for audio interruptions, media reset safety signaling, asynchronous structured-log flush, and contaminated comparison exclusion
+- [x] cancel obsolete same-branch GitHub Actions runs on newer pushes
+- [ ] future architecture: move FFT/spectrum/dominant-tone/music analysis off the microphone tap path using a bounded/preallocated handoff so DSP workload cannot perturb callback timing
