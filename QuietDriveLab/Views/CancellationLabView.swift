@@ -5248,6 +5248,16 @@ struct CancellationLabView: View {
             toneIsQuiet &&
             !sound.isClipping &&
             sound.musicInterference.level != .likely &&
+            ProcessingLatencyMath
+                .analysisFitsBufferBudget(
+                    analysisProcessingMilliseconds:
+                        sound
+                            .processingLatency
+                            .latestAnalysisProcessingMilliseconds,
+                    bufferDurationMilliseconds:
+                        sound
+                            .bufferDurationMilliseconds
+                ) &&
             !audioSession.inputs.isEmpty &&
             !audioSession.outputs.isEmpty &&
             !calibration.state.isRunning
@@ -5404,6 +5414,23 @@ struct CancellationLabView: View {
 
                     if microphoneCapture.snapshot.isClipping {
                         return "Microphone clipping invalidated calibration."
+                    }
+
+                    if
+                        !ProcessingLatencyMath
+                            .analysisFitsBufferBudget(
+                                analysisProcessingMilliseconds:
+                                    microphoneCapture
+                                        .snapshot
+                                        .processingLatency
+                                        .latestAnalysisProcessingMilliseconds,
+                                bufferDurationMilliseconds:
+                                    microphoneCapture
+                                        .snapshot
+                                        .bufferDurationMilliseconds
+                            )
+                    {
+                        return "Audio analysis exceeded the microphone buffer budget."
                     }
 
                     if
@@ -6148,7 +6175,17 @@ struct CancellationLabView: View {
                 .capturing,
             !snapshot.isClipping,
             snapshot.musicInterference
-                .level != .likely
+                .level != .likely,
+            ProcessingLatencyMath
+                .analysisFitsBufferBudget(
+                    analysisProcessingMilliseconds:
+                        snapshot
+                            .processingLatency
+                            .latestAnalysisProcessingMilliseconds,
+                    bufferDurationMilliseconds:
+                        snapshot
+                            .bufferDurationMilliseconds
+                )
         else {
             return nil
         }
@@ -6252,7 +6289,17 @@ struct CancellationLabView: View {
                 .capturing &&
             !snapshot.isClipping &&
             snapshot.musicInterference
-                .level != .likely
+                .level != .likely &&
+            ProcessingLatencyMath
+                .analysisFitsBufferBudget(
+                    analysisProcessingMilliseconds:
+                        snapshot
+                            .processingLatency
+                            .latestAnalysisProcessingMilliseconds,
+                    bufferDurationMilliseconds:
+                        snapshot
+                            .bufferDurationMilliseconds
+                )
     }
 
     private var targetEnergyMeasurement: TargetFrequencyEnergyMeasurement? {
