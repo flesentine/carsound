@@ -38,6 +38,8 @@ final class AudioSessionModel {
     private(set) var interruptionRevision: UInt64 = 0
     private(set) var isInterrupted = false
     private(set) var lastInterruptionReason = "None"
+    private(set) var audioSafetyRevision: UInt64 = 0
+    private(set) var lastAudioSafetyReason = "None"
 
     @ObservationIgnored
     private let session = AVAudioSession.sharedInstance()
@@ -160,6 +162,9 @@ final class AudioSessionModel {
                 guard let self else { return }
                 self.state = .inactive
                 self.lastRouteChangeReason = "Media services reset"
+                self.lastAudioSafetyReason =
+                    "Media services reset"
+                self.audioSafetyRevision &+= 1
                 self.refreshRoute()
             }
         }
@@ -198,6 +203,9 @@ final class AudioSessionModel {
                     self.interruptionRevision &+= 1
                     self.lastInterruptionReason =
                         "Audio interruption began"
+                    self.lastAudioSafetyReason =
+                        "Audio interruption began"
+                    self.audioSafetyRevision &+= 1
                     self.state = .inactive
                     self.refreshRoute()
 
