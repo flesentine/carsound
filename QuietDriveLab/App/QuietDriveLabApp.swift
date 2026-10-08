@@ -77,6 +77,11 @@ struct QuietDriveLabApp: App {
                             "App left the foreground",
                         deactivateSession: true
                     )
+
+                    Task { @MainActor in
+                        await structuredLog
+                            .flushPersistence()
+                    }
                 }
                 .onChange(
                     of:
