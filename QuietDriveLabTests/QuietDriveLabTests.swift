@@ -9,6 +9,8 @@ final class QuietDriveLabTests: XCTestCase {
             AudioSessionModel()
         let initialRevision =
             model.interruptionRevision
+        let initialSafetyRevision =
+            model.audioSafetyRevision
 
         NotificationCenter.default.post(
             name:
@@ -40,6 +42,10 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(
             model.interruptionRevision,
             initialRevision + 1
+        )
+        XCTAssertEqual(
+            model.audioSafetyRevision,
+            initialSafetyRevision + 1
         )
         XCTAssertEqual(
             model.state,
@@ -89,6 +95,44 @@ final class QuietDriveLabTests: XCTestCase {
                 .contains(
                     "reactivate manually"
                 )
+        )
+    }
+
+    @MainActor
+    func testAudioSessionMediaResetRaisesSafetyRevision() async {
+        let model =
+            AudioSessionModel()
+        let initialSafetyRevision =
+            model.audioSafetyRevision
+
+        NotificationCenter.default.post(
+            name:
+                AVAudioSession
+                    .mediaServicesWereResetNotification,
+            object:
+                AVAudioSession
+                    .sharedInstance()
+        )
+
+        for _ in 0..<20
+        where
+            model.audioSafetyRevision ==
+                initialSafetyRevision
+        {
+            await Task.yield()
+        }
+
+        XCTAssertEqual(
+            model.audioSafetyRevision,
+            initialSafetyRevision + 1
+        )
+        XCTAssertEqual(
+            model.state,
+            .inactive
+        )
+        XCTAssertEqual(
+            model.lastAudioSafetyReason,
+            "Media services reset"
         )
     }
 
