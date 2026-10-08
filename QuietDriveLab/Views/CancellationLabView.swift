@@ -2583,6 +2583,17 @@ struct CancellationLabView: View {
                         .standardDeviationDB,
                 processingCallbackJitterMilliseconds:
                     processingJitter,
+                processingAnalysisMilliseconds:
+                    sound.fftTransformCount > 0
+                    ? sound
+                        .processingLatency
+                        .latestAnalysisProcessingMilliseconds
+                    : nil,
+                processingBufferDurationMilliseconds:
+                    sound.fftTransformCount > 0
+                    ? sound
+                        .bufferDurationMilliseconds
+                    : nil,
                 bluetoothActive:
                     bluetoothActive,
                 bluetoothJitter:
