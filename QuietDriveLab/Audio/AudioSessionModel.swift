@@ -174,11 +174,11 @@ final class AudioSessionModel {
                     AVAudioSessionInterruptionTypeKey
                 ] as? UInt
             let type =
-                typeRaw.flatMap(
-                    AVAudioSession.InterruptionType.init(
-                        rawValue:
-                            )
-                )
+                typeRaw.flatMap {
+                    AVAudioSession.InterruptionType(
+                        rawValue: $0
+                    )
+                }
             let optionsRaw =
                 notification.userInfo?[
                     AVAudioSessionInterruptionOptionKey
