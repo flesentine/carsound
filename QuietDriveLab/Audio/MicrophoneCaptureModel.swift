@@ -183,6 +183,7 @@ final class MicrophoneCaptureModel {
 
 private final class CaptureStatsStore: @unchecked Sendable {
     private let lock = NSLock()
+    private let analysisLock = NSLock()
 
     private var analysisMode: AnalysisMode = .ancFocus
     private var bufferCount: UInt64 = 0
@@ -228,6 +229,11 @@ private final class CaptureStatsStore: @unchecked Sendable {
     }
 
     func record(buffer: AVAudioPCMBuffer) {
+        analysisLock.lock()
+        defer {
+            analysisLock.unlock()
+        }
+
         let callbackStartedNanoseconds =
             DispatchTime.now().uptimeNanoseconds
 
@@ -385,6 +391,11 @@ private final class CaptureStatsStore: @unchecked Sendable {
     }
 
     func reset() {
+        analysisLock.lock()
+        defer {
+            analysisLock.unlock()
+        }
+
         fftAnalyzer.reset()
         smoothingBank.reset()
         noiseFloorEstimator.reset()
