@@ -249,6 +249,10 @@ enum LabGoNoGoAnalytics {
                                 series.context
                                     .routeSignature &&
                             $0.condition
+                                .audioConfigurationID ==
+                                series.context
+                                    .audioConfigurationID &&
+                            $0.condition
                                 .headPosition ==
                                 position
                         }
@@ -260,6 +264,10 @@ enum LabGoNoGoAnalytics {
                                 .routeSignature ==
                                 series.context
                                     .routeSignature &&
+                            $0.condition
+                                .audioConfigurationID ==
+                                series.context
+                                    .audioConfigurationID &&
                             $0.positionCount >= 2 &&
                             $0.assessment !=
                                 .directionReversal &&
@@ -537,6 +545,11 @@ enum LabGoNoGoAnalytics {
                         let route =
                             $0.context
                                 .routeSignature,
+                        let audioConfigurationID =
+                            ExperimentEvidenceQuality
+                                .audioConfigurationID(
+                                    for: $0
+                                ),
                         let rawPosition =
                             $0.text[
                                 "head_position"
@@ -555,6 +568,8 @@ enum LabGoNoGoAnalytics {
                             FrequencyCoverageContext(
                                 routeSignature:
                                     route,
+                                audioConfigurationID:
+                                    audioConfigurationID,
                                 headPosition:
                                     position
                             )
