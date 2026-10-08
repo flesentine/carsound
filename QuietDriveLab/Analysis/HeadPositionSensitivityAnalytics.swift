@@ -87,6 +87,7 @@ struct HeadPositionBaseCondition:
     Sendable
 {
     let routeSignature: String
+    let audioConfigurationID: String
     let frequencyTenthsHz: Int
     let phaseDegrees: Int
     let outputPercent: Int
@@ -94,6 +95,7 @@ struct HeadPositionBaseCondition:
     var id: String {
         [
             routeSignature,
+            audioConfigurationID,
             String(frequencyTenthsHz),
             String(phaseDegrees),
             String(outputPercent)
@@ -376,6 +378,11 @@ enum HeadPositionSensitivityAnalytics {
                 event.context
                     .routeSignature,
             !route.isEmpty,
+            let audioConfigurationID =
+                ExperimentEvidenceQuality
+                    .audioConfigurationID(
+                        for: event
+                    ),
             let frequency =
                 event.context
                     .targetFrequencyHz,
@@ -394,6 +401,8 @@ enum HeadPositionSensitivityAnalytics {
 
         return HeadPositionBaseCondition(
             routeSignature: route,
+            audioConfigurationID:
+                audioConfigurationID,
             frequencyTenthsHz:
                 Int(
                     (frequency * 10)
