@@ -50,22 +50,19 @@ enum ExperimentEvidenceQuality {
         _ build: String
     ) -> Bool {
         let components =
-            build
-                .split(
-                    separator: "."
-                )
-                .compactMap {
-                    Int($0)
-                }
+            build.split(
+                separator: "."
+            )
 
         guard
-            components.count >= 2
+            components.count >= 2,
+            let major =
+                Int(components[0]),
+            let minor =
+                Int(components[1])
         else {
             return false
         }
-
-        let major = components[0]
-        let minor = components[1]
 
         return
             major >
