@@ -327,16 +327,48 @@ final class ToneGeneratorModel {
     }
 
     func unmute() {
-        guard state == .playing, isMuted else {
+        guard
+            state == .playing,
+            isMuted,
+            sampleRate > 0,
+            let monoFormat = AVAudioFormat(
+                standardFormatWithSampleRate:
+                    sampleRate,
+                channels: 1
+            ),
+            let buffer = makeToneBuffer(
+                format: monoFormat,
+                phaseDegrees:
+                    phaseDegrees
+            )
+        else {
             return
         }
 
+        phaseChangeTask?.cancel()
+        phaseChangeTask = nil
+        rampTask?.cancel()
+        rampTask = nil
+
+        player.stop()
+        player.scheduleBuffer(
+            buffer,
+            at: nil,
+            options: [.loops],
+            completionHandler: nil
+        )
+        player.volume = 0
+        player.play()
+
+        generatedFrames =
+            Int(buffer.frameLength)
         isMuted = false
 
         beginRamp(
             to: outputGain,
             duration:
-                ToneGeneratorMath.liveLevelRampDurationSeconds
+                ToneGeneratorMath
+                    .liveLevelRampDurationSeconds
         )
     }
 
