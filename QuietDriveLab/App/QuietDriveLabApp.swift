@@ -143,6 +143,32 @@ struct QuietDriveLabApp: App {
                 .state.isRunning ||
             accelerometerCapture.state ==
                 .capturing
+        let safetyContext =
+            StructuredLogContext(
+                routeSignature:
+                    audioSession
+                        .routeSignature,
+                routeRevision:
+                    audioSession
+                        .routeRevision,
+                calibrationProfileID:
+                    nil,
+                targetFrequencyHz:
+                    toneGenerator
+                        .frequencyHz,
+                phaseDegrees:
+                    toneGenerator
+                        .phaseDegrees,
+                outputPercent:
+                    toneGenerator
+                        .outputPercent,
+                confidenceScorePercent:
+                    nil,
+                evidenceCoveragePercent:
+                    nil,
+                confidenceLevel:
+                    nil
+            )
 
         toneGenerator.stopImmediately()
         microphoneCapture.stopCapture()
@@ -199,31 +225,7 @@ struct QuietDriveLabApp: App {
         _ = structuredLog.record(
             kind: .safetyMute,
             context:
-                StructuredLogContext(
-                    routeSignature:
-                        audioSession
-                            .routeSignature,
-                    routeRevision:
-                        audioSession
-                            .routeRevision,
-                    calibrationProfileID:
-                        nil,
-                    targetFrequencyHz:
-                        toneGenerator
-                            .frequencyHz,
-                    phaseDegrees:
-                        toneGenerator
-                            .phaseDegrees,
-                    outputPercent:
-                        toneGenerator
-                            .outputPercent,
-                    confidenceScorePercent:
-                        nil,
-                    evidenceCoveragePercent:
-                        nil,
-                    confidenceLevel:
-                        nil
-                ),
+                safetyContext,
             text: [
                 "reason": reason,
                 "action":
