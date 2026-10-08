@@ -1,7 +1,97 @@
 import XCTest
+import AVFAudio
 @testable import QuietDriveLab
 
 final class QuietDriveLabTests: XCTestCase {
+    @MainActor
+    func testAudioSessionInterruptionMarksSessionInactiveWithoutAutoResume() async {
+        let model =
+            AudioSessionModel()
+        let initialRevision =
+            model.interruptionRevision
+
+        NotificationCenter.default.post(
+            name:
+                AVAudioSession
+                    .interruptionNotification,
+            object:
+                AVAudioSession
+                    .sharedInstance(),
+            userInfo: [
+                AVAudioSessionInterruptionTypeKey:
+                    AVAudioSession
+                        .InterruptionType
+                        .began
+                        .rawValue
+            ]
+        )
+
+        for _ in 0..<20
+        where
+            model.interruptionRevision ==
+                initialRevision
+        {
+            await Task.yield()
+        }
+
+        XCTAssertTrue(
+            model.isInterrupted
+        )
+        XCTAssertEqual(
+            model.interruptionRevision,
+            initialRevision + 1
+        )
+        XCTAssertEqual(
+            model.state,
+            .inactive
+        )
+
+        NotificationCenter.default.post(
+            name:
+                AVAudioSession
+                    .interruptionNotification,
+            object:
+                AVAudioSession
+                    .sharedInstance(),
+            userInfo: [
+                AVAudioSessionInterruptionTypeKey:
+                    AVAudioSession
+                        .InterruptionType
+                        .ended
+                        .rawValue,
+                AVAudioSessionInterruptionOptionKey:
+                    AVAudioSession
+                        .InterruptionOptions
+                        .shouldResume
+                        .rawValue
+            ]
+        )
+
+        for _ in 0..<20
+        where model.isInterrupted
+        {
+            await Task.yield()
+        }
+
+        XCTAssertFalse(
+            model.isInterrupted
+        )
+        XCTAssertEqual(
+            model.state,
+            .inactive
+        )
+        XCTAssertEqual(
+            model.interruptionRevision,
+            initialRevision + 1
+        )
+        XCTAssertTrue(
+            model.lastInterruptionReason
+                .contains(
+                    "reactivate manually"
+                )
+        )
+    }
+
     func testProjectBootstraps() {
         XCTAssertTrue(true)
     }
