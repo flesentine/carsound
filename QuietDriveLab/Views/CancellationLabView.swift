@@ -3059,6 +3059,7 @@ struct CancellationLabView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(
                     microphoneCapture.state != .capturing ||
+                    !measurementWindowIsUsable ||
                     targetEnergyMeasurement == nil ||
                     beforeAfterMeasurement.state.isBusy ||
                     phaseSweep.state.isRunning ||
@@ -3076,6 +3077,7 @@ struct CancellationLabView: View {
                     microphoneCapture.state != .capturing ||
                     toneGenerator.state != .playing ||
                     toneGenerator.isMuted ||
+                    !measurementWindowIsUsable ||
                     targetEnergyMeasurement == nil ||
                     !baselineMatchesCurrentTarget ||
                     !baselineMatchesCurrentHeadPosition ||
@@ -4614,6 +4616,17 @@ struct CancellationLabView: View {
                         selectedHeadPosition
                     ).title
             ],
+            flags: [
+                "microphone_clipping":
+                    microphoneCapture
+                        .snapshot
+                        .isClipping,
+                "likely_program_interference":
+                    microphoneCapture
+                        .snapshot
+                        .musicInterference
+                        .level == .likely
+            ],
             references: [
                 "experiment_record_id":
                     record.id.uuidString
@@ -5573,6 +5586,7 @@ struct CancellationLabView: View {
         audioSession.state == .active &&
         toneGenerator.state == .playing &&
         !toneGenerator.isMuted &&
+        measurementWindowIsUsable &&
         targetEnergyMeasurement != nil &&
         !beforeAfterMeasurement.state.isBusy &&
         !phaseSweep.state.isRunning &&
@@ -5706,6 +5720,7 @@ struct CancellationLabView: View {
         !toneGenerator.isMuted &&
         toneGenerator.outputPercent >=
             AmplitudeSearchMath.minimumSearchPercent &&
+        measurementWindowIsUsable &&
         targetEnergyMeasurement != nil &&
         !beforeAfterMeasurement.state.isBusy &&
         !phaseSweep.state.isRunning &&
@@ -5813,6 +5828,7 @@ struct CancellationLabView: View {
         toneGenerator.state == .playing &&
         !toneGenerator.isMuted &&
         toneGenerator.outputPercent > 0 &&
+        measurementWindowIsUsable &&
         targetEnergyMeasurement != nil &&
         !beforeAfterMeasurement.state.isBusy &&
         !phaseSweep.state.isRunning &&
@@ -5952,6 +5968,7 @@ struct CancellationLabView: View {
         toneGenerator.state == .playing &&
         !toneGenerator.isMuted &&
         toneGenerator.outputPercent > 0 &&
+        measurementWindowIsUsable &&
         targetEnergyMeasurement != nil &&
         !beforeAfterMeasurement.state.isBusy &&
         !phaseSweep.state.isRunning &&
@@ -6120,6 +6137,16 @@ struct CancellationLabView: View {
     ) -> TargetFrequencyEnergyMeasurement? {
         let snapshot = microphoneCapture.snapshot
 
+        guard
+            microphoneCapture.state ==
+                .capturing,
+            !snapshot.isClipping,
+            snapshot.musicInterference
+                .level != .likely
+        else {
+            return nil
+        }
+
         return TargetFrequencyEnergyMeter.measure(
             spectrum: snapshot.smoothedSpectrum.balanced,
             noiseFloor: snapshot.noiseFloor.bins,
@@ -6208,6 +6235,18 @@ struct CancellationLabView: View {
             format: "Increase %.2f dB",
             abs(comparison.measuredReductionDB)
         )
+    }
+
+    private var measurementWindowIsUsable: Bool {
+        let snapshot =
+            microphoneCapture.snapshot
+
+        return
+            microphoneCapture.state ==
+                .capturing &&
+            !snapshot.isClipping &&
+            snapshot.musicInterference
+                .level != .likely
     }
 
     private var targetEnergyMeasurement: TargetFrequencyEnergyMeasurement? {
