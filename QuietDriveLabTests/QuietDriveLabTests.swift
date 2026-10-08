@@ -2416,6 +2416,45 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testProcessingLatencyBufferBudgetRequiresAnalysisToKeepUp() {
+        XCTAssertTrue(
+            ProcessingLatencyMath
+                .analysisFitsBufferBudget(
+                    analysisProcessingMilliseconds:
+                        10,
+                    bufferDurationMilliseconds:
+                        21.33
+                )
+        )
+        XCTAssertTrue(
+            ProcessingLatencyMath
+                .analysisFitsBufferBudget(
+                    analysisProcessingMilliseconds:
+                        21.33,
+                    bufferDurationMilliseconds:
+                        21.33
+                )
+        )
+        XCTAssertFalse(
+            ProcessingLatencyMath
+                .analysisFitsBufferBudget(
+                    analysisProcessingMilliseconds:
+                        22,
+                    bufferDurationMilliseconds:
+                        21.33
+                )
+        )
+        XCTAssertFalse(
+            ProcessingLatencyMath
+                .analysisFitsBufferBudget(
+                    analysisProcessingMilliseconds:
+                        1,
+                    bufferDurationMilliseconds:
+                        0
+                )
+        )
+    }
+
     func testProcessingLatencySpectrumCenterAgeAddsHalfWindowProcessingAndPublishAge() {
         XCTAssertEqual(
             ProcessingLatencyMath
