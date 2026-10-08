@@ -38,6 +38,7 @@ struct RepeatabilityCondition:
     Sendable
 {
     let routeSignature: String
+    let audioConfigurationID: String
     let frequencyTenthsHz: Int
     let phaseDegrees: Int
     let outputPercent: Int
@@ -47,6 +48,7 @@ struct RepeatabilityCondition:
     var id: String {
         [
             routeSignature,
+            audioConfigurationID,
             String(frequencyTenthsHz),
             String(phaseDegrees),
             String(outputPercent),
@@ -232,6 +234,11 @@ enum RepeatabilityAnalytics {
                 event.context
                     .routeSignature,
             !route.isEmpty,
+            let audioConfigurationID =
+                ExperimentEvidenceQuality
+                    .audioConfigurationID(
+                        for: event
+                    ),
             let frequency =
                 event.context
                     .targetFrequencyHz,
@@ -250,6 +257,8 @@ enum RepeatabilityAnalytics {
 
         return RepeatabilityCondition(
             routeSignature: route,
+            audioConfigurationID:
+                audioConfigurationID,
             frequencyTenthsHz:
                 Int(
                     (frequency * 10)
