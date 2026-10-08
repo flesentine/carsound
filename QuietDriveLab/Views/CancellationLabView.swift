@@ -3190,6 +3190,7 @@ struct CancellationLabView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(
                     comparisonKey(comparison) == lastSavedComparisonKey ||
+                    !baselineMatchesCurrentRoute ||
                     phaseSweep.state.isRunning ||
                     phaseRefinement.state.isRunning ||
                     amplitudeSearch.state.isRunning ||
