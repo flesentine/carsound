@@ -36,9 +36,10 @@ enum ExperimentEvidenceQuality {
                         event.sessionID
                     ]
             else {
-                // Synthetic/unit-test events may not include
-                // a session-start build marker.
-                return true
+                // Final decisions require an explicit session
+                // build marker. If retention has pruned it,
+                // the remaining events are not decision-eligible.
+                return false
             }
 
             guard
@@ -144,8 +145,9 @@ enum ExperimentEvidenceQuality {
             return nil
         }
 
-        // Unversioned synthetic/unit-test events use the route
-        // identity as a compatibility fallback.
+        // Standalone analytics may still operate on older or
+        // synthetic events. Final-decision filtering separately
+        // requires the explicit 4.2+ configuration tag.
         return route
     }
 
