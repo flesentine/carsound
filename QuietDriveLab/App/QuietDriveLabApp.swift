@@ -2,6 +2,8 @@ import SwiftUI
 
 @main
 struct QuietDriveLabApp: App {
+    @Environment(\.scenePhase)
+    private var scenePhase
     @State private var microphonePermission = MicrophonePermissionModel()
     @State private var audioSession = AudioSessionModel()
     @State private var microphoneCapture = MicrophoneCaptureModel()
@@ -63,6 +65,165 @@ struct QuietDriveLabApp: App {
                         ]
                     )
                 }
+                .onChange(
+                    of: scenePhase
+                ) { _, phase in
+                    guard phase != .active else {
+                        return
+                    }
+
+                    stopSafetyCriticalActivity(
+                        reason:
+                            "App left the foreground",
+                        deactivateSession: true
+                    )
+                }
+                .onChange(
+                    of:
+                        audioSession
+                            .interruptionRevision
+                ) { oldValue, newValue in
+                    guard newValue != oldValue else {
+                        return
+                    }
+
+                    stopSafetyCriticalActivity(
+                        reason:
+                            audioSession
+                                .lastInterruptionReason,
+                        deactivateSession:
+                            false
+                    )
+                }
+                .onChange(
+                    of:
+                        audioSession
+                            .routeRevision
+                ) { oldValue, newValue in
+                    guard
+                        oldValue != 0,
+                        newValue != oldValue
+                    else {
+                        return
+                    }
+
+                    stopSafetyCriticalActivity(
+                        reason:
+                            "Audio route changed",
+                        deactivateSession:
+                            false
+                    )
+                }
         }
+    }
+
+    private func stopSafetyCriticalActivity(
+        reason: String,
+        deactivateSession: Bool
+    ) {
+        let hadActiveWork =
+            toneGenerator.state == .playing ||
+            microphoneCapture.state ==
+                .capturing ||
+            beforeAfterMeasurement.state
+                .isBusy ||
+            phaseSweep.state.isRunning ||
+            phaseRefinement.state.isRunning ||
+            amplitudeSearch.state.isRunning ||
+            adaptiveController.state.isRunning ||
+            calibration.state.isRunning ||
+            bluetoothJitterDiagnostics
+                .state.isRunning ||
+            soundVibrationCorrelation
+                .state.isRunning ||
+            accelerometerCapture.state ==
+                .capturing
+
+        toneGenerator.stopImmediately()
+        microphoneCapture.stopCapture()
+
+        if beforeAfterMeasurement.state.isBusy {
+            beforeAfterMeasurement
+                .cancelCapture()
+        }
+        if phaseSweep.state.isRunning {
+            phaseSweep.cancel()
+        }
+        if phaseRefinement.state.isRunning {
+            phaseRefinement.cancel()
+        }
+        if amplitudeSearch.state.isRunning {
+            amplitudeSearch.cancel()
+        }
+        if adaptiveController.state.isRunning {
+            adaptiveController.cancel()
+        }
+        if calibration.state.isRunning {
+            calibration.cancel()
+        }
+        if
+            bluetoothJitterDiagnostics
+                .state.isRunning
+        {
+            bluetoothJitterDiagnostics.stop()
+        }
+        if
+            soundVibrationCorrelation
+                .state.isRunning
+        {
+            soundVibrationCorrelation.stop()
+        }
+        if
+            accelerometerCapture.state ==
+                .capturing
+        {
+            accelerometerCapture.stop()
+        }
+
+        if
+            deactivateSession,
+            audioSession.state == .active
+        {
+            audioSession.deactivate()
+        }
+
+        guard hadActiveWork else {
+            return
+        }
+
+        _ = structuredLog.record(
+            kind: .safetyMute,
+            context:
+                StructuredLogContext(
+                    routeSignature:
+                        audioSession
+                            .routeSignature,
+                    routeRevision:
+                        audioSession
+                            .routeRevision,
+                    calibrationProfileID:
+                        nil,
+                    targetFrequencyHz:
+                        toneGenerator
+                            .frequencyHz,
+                    phaseDegrees:
+                        toneGenerator
+                            .phaseDegrees,
+                    outputPercent:
+                        toneGenerator
+                            .outputPercent,
+                    confidenceScorePercent:
+                        nil,
+                    evidenceCoveragePercent:
+                        nil,
+                    confidenceLevel:
+                        nil
+                ),
+            text: [
+                "reason": reason,
+                "action":
+                    "automatic lifecycle shutdown"
+            ]
+        )
     }
 }
