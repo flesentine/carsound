@@ -1,6 +1,83 @@
 import Foundation
 
 enum ExperimentEvidenceQuality {
+    static let minimumDecisionBuildMajor = 4
+    static let minimumDecisionBuildMinor = 1
+
+    static func decisionEligibleEvents(
+        _ events: [StructuredLogEvent]
+    ) -> [StructuredLogEvent] {
+        var buildBySession:
+            [UUID: String] = [:]
+
+        for event in events
+        where
+            event.kind ==
+                .sessionStarted
+        {
+            if
+                let build =
+                    event.text[
+                        "app_build"
+                    ]
+            {
+                buildBySession[
+                    event.sessionID
+                ] = build
+            }
+        }
+
+        return events.filter { event in
+            guard
+                let build =
+                    buildBySession[
+                        event.sessionID
+                    ]
+            else {
+                // Synthetic/unit-test events may not include
+                // a session-start build marker.
+                return true
+            }
+
+            return
+                isDecisionBuildEligible(
+                    build
+                )
+        }
+    }
+
+    static func isDecisionBuildEligible(
+        _ build: String
+    ) -> Bool {
+        let components =
+            build
+                .split(
+                    separator: "."
+                )
+                .compactMap {
+                    Int($0)
+                }
+
+        guard
+            components.count >= 2
+        else {
+            return false
+        }
+
+        let major = components[0]
+        let minor = components[1]
+
+        return
+            major >
+                minimumDecisionBuildMajor ||
+            (
+                major ==
+                    minimumDecisionBuildMajor &&
+                minor >=
+                    minimumDecisionBuildMinor
+            )
+    }
+
     static func isContaminated(
         _ event: StructuredLogEvent
     ) -> Bool {
