@@ -608,6 +608,11 @@ struct CancellationLabView: View {
                                     "4.1"
                             ]
                         )
+
+                        Task { @MainActor in
+                            await structuredLog
+                                .flushPersistence()
+                        }
                     }
                     .buttonStyle(.bordered)
                 }
