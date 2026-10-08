@@ -134,7 +134,9 @@ struct CancellationLabView: View {
                 routeSignature:
                     audioSession.routeSignature,
                 sampleRate:
-                    audioSession.sampleRate
+                    audioSession.sampleRate,
+                ioBufferDuration:
+                    audioSession.ioBufferDuration
             )
         let approximateLiveSPL =
             matching.flatMap {
@@ -4419,7 +4421,9 @@ struct CancellationLabView: View {
                 routeSignature:
                     audioSession.routeSignature,
                 sampleRate:
-                    audioSession.sampleRate
+                    audioSession.sampleRate,
+                ioBufferDuration:
+                    audioSession.ioBufferDuration
             )
 
         return StructuredLogContext(
