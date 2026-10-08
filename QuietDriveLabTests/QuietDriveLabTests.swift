@@ -4972,7 +4972,7 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
-    func testCalibrationRouteMatchRequiresSignatureAndSampleRate() {
+    func testCalibrationRouteMatchRequiresSignatureSampleRateAndBuffer() {
         let profile =
             makeCalibrationProfile(
                 routeSignature: "route-A",
@@ -4983,7 +4983,8 @@ final class QuietDriveLabTests: XCTestCase {
             CalibrationMath.routeMatches(
                 profile: profile,
                 routeSignature: "route-A",
-                sampleRate: 48_000.5
+                sampleRate: 48_000.5,
+                ioBufferDuration: 0.005
             )
         )
 
@@ -4991,7 +4992,8 @@ final class QuietDriveLabTests: XCTestCase {
             CalibrationMath.routeMatches(
                 profile: profile,
                 routeSignature: "route-B",
-                sampleRate: 48_000
+                sampleRate: 48_000,
+                ioBufferDuration: 0.005
             )
         )
 
@@ -4999,7 +5001,17 @@ final class QuietDriveLabTests: XCTestCase {
             CalibrationMath.routeMatches(
                 profile: profile,
                 routeSignature: "route-A",
-                sampleRate: 44_100
+                sampleRate: 44_100,
+                ioBufferDuration: 0.005
+            )
+        )
+
+        XCTAssertFalse(
+            CalibrationMath.routeMatches(
+                profile: profile,
+                routeSignature: "route-A",
+                sampleRate: 48_000,
+                ioBufferDuration: 0.010
             )
         )
     }
@@ -5069,7 +5081,8 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(
             reloaded.latestMatchingProfile(
                 routeSignature: "route-A",
-                sampleRate: 48_000
+                sampleRate: 48_000,
+                ioBufferDuration: 0.005
             ),
             profile
         )
