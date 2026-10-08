@@ -8245,6 +8245,104 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testContaminatedComparisonIsExcludedFromDecisionAnalytics() {
+        let source =
+            makeLabDecisionEvents()
+        var contaminatedOne = false
+
+        let events =
+            source.map { event in
+                guard
+                    !contaminatedOne,
+                    event.kind ==
+                        .comparisonSaved,
+                    event.context
+                        .targetFrequencyHz ==
+                        90
+                else {
+                    return event
+                }
+
+                contaminatedOne = true
+
+                return StructuredLogEvent(
+                    recordedAt:
+                        event.recordedAt,
+                    sessionID:
+                        event.sessionID,
+                    sequence:
+                        event.sequence,
+                    kind:
+                        event.kind,
+                    context:
+                        event.context,
+                    metrics:
+                        event.metrics,
+                    text:
+                        event.text,
+                    flags: [
+                        "microphone_clipping":
+                            true
+                    ],
+                    references:
+                        event.references
+                )
+            }
+
+        let decision =
+            LabGoNoGoAnalytics
+                .snapshot(
+                    events: events,
+                    currentSessionID:
+                        events[0]
+                            .sessionID
+                )
+        let evidenceGate =
+            decision.gates
+                .first {
+                    $0.id ==
+                        "evidence_volume"
+                }
+
+        XCTAssertEqual(
+            decision.comparisonCount,
+            9
+        )
+        XCTAssertEqual(
+            evidenceGate?.status,
+            .needsEvidence
+        )
+        XCTAssertEqual(
+            decision.verdict,
+            .hold
+        )
+
+        XCTAssertEqual(
+            RepeatabilityAnalytics
+                .snapshot(
+                    events: events
+                )
+                .analyzableComparisonCount,
+            9
+        )
+        XCTAssertEqual(
+            HeadPositionSensitivityAnalytics
+                .snapshot(
+                    events: events
+                )
+                .taggedComparisonCount,
+            9
+        )
+        XCTAssertEqual(
+            FrequencyCoverageAnalytics
+                .snapshot(
+                    events: events
+                )
+                .analyzableComparisonCount,
+            9
+        )
+    }
+
     func testLabGoNoGoCountsOnlySessionsWithComparisonsForEvidenceVolume() {
         let source =
             makeLabDecisionEvents()
