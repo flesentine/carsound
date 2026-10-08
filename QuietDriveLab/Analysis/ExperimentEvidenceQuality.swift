@@ -172,10 +172,56 @@ enum ExperimentEvidenceQuality {
     static func isEligibleComparison(
         _ event: StructuredLogEvent
     ) -> Bool {
-        event.kind == .comparisonSaved &&
-        event.metrics[
-            "measured_reduction_db"
-        ] != nil &&
-        !isContaminated(event)
+        guard
+            event.kind == .comparisonSaved,
+            let reduction =
+                event.metrics[
+                    "measured_reduction_db"
+                ],
+            reduction.isFinite
+        else {
+            return false
+        }
+
+        return !isContaminated(event)
+    }
+
+    static func isEligibleDecisionComparison(
+        _ event: StructuredLogEvent
+    ) -> Bool {
+        guard
+            isEligibleComparison(event),
+            let route =
+                event.context
+                    .routeSignature,
+            !route.isEmpty,
+            let frequency =
+                event.context
+                    .targetFrequencyHz,
+            let phase =
+                event.context
+                    .phaseDegrees,
+            let output =
+                event.context
+                    .outputPercent,
+            frequency.isFinite,
+            phase.isFinite,
+            output.isFinite,
+            audioConfigurationID(
+                for: event
+            ) != nil,
+            let rawPosition =
+                event.text[
+                    "head_position"
+                ],
+            HeadPositionPreset(
+                rawValue:
+                    rawPosition
+            ) != nil
+        else {
+            return false
+        }
+
+        return true
     }
 }
