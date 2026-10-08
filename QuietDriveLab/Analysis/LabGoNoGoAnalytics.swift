@@ -155,6 +155,7 @@ private struct LabDecisionConfidenceEvidence {
     let scorePercent: Double?
     let coveragePercent: Double?
     let routeSignature: String?
+    let headPosition: HeadPositionPreset?
 }
 
 enum LabGoNoGoAnalytics {
@@ -270,20 +271,19 @@ enum LabGoNoGoAnalytics {
                     hasSafePositionEvidence
             }
 
-        let coherentRoutes =
+        let coherentContexts =
             Set(
                 coherentQualifyingBroad
                     .map {
                         $0.context
-                            .routeSignature
                     }
             )
         let confidenceEvidence =
             latestConfidenceEvidence(
                 events:
                     decisionEvents,
-                preferredRoutes:
-                    coherentRoutes
+                preferredContexts:
+                    coherentContexts
             )
 
         let gates = [
@@ -295,8 +295,8 @@ enum LabGoNoGoAnalytics {
             ),
             confidenceGate(
                 confidenceEvidence,
-                requiresPreferredRoute:
-                    !coherentRoutes.isEmpty
+                requiresPreferredContext:
+                    !coherentContexts.isEmpty
             ),
             repeatabilityGate(
                 repeatability
@@ -401,7 +401,7 @@ enum LabGoNoGoAnalytics {
     private static func confidenceGate(
         _ evidence:
             LabDecisionConfidenceEvidence?,
-        requiresPreferredRoute: Bool
+        requiresPreferredContext: Bool
     ) -> LabDecisionGate {
         guard let evidence else {
             return LabDecisionGate(
@@ -410,12 +410,12 @@ enum LabGoNoGoAnalytics {
                 status:
                     .needsEvidence,
                 summary:
-                    requiresPreferredRoute
-                    ? "No confidence snapshot for the coherent route"
+                    requiresPreferredContext
+                    ? "No confidence snapshot for the coherent route/head position"
                     : "No explicit confidence snapshot",
                 detail:
-                    requiresPreferredRoute
-                    ? "Log a Confidence Snapshot while testing the same route that supplies the coherent repeatability, head-position, and frequency evidence."
+                    requiresPreferredContext
+                    ? "Log a Confidence Snapshot at the same route and head position that supply the coherent repeatability and frequency evidence."
                     : "Use Log Confidence Snapshot before making the final Lab decision. Incidental confidence context on other events does not count."
             )
         }
@@ -482,6 +482,12 @@ enum LabGoNoGoAnalytics {
                     " • route " + $0
                 } ??
             ""
+        let positionSuffix =
+            evidence.headPosition
+                .map {
+                    " • " + $0.title
+                } ??
+            ""
 
         return LabDecisionGate(
             id: "overall_confidence",
@@ -497,7 +503,8 @@ enum LabGoNoGoAnalytics {
                     score,
                     coverage
                 ) +
-                routeSuffix,
+                routeSuffix +
+                positionSuffix,
             detail:
                 pass
                 ? "The explicit confidence snapshot meets the existing moderate-confidence threshold."
@@ -507,7 +514,8 @@ enum LabGoNoGoAnalytics {
 
     private static func latestConfidenceEvidence(
         events: [StructuredLogEvent],
-        preferredRoutes: Set<String>
+        preferredContexts:
+            Set<FrequencyCoverageContext>
     ) -> LabDecisionConfidenceEvidence? {
         let snapshots =
             events
@@ -520,7 +528,7 @@ enum LabGoNoGoAnalytics {
                     }
 
                     guard
-                        !preferredRoutes.isEmpty
+                        !preferredContexts.isEmpty
                     else {
                         return true
                     }
@@ -528,13 +536,29 @@ enum LabGoNoGoAnalytics {
                     guard
                         let route =
                             $0.context
-                                .routeSignature
+                                .routeSignature,
+                        let rawPosition =
+                            $0.text[
+                                "head_position"
+                            ],
+                        let position =
+                            HeadPositionPreset(
+                                rawValue:
+                                    rawPosition
+                            )
                     else {
                         return false
                     }
 
-                    return preferredRoutes
-                        .contains(route)
+                    return preferredContexts
+                        .contains(
+                            FrequencyCoverageContext(
+                                routeSignature:
+                                    route,
+                                headPosition:
+                                    position
+                            )
+                        )
                 }
                 .sorted {
                     if
@@ -581,7 +605,16 @@ enum LabGoNoGoAnalytics {
                     .evidenceCoveragePercent,
             routeSignature:
                 event.context
-                    .routeSignature
+                    .routeSignature,
+            headPosition:
+                event.text[
+                    "head_position"
+                ]
+                .flatMap(
+                    HeadPositionPreset.init(
+                        rawValue:
+                            )
+                )
         )
     }
 
