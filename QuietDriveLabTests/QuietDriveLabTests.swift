@@ -5184,7 +5184,7 @@ final class QuietDriveLabTests: XCTestCase {
     }
 
     @MainActor
-    func testStructuredLogExplicitNilStorageIsEphemeral() {
+    func testStructuredLogExplicitNilStorageIsEphemeral() async {
         let first =
             StructuredLogModel(
                 storageURL: nil,
@@ -5359,6 +5359,7 @@ final class QuietDriveLabTests: XCTestCase {
         _ = first.record(
             kind: .captureStarted
         )
+        await first.flushPersistence()
 
         let second =
             StructuredLogModel(
