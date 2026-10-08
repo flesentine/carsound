@@ -199,6 +199,23 @@ Final-decision coverage verifies the all-gates-pass GO path, comparison-bearing 
 
 Post-roadmap review also covers explicit memory-only structured-log storage and the 200 Hz boundary between ANC/road-noise and program-audio interference analysis.
 
+## Post-roadmap hardening
+
+Lab build **4.1** adds a second stability/safety review on top of the #40 decision milestone:
+
+- A/B baselines are bound to the active route signature and route/configuration revision; treatment, automatic searches, and Save Run are blocked after a route/configuration change.
+- Route revision now changes when the route identity, sample rate, or I/O buffer duration changes.
+- App backgrounding, audio interruptions, and media-services resets stop generated output, microphone capture, active experiment/search workflows, calibration, motion capture, and long-running diagnostics as appropriate.
+- Leaving Cancellation Lab cancels active experiment workflows and mutes generated output.
+- Resume-from-mute rebuilds the tone buffer from the authoritative current phase before ramping sound back up, preventing UI phase from diverging from the rendered waveform.
+- Measurement windows skip microphone-clipped frames and frames marked as likely program-audio interference.
+- Repeatability, head-position sensitivity, frequency coverage, and the final decision exclude saved comparisons explicitly flagged as clipped or likely program-contaminated.
+- The final evidence-volume gate counts only eligible comparisons.
+- Structured-log writes are serialized off the main actor; backgrounding explicitly flushes the latest snapshot.
+- GitHub Actions cancels obsolete same-branch runs after newer pushes, while still executing the full XCTest suite on the latest head.
+
+A remaining architectural performance concern is that FFT/spectrum/dominant-tone/music analysis is still performed synchronously from the microphone tap path. A future audio-engine refactor should move non-real-time analysis behind a preallocated queue/ring buffer so DSP cannot perturb audio callback timing.
+
 ## Roadmap status
 
 **Milestone 4 is complete through #40.**
