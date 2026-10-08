@@ -227,11 +227,10 @@ enum FrequencyCoverageAnalytics {
 
         for event in comparisons {
             guard
-                !ExperimentEvidenceQuality
-                    .isContaminated(event),
-                event.metrics[
-                    "measured_reduction_db"
-                ] != nil,
+                ExperimentEvidenceQuality
+                    .isEligibleComparison(
+                        event
+                    ),
                 let context =
                     coverageContext(
                         for: event
