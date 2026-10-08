@@ -99,7 +99,7 @@ struct LabGoNoGoSnapshot:
             "",
             "Verdict: " + verdict.title,
             "",
-            "Evidence (Lab build 4.1+ when build metadata is available):",
+            "Evidence (Lab build 4.2+ when build metadata is available):",
             "- Sessions: \(sessionCount)",
             "- Sessions with A/B comparisons: \(comparisonSessionCount)",
             "- Saved A/B comparisons: \(comparisonCount)",
@@ -419,11 +419,11 @@ enum LabGoNoGoAnalytics {
                     .needsEvidence,
                 summary:
                     requiresPreferredContext
-                    ? "No confidence snapshot for the coherent route/head position"
+                    ? "No confidence snapshot for the coherent audio configuration/head position"
                     : "No explicit confidence snapshot",
                 detail:
                     requiresPreferredContext
-                    ? "Log a Confidence Snapshot at the same route and head position that supply the coherent repeatability and frequency evidence."
+                    ? "Log a Confidence Snapshot at the same route, audio configuration, and head position that supply the coherent repeatability and frequency evidence."
                     : "Use Log Confidence Snapshot before making the final Lab decision. Incidental confidence context on other events does not count."
             )
         }
