@@ -4575,7 +4575,10 @@ struct CancellationLabView: View {
                         .rawValue,
                 "head_position_title":
                     selectedHeadPosition
-                        .title
+                        .title,
+                ExperimentEvidenceQuality
+                    .audioConfigurationTextKey:
+                    audioConfigurationSignature
             ],
             flags: [
                 "microphone_clipping":
@@ -4642,7 +4645,10 @@ struct CancellationLabView: View {
                     (
                         baselineHeadPosition ??
                         selectedHeadPosition
-                    ).title
+                    ).title,
+                ExperimentEvidenceQuality
+                    .audioConfigurationTextKey:
+                    audioConfigurationSignature
             ],
             flags: [
                 "quality_filtered_samples_only":
@@ -6359,6 +6365,20 @@ struct CancellationLabView: View {
     private var bothRunning: Bool {
         microphoneCapture.state == .capturing &&
         toneGenerator.state == .playing
+    }
+
+    private var audioConfigurationSignature:
+        String
+    {
+        ExperimentEvidenceQuality
+            .audioConfigurationID(
+                routeSignature:
+                    audioSession.routeSignature,
+                sampleRate:
+                    audioSession.sampleRate,
+                ioBufferDuration:
+                    audioSession.ioBufferDuration
+            )
     }
 
     private var inputRouteSummary: String {
