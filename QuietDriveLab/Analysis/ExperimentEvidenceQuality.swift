@@ -4,12 +4,21 @@ enum ExperimentEvidenceQuality {
     static func isContaminated(
         _ event: StructuredLogEvent
     ) -> Bool {
-        event.flags[
-            "microphone_clipping"
-        ] == true ||
-        event.flags[
-            "likely_program_interference"
-        ] == true
+        if
+            event.flags[
+                "quality_filtered_samples_only"
+            ] == true
+        {
+            return false
+        }
+
+        return
+            event.flags[
+                "microphone_clipping"
+            ] == true ||
+            event.flags[
+                "likely_program_interference"
+            ] == true
     }
 
     static func isEligibleComparison(
