@@ -426,7 +426,7 @@ final class AccelerometerCaptureModel {
                         self.sampleStore
                             .recentSamples()
 
-                    self.vibrationSpectrum =
+                    let analyzedSpectrum =
                         await Task.detached(
                             priority: .userInitiated
                         ) {
@@ -436,6 +436,16 @@ final class AccelerometerCaptureModel {
                                 )
                         }
                         .value
+
+                    guard
+                        !Task.isCancelled,
+                        self.state == .capturing
+                    else {
+                        return
+                    }
+
+                    self.vibrationSpectrum =
+                        analyzedSpectrum
                 }
 
                 tick &+= 1
