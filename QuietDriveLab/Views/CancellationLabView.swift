@@ -85,6 +85,9 @@ struct CancellationLabView: View {
                 result
             )
         }
+        .onDisappear {
+            stopExperimentWorkForNavigation()
+        }
     }
 
     private var readinessCard: some View {
@@ -4362,6 +4365,46 @@ struct CancellationLabView: View {
             )
         }
         .cancellationCard()
+    }
+
+    private func stopExperimentWorkForNavigation() {
+        if beforeAfterMeasurement.state.isBusy {
+            beforeAfterMeasurement
+                .cancelCapture()
+        }
+        if phaseSweep.state.isRunning {
+            phaseSweep.cancel()
+        }
+        if phaseRefinement.state.isRunning {
+            phaseRefinement.cancel()
+        }
+        if amplitudeSearch.state.isRunning {
+            amplitudeSearch.cancel()
+        }
+        if adaptiveController.state.isRunning {
+            adaptiveController.cancel()
+        }
+        if calibration.state.isRunning {
+            calibration.cancel()
+        }
+        if
+            bluetoothJitterDiagnostics
+                .state.isRunning
+        {
+            bluetoothJitterDiagnostics.stop()
+        }
+        if
+            soundVibrationCorrelation
+                .state.isRunning
+        {
+            soundVibrationCorrelation.stop()
+        }
+        if
+            toneGenerator.state ==
+                .playing
+        {
+            toneGenerator.muteImmediately()
+        }
     }
 
     private var structuredLogContext:
