@@ -99,7 +99,7 @@ struct LabGoNoGoSnapshot:
             "",
             "Verdict: " + verdict.title,
             "",
-            "Evidence:",
+            "Evidence (Lab build 4.1+ when build metadata is available):",
             "- Sessions: \(sessionCount)",
             "- Sessions with A/B comparisons: \(comparisonSessionCount)",
             "- Saved A/B comparisons: \(comparisonCount)",
@@ -176,10 +176,16 @@ enum LabGoNoGoAnalytics {
         events: [StructuredLogEvent],
         currentSessionID: UUID
     ) -> LabGoNoGoSnapshot {
+        let decisionEvents =
+            ExperimentEvidenceQuality
+                .decisionEligibleEvents(
+                    events
+                )
         let dashboard =
             TestDashboardAnalytics
                 .snapshot(
-                    events: events,
+                    events:
+                        decisionEvents,
                     scope: .allSaved,
                     currentSessionID:
                         currentSessionID
@@ -187,20 +193,23 @@ enum LabGoNoGoAnalytics {
         let repeatability =
             RepeatabilityAnalytics
                 .snapshot(
-                    events: events
+                    events:
+                        decisionEvents
                 )
         let headPosition =
             HeadPositionSensitivityAnalytics
                 .snapshot(
-                    events: events
+                    events:
+                        decisionEvents
                 )
         let frequency =
             FrequencyCoverageAnalytics
                 .snapshot(
-                    events: events
+                    events:
+                        decisionEvents
                 )
         let eligibleComparisons =
-            events.filter {
+            decisionEvents.filter {
                 ExperimentEvidenceQuality
                     .isEligibleComparison($0)
             }
@@ -271,7 +280,8 @@ enum LabGoNoGoAnalytics {
             )
         let confidenceEvidence =
             latestConfidenceEvidence(
-                events: events,
+                events:
+                    decisionEvents,
                 preferredRoutes:
                     coherentRoutes
             )
