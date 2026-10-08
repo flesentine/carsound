@@ -610,11 +610,11 @@ enum LabGoNoGoAnalytics {
                 event.text[
                     "head_position"
                 ]
-                .flatMap(
-                    HeadPositionPreset.init(
-                        rawValue:
-                            )
-                )
+                .flatMap {
+                    HeadPositionPreset(
+                        rawValue: $0
+                    )
+                }
         )
     }
 
