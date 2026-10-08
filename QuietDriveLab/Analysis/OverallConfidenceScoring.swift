@@ -59,6 +59,8 @@ struct OverallConfidenceInput: Equatable, Sendable {
     let adaptiveTreatmentStandardDeviationDB: Double?
 
     let processingCallbackJitterMilliseconds: Double?
+    let processingAnalysisMilliseconds: Double?
+    let processingBufferDurationMilliseconds: Double?
     let bluetoothActive: Bool
     let bluetoothJitter: BluetoothJitterSnapshot?
 
@@ -178,6 +180,29 @@ enum OverallConfidenceMath {
                 )
             limitingFactors.append(
                 "Microphone clipping is active."
+            )
+        }
+
+        if
+            let analysis =
+                input.processingAnalysisMilliseconds,
+            let buffer =
+                input.processingBufferDurationMilliseconds,
+            !ProcessingLatencyMath
+                .analysisFitsBufferBudget(
+                    analysisProcessingMilliseconds:
+                        analysis,
+                    bufferDurationMilliseconds:
+                        buffer
+                )
+        {
+            cappedScore =
+                min(
+                    cappedScore,
+                    50
+                )
+            limitingFactors.append(
+                "Audio analysis is slower than the microphone buffer budget."
             )
         }
 
@@ -628,9 +653,45 @@ enum OverallConfidenceMath {
             )
         }
 
-        let score =
+        let jitterScore =
             timingJitterScore(
                 jitter
+            )
+        let budgetScore: Double
+        let budgetDetail: String
+
+        if
+            let analysis =
+                input
+                    .processingAnalysisMilliseconds,
+            let buffer =
+                input
+                    .processingBufferDurationMilliseconds,
+            buffer > 0
+        {
+            budgetScore =
+                analysisBudgetScore(
+                    analysisMilliseconds:
+                        analysis,
+                    bufferMilliseconds:
+                        buffer
+                )
+            budgetDetail =
+                String(
+                    format:
+                        " • DSP %.2f/%.2f ms",
+                    analysis,
+                    buffer
+                )
+        } else {
+            budgetScore = 1
+            budgetDetail = ""
+        }
+
+        let score =
+            min(
+                jitterScore,
+                budgetScore
             )
 
         return ConfidenceComponent(
@@ -638,11 +699,13 @@ enum OverallConfidenceMath {
             weight:
                 routeTimingWeight,
             score: score,
-            detail: String(
-                format:
-                    "Non-Bluetooth callback jitter σ %.3f ms",
-                jitter
-            )
+            detail:
+                String(
+                    format:
+                        "Non-Bluetooth callback jitter σ %.3f ms",
+                    jitter
+                ) +
+                budgetDetail
         )
     }
 
@@ -806,6 +869,40 @@ enum OverallConfidenceMath {
                 deviationDB -
                 0.5
             ) / 2.0
+        )
+    }
+
+    static func analysisBudgetScore(
+        analysisMilliseconds: Double,
+        bufferMilliseconds: Double
+    ) -> Double {
+        guard
+            analysisMilliseconds.isFinite,
+            bufferMilliseconds.isFinite,
+            analysisMilliseconds >= 0,
+            bufferMilliseconds > 0
+        else {
+            return 0
+        }
+
+        let ratio =
+            analysisMilliseconds /
+            bufferMilliseconds
+
+        if ratio <= 0.60 {
+            return 1
+        }
+
+        if ratio >= 1 {
+            return 0
+        }
+
+        return clamp01(
+            1 -
+            (
+                ratio -
+                0.60
+            ) / 0.40
         )
     }
 
