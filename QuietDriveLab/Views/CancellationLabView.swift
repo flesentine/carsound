@@ -603,7 +603,7 @@ struct CancellationLabView: View {
                                 structuredLogContext,
                             text: [
                                 "app_build":
-                                    "4.0"
+                                    "4.1"
                             ]
                         )
                     }
