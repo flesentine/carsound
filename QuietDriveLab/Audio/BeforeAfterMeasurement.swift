@@ -204,9 +204,12 @@ final class BeforeAfterMeasurementModel {
 
         captureGeneration += 1
         let generation = captureGeneration
-        var lastMeasurementSequence =
-            measurementProvider()?.sequence ??
-            0
+        var sampleGate =
+            FreshTargetEnergySampleGate(
+                watermark:
+                    measurementProvider()?
+                        .sequence ?? 0
+            )
         state = .settling(window)
 
         try? await Task.sleep(
@@ -245,18 +248,16 @@ final class BeforeAfterMeasurementModel {
             if
                 let sample =
                     measurementProvider(),
-                sample.sequence >
-                    lastMeasurementSequence,
-                abs(
-                    sample.measurement
-                        .targetFrequencyHz -
-                    condition.targetFrequencyHz
-                ) <= 0.5
+                let measurement =
+                    sampleGate.accept(
+                        sample,
+                        targetFrequencyHz:
+                            condition
+                                .targetFrequencyHz
+                    )
             {
-                lastMeasurementSequence =
-                    sample.sequence
                 measurements.append(
-                    sample.measurement
+                    measurement
                 )
             }
 
