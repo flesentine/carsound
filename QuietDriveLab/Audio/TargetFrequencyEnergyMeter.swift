@@ -35,7 +35,16 @@ enum TargetFrequencyEnergyMeter {
         guard
             !spectrum.isEmpty,
             targetFrequencyHz.isFinite,
-            frequencyResolutionHz > 0
+            frequencyResolutionHz.isFinite,
+            frequencyResolutionHz > 0,
+            spectrum.allSatisfy({
+                $0.frequencyHz.isFinite &&
+                $0.magnitudeDBFS.isFinite
+            }),
+            noiseFloor.allSatisfy({
+                $0.frequencyHz.isFinite &&
+                $0.magnitudeDBFS.isFinite
+            })
         else {
             return nil
         }
