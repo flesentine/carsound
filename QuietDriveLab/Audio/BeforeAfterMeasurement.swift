@@ -198,12 +198,15 @@ final class BeforeAfterMeasurementModel {
         condition: MeasurementCondition,
         measurementProvider:
             @escaping @MainActor
-            () -> TargetFrequencyEnergyMeasurement?
+            () -> SequencedTargetEnergyMeasurement?
     ) async {
         guard !state.isBusy else { return }
 
         captureGeneration += 1
         let generation = captureGeneration
+        var lastMeasurementSequence =
+            measurementProvider()?.sequence ??
+            0
         state = .settling(window)
 
         try? await Task.sleep(
@@ -240,13 +243,21 @@ final class BeforeAfterMeasurementModel {
             attempts += 1
 
             if
-                let measurement = measurementProvider(),
+                let sample =
+                    measurementProvider(),
+                sample.sequence >
+                    lastMeasurementSequence,
                 abs(
-                    measurement.targetFrequencyHz -
+                    sample.measurement
+                        .targetFrequencyHz -
                     condition.targetFrequencyHz
                 ) <= 0.5
             {
-                measurements.append(measurement)
+                lastMeasurementSequence =
+                    sample.sequence
+                measurements.append(
+                    sample.measurement
+                )
             }
 
             state = .capturing(
