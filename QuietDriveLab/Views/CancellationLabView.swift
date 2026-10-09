@@ -160,7 +160,7 @@ struct CancellationLabView: View {
 
                 Spacer()
 
-                if let matching {
+                if matching != nil {
                     Text("Route matched")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.green)
