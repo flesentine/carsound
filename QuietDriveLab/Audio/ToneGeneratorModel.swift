@@ -22,7 +22,11 @@ enum ToneGeneratorMath {
     static let phaseChangeDebounceSeconds = 0.05
 
     static func sanitizedFrequency(_ frequencyHz: Double) -> Double {
-        min(
+        guard frequencyHz.isFinite else {
+            return defaultFrequencyHz
+        }
+
+        return min(
             maximumFrequencyHz,
             max(
                 minimumFrequencyHz,
@@ -48,7 +52,11 @@ enum ToneGeneratorMath {
     }
 
     static func sanitizedOutputPercent(_ percent: Double) -> Double {
-        min(100, max(0, percent))
+        guard percent.isFinite else {
+            return 0
+        }
+
+        return min(100, max(0, percent))
     }
 
     static func outputGain(forPercent percent: Double) -> Float {
@@ -87,7 +95,12 @@ enum ToneGeneratorMath {
         sampleRate: Double,
         phaseDegrees: Double = defaultPhaseDegrees
     ) -> [Float] {
-        guard sampleRate > 0 else { return [] }
+        guard
+            sampleRate.isFinite,
+            sampleRate > 0
+        else {
+            return []
+        }
 
         let frequency = sanitizedFrequency(frequencyHz)
         let phaseRadians =
