@@ -290,9 +290,12 @@ final class PhaseRefinementModel {
             )
 
             applyPhase(phase)
-            var lastMeasurementSequence =
-                measurementProvider()?.sequence ??
-                0
+            var sampleGate =
+                FreshTargetEnergySampleGate(
+                    watermark:
+                        measurementProvider()?
+                            .sequence ?? 0
+                )
 
             try? await Task.sleep(
                 nanoseconds: UInt64(
@@ -331,19 +334,16 @@ final class PhaseRefinementModel {
                 if
                     let sample =
                         measurementProvider(),
-                    sample.sequence >
-                        lastMeasurementSequence,
-                    abs(
-                        sample.measurement
-                            .targetFrequencyHz -
-                        baseline.condition
-                            .targetFrequencyHz
-                    ) <= 0.5
+                    let measurement =
+                        sampleGate.accept(
+                            sample,
+                            targetFrequencyHz:
+                                baseline.condition
+                                    .targetFrequencyHz
+                        )
                 {
-                    lastMeasurementSequence =
-                        sample.sequence
                     measurements.append(
-                        sample.measurement
+                        measurement
                     )
                 }
 
