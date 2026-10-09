@@ -303,12 +303,17 @@ final class BeforeAfterMeasurementModel {
                 required: Self.requiredSamples
             )
 
-            try? await Task.sleep(
-                nanoseconds: UInt64(
-                    Self.sampleIntervalSeconds *
-                    1_000_000_000
+            if
+                measurements.count <
+                    Self.requiredSamples
+            {
+                try? await Task.sleep(
+                    nanoseconds: UInt64(
+                        Self.sampleIntervalSeconds *
+                        1_000_000_000
+                    )
                 )
-            )
+            }
         }
 
         guard
