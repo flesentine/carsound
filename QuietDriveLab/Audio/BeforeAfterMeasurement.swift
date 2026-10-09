@@ -57,9 +57,13 @@ enum BeforeAfterMeasurementMath {
         let averageCenter =
             averageDBFromPower(levelsDB: centerLevels)
 
+        let arithmeticBandMean =
+            bandLevels.reduce(0, +) /
+            Double(bandLevels.count)
         let variance =
             bandLevels.reduce(0.0) { partial, level in
-                let delta = level - averageBand
+                let delta =
+                    level - arithmeticBandMean
                 return partial + delta * delta
             } /
             Double(bandLevels.count)
