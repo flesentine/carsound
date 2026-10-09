@@ -12,10 +12,8 @@ struct AdaptiveControllerObservation: Equatable, Sendable {
     let comparison: BeforeAfterComparison
 }
 
-struct AdaptiveMeasurementSample: Equatable, Sendable {
-    let sequence: UInt64
-    let measurement: TargetFrequencyEnergyMeasurement
-}
+typealias AdaptiveMeasurementSample =
+    SequencedTargetEnergyMeasurement
 
 enum AdaptiveAdjustmentDimension: String, Equatable, Sendable {
     case phase = "Phase"
