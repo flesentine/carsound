@@ -1147,6 +1147,50 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testBeforeAfterSummaryUsesActualElapsedDurationWhenProvided() throws {
+        let condition =
+            MeasurementCondition(
+                targetFrequencyHz: 80,
+                phaseDegrees: 0,
+                outputPercent: 50,
+                toneAudible: false
+            )
+        let measurement =
+            TargetFrequencyEnergyMeasurement(
+                targetFrequencyHz: 80,
+                nearestBinFrequencyHz: 80,
+                centerLevelDBFS: -30,
+                bandEnergyDBFS: -30,
+                floorBandEnergyDBFS: nil,
+                excessDB: nil,
+                lowerFrequencyHz: 70,
+                upperFrequencyHz: 90,
+                binCount: 3,
+                frequencyResolutionHz: 10
+            )
+
+        let summary = try XCTUnwrap(
+            BeforeAfterMeasurementMath
+                .summarize(
+                    [
+                        measurement,
+                        measurement
+                    ],
+                    condition: condition,
+                    sampleIntervalSeconds:
+                        0.1,
+                    durationSeconds:
+                        0.42
+                )
+        )
+
+        XCTAssertEqual(
+            summary.durationSeconds,
+            0.42,
+            accuracy: 0.0001
+        )
+    }
+
     func testBeforeAfterComparisonReportsPositiveReduction() throws {
         let baselineCondition = MeasurementCondition(
             targetFrequencyHz: 80,
