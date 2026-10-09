@@ -5689,20 +5689,8 @@ struct CancellationLabView: View {
                     )
                 },
                 measurementProvider: {
-                    let snapshot =
-                        microphoneCapture.snapshot
-
-                    guard
-                        let measurement =
-                            measurementForTarget(target)
-                    else {
-                        return nil
-                    }
-
-                    return AdaptiveMeasurementSample(
-                        sequence:
-                            snapshot.fftTransformCount,
-                        measurement: measurement
+                    sequencedMeasurementForTarget(
+                        target
                     )
                 },
                 safetyCheck: {
@@ -5821,7 +5809,9 @@ struct CancellationLabView: View {
                     toneGenerator.setOutputPercent(percent)
                 },
                 measurementProvider: {
-                    measurementForTarget(target)
+                    sequencedMeasurementForTarget(
+                        target
+                    )
                 },
                 onComparison: { comparison in
                     let record = experimentRecorder.record(
@@ -5929,7 +5919,9 @@ struct CancellationLabView: View {
                     toneGenerator.setPhaseDegrees(phase)
                 },
                 measurementProvider: {
-                    measurementForTarget(target)
+                    sequencedMeasurementForTarget(
+                        target
+                    )
                 },
                 onComparison: { comparison in
                     let record = experimentRecorder.record(
@@ -6068,7 +6060,9 @@ struct CancellationLabView: View {
                     toneGenerator.setPhaseDegrees(phase)
                 },
                 measurementProvider: {
-                    measurementForTarget(target)
+                    sequencedMeasurementForTarget(
+                        target
+                    )
                 },
                 onComparison: { comparison in
                     let record = experimentRecorder.record(
@@ -6193,6 +6187,28 @@ struct CancellationLabView: View {
                 measurementForTarget(target)
             }
         }
+    }
+
+    private func sequencedMeasurementForTarget(
+        _ targetFrequencyHz: Double
+    ) -> SequencedTargetEnergyMeasurement? {
+        let snapshot =
+            microphoneCapture.snapshot
+
+        guard
+            let measurement =
+                measurementForTarget(
+                    targetFrequencyHz
+                )
+        else {
+            return nil
+        }
+
+        return SequencedTargetEnergyMeasurement(
+            sequence:
+                snapshot.fftTransformCount,
+            measurement: measurement
+        )
     }
 
     private func measurementForTarget(
