@@ -648,6 +648,9 @@ final class AdaptiveControllerModel {
             Self.requiredSamples
         )
 
+        let measurementStartedAt =
+            ProcessInfo.processInfo
+                .systemUptime
         var attempts = 0
 
         while
@@ -711,7 +714,14 @@ final class AdaptiveControllerModel {
                     measurements,
                     condition: condition,
                     sampleIntervalSeconds:
-                        Self.sampleIntervalSeconds
+                        Self.sampleIntervalSeconds,
+                    durationSeconds:
+                        max(
+                            0,
+                            ProcessInfo.processInfo
+                                .systemUptime -
+                            measurementStartedAt
+                        )
                 ),
             treatment.sampleCount ==
                 Self.requiredSamples,
