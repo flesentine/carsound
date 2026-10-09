@@ -32,7 +32,7 @@ struct ContentView: View {
                         persistentToneCard
                     }
 
-                    Text("Lab build 4.2 • Audio-configuration evidence hardening")
+                    Text("Lab build 4.3 • Fresh-sample evidence hardening")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                         .multilineTextAlignment(.center)
