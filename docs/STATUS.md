@@ -592,3 +592,17 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] add regression coverage for audio interruptions, media reset safety signaling, asynchronous structured-log flush, and contaminated comparison exclusion
 - [x] cancel obsolete same-branch GitHub Actions runs on newer pushes
 - [ ] future architecture: move FFT/spectrum/dominant-tone/music analysis off the microphone tap path using a bounded/preallocated handoff so DSP workload cannot perturb callback timing
+
+
+## Third post-roadmap review — Lab build 4.3
+
+- [x] require strictly fresh FFT sequences in manual A/B, phase sweep, phase refinement, and amplitude search
+- [x] establish a pre-settle FFT watermark for every new measurement window
+- [x] centralize fresh sequence/target acceptance in a shared sample gate
+- [x] reuse the shared sequenced target-energy sample type in adaptive control
+- [x] reject non-finite tone frequency/output/sample-rate inputs
+- [x] reject non-finite target-energy spectrum/noise-floor/resolution inputs
+- [x] compute A/B dB stability around the arithmetic dB mean while retaining power-averaged energy
+- [x] report actual elapsed measurement-window duration when samples are skipped
+- [x] add regression coverage for stale/duplicate sequence rejection, non-finite inputs, dB sigma math, and actual duration metadata
+- [ ] future architecture: move heavy FFT/spectrum analysis off the microphone tap callback via a bounded/preallocated handoff with dropped-frame accounting and reset generations
