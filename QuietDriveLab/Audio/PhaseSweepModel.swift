@@ -192,6 +192,9 @@ final class PhaseSweepModel {
                 Self.requiredSamples
             )
 
+            let measurementStartedAt =
+                ProcessInfo.processInfo
+                    .systemUptime
             var attempts = 0
 
             while
@@ -255,7 +258,14 @@ final class PhaseSweepModel {
                         measurements,
                         condition: condition,
                         sampleIntervalSeconds:
-                            Self.sampleIntervalSeconds
+                            Self.sampleIntervalSeconds,
+                        durationSeconds:
+                            max(
+                                0,
+                                ProcessInfo.processInfo
+                                    .systemUptime -
+                                measurementStartedAt
+                            )
                     ),
                 treatment.sampleCount ==
                     Self.requiredSamples,
