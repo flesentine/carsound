@@ -1140,6 +1140,11 @@ final class QuietDriveLabTests: XCTestCase {
             0.1,
             accuracy: 0.0001
         )
+        XCTAssertEqual(
+            summary.standardDeviationDB,
+            10,
+            accuracy: 0.0001
+        )
     }
 
     func testBeforeAfterComparisonReportsPositiveReduction() throws {
