@@ -449,6 +449,9 @@ final class AmplitudeSearchModel {
                 PhaseSweepModel.requiredSamples
             )
 
+            let measurementStartedAt =
+                ProcessInfo.processInfo
+                    .systemUptime
             var attempts = 0
 
             while
@@ -518,7 +521,14 @@ final class AmplitudeSearchModel {
                         condition: condition,
                         sampleIntervalSeconds:
                             PhaseSweepModel
-                                .sampleIntervalSeconds
+                                .sampleIntervalSeconds,
+                        durationSeconds:
+                            max(
+                                0,
+                                ProcessInfo.processInfo
+                                    .systemUptime -
+                                measurementStartedAt
+                            )
                     ),
                 treatment.sampleCount ==
                     PhaseSweepModel.requiredSamples,
