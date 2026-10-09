@@ -359,13 +359,19 @@ final class PhaseRefinementModel {
                     PhaseSweepModel.requiredSamples
                 )
 
-                try? await Task.sleep(
-                    nanoseconds: UInt64(
+                if
+                    measurements.count <
                         PhaseSweepModel
-                            .sampleIntervalSeconds *
-                        1_000_000_000
+                            .requiredSamples
+                {
+                    try? await Task.sleep(
+                        nanoseconds: UInt64(
+                            PhaseSweepModel
+                                .sampleIntervalSeconds *
+                            1_000_000_000
+                        )
                     )
-                )
+                }
             }
 
             guard
