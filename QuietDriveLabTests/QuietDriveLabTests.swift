@@ -626,6 +626,39 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertFalse(tone.isPersistent)
     }
 
+    func testToneSanitizersRejectNonfiniteInputs() {
+        XCTAssertEqual(
+            ToneGeneratorMath
+                .sanitizedFrequency(.nan),
+            ToneGeneratorMath
+                .defaultFrequencyHz
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath
+                .sanitizedFrequency(.infinity),
+            ToneGeneratorMath
+                .defaultFrequencyHz
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath
+                .sanitizedOutputPercent(.nan),
+            0
+        )
+        XCTAssertEqual(
+            ToneGeneratorMath
+                .sanitizedOutputPercent(.infinity),
+            0
+        )
+        XCTAssertTrue(
+            ToneGeneratorMath
+                .makeOneSecondLoop(
+                    frequencyHz: 80,
+                    sampleRate: .infinity
+                )
+                .isEmpty
+        )
+    }
+
     func testToneFrequencySanitizesToSupportedIntegerRange() {
         XCTAssertEqual(
             ToneGeneratorMath.sanitizedFrequency(12.4),
@@ -835,6 +868,116 @@ final class QuietDriveLabTests: XCTestCase {
                 forOutputPercent: 0
             ),
             AudioLevelAnalyzer.silenceFloorDBFS
+        )
+    }
+
+    func testFreshTargetEnergyGateRejectsDuplicatesAndStaleTargetSamples() {
+        let measurement80 =
+            TargetFrequencyEnergyMeasurement(
+                targetFrequencyHz: 80,
+                nearestBinFrequencyHz: 80,
+                centerLevelDBFS: -40,
+                bandEnergyDBFS: -35,
+                floorBandEnergyDBFS: -60,
+                excessDB: 25,
+                lowerFrequencyHz: 70,
+                upperFrequencyHz: 90,
+                binCount: 3,
+                frequencyResolutionHz: 10
+            )
+        let measurement90 =
+            TargetFrequencyEnergyMeasurement(
+                targetFrequencyHz: 90,
+                nearestBinFrequencyHz: 90,
+                centerLevelDBFS: -40,
+                bandEnergyDBFS: -35,
+                floorBandEnergyDBFS: -60,
+                excessDB: 25,
+                lowerFrequencyHz: 80,
+                upperFrequencyHz: 100,
+                binCount: 3,
+                frequencyResolutionHz: 10
+            )
+        var gate =
+            FreshTargetEnergySampleGate(
+                watermark: 10
+            )
+
+        XCTAssertNil(
+            gate.accept(
+                SequencedTargetEnergyMeasurement(
+                    sequence: 10,
+                    measurement:
+                        measurement80
+                ),
+                targetFrequencyHz: 80
+            )
+        )
+        XCTAssertNil(
+            gate.accept(
+                SequencedTargetEnergyMeasurement(
+                    sequence: 11,
+                    measurement:
+                        measurement90
+                ),
+                targetFrequencyHz: 80
+            )
+        )
+        XCTAssertNil(
+            gate.accept(
+                SequencedTargetEnergyMeasurement(
+                    sequence: 11,
+                    measurement:
+                        measurement80
+                ),
+                targetFrequencyHz: 80
+            )
+        )
+        XCTAssertNotNil(
+            gate.accept(
+                SequencedTargetEnergyMeasurement(
+                    sequence: 12,
+                    measurement:
+                        measurement80
+                ),
+                targetFrequencyHz: 80
+            )
+        )
+        XCTAssertEqual(
+            gate.lastSequence,
+            12
+        )
+    }
+
+    func testTargetEnergyRejectsNonfiniteSpectrumInputs() {
+        XCTAssertNil(
+            TargetFrequencyEnergyMeter
+                .measure(
+                    spectrum: [
+                        SpectrumBin(
+                            frequencyHz: 80,
+                            magnitudeDBFS: .nan
+                        )
+                    ],
+                    noiseFloor: [],
+                    targetFrequencyHz: 80,
+                    frequencyResolutionHz: 10
+                )
+        )
+        XCTAssertNil(
+            TargetFrequencyEnergyMeter
+                .measure(
+                    spectrum: [
+                        SpectrumBin(
+                            frequencyHz: 80,
+                            magnitudeDBFS: -40
+                        )
+                    ],
+                    noiseFloor: [],
+                    targetFrequencyHz: 80,
+                    frequencyResolutionHz:
+                        .infinity
+                )
         )
     }
 
