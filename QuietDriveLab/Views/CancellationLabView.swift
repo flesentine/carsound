@@ -6165,7 +6165,9 @@ struct CancellationLabView: View {
                 window: .baseline,
                 condition: condition
             ) {
-                measurementForTarget(target)
+                sequencedMeasurementForTarget(
+                    target
+                )
             }
         }
     }
@@ -6184,7 +6186,9 @@ struct CancellationLabView: View {
                 window: .treatment,
                 condition: condition
             ) {
-                measurementForTarget(target)
+                sequencedMeasurementForTarget(
+                    target
+                )
             }
         }
     }
