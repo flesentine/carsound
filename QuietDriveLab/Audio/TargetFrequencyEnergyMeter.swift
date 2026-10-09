@@ -1,5 +1,14 @@
 import Foundation
 
+struct SequencedTargetEnergyMeasurement:
+    Equatable,
+    Sendable
+{
+    let sequence: UInt64
+    let measurement:
+        TargetFrequencyEnergyMeasurement
+}
+
 struct TargetFrequencyEnergyMeasurement: Equatable, Sendable {
     let targetFrequencyHz: Double
     let nearestBinFrequencyHz: Double
