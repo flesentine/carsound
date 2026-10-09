@@ -129,7 +129,7 @@ final class PhaseSweepModel {
             @escaping @MainActor (Double) -> Void,
         measurementProvider:
             @escaping @MainActor
-            () -> TargetFrequencyEnergyMeasurement?,
+            () -> SequencedTargetEnergyMeasurement?,
         onComparison:
             @escaping @MainActor
             (BeforeAfterComparison) -> Void
@@ -165,6 +165,9 @@ final class PhaseSweepModel {
             )
 
             applyPhase(phase)
+            var lastMeasurementSequence =
+                measurementProvider()?.sequence ??
+                0
 
             try? await Task.sleep(
                 nanoseconds: UInt64(
@@ -197,13 +200,21 @@ final class PhaseSweepModel {
                 attempts += 1
 
                 if
-                    let measurement = measurementProvider(),
+                    let sample =
+                        measurementProvider(),
+                    sample.sequence >
+                        lastMeasurementSequence,
                     abs(
-                        measurement.targetFrequencyHz -
+                        sample.measurement
+                            .targetFrequencyHz -
                         baseline.condition.targetFrequencyHz
                     ) <= 0.5
                 {
-                    measurements.append(measurement)
+                    lastMeasurementSequence =
+                        sample.sequence
+                    measurements.append(
+                        sample.measurement
+                    )
                 }
 
                 state = .capturing(
