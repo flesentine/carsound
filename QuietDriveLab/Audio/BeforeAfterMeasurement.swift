@@ -34,7 +34,9 @@ enum BeforeAfterMeasurementMath {
     static func summarize(
         _ measurements: [TargetFrequencyEnergyMeasurement],
         condition: MeasurementCondition,
-        sampleIntervalSeconds: Double
+        sampleIntervalSeconds: Double,
+        durationSeconds:
+            Double? = nil
     ) -> TargetEnergyWindowSummary? {
         guard
             !measurements.isEmpty,
@@ -72,8 +74,13 @@ enum BeforeAfterMeasurementMath {
             condition: condition,
             sampleCount: measurements.count,
             durationSeconds:
-                Double(max(0, measurements.count - 1)) *
-                sampleIntervalSeconds,
+                resolvedDurationSeconds(
+                    durationSeconds,
+                    measurementCount:
+                        measurements.count,
+                    sampleIntervalSeconds:
+                        sampleIntervalSeconds
+                ),
             averageBandEnergyDBFS: averageBand,
             minimumBandEnergyDBFS:
                 bandLevels.min() ??
@@ -84,6 +91,29 @@ enum BeforeAfterMeasurementMath {
             averageCenterLevelDBFS: averageCenter,
             standardDeviationDB: sqrt(max(0, variance))
         )
+    }
+
+    private static func resolvedDurationSeconds(
+        _ actualDurationSeconds: Double?,
+        measurementCount: Int,
+        sampleIntervalSeconds: Double
+    ) -> Double {
+        if
+            let actualDurationSeconds,
+            actualDurationSeconds.isFinite,
+            actualDurationSeconds >= 0
+        {
+            return actualDurationSeconds
+        }
+
+        return
+            Double(
+                max(
+                    0,
+                    measurementCount - 1
+                )
+            ) *
+            sampleIntervalSeconds
     }
 
     static func compare(
@@ -238,6 +268,8 @@ final class BeforeAfterMeasurementModel {
         measurements.reserveCapacity(
             Self.requiredSamples
         )
+        let measurementStartedAt =
+            ProcessInfo.processInfo.systemUptime
 
         var attempts = 0
 
@@ -294,7 +326,14 @@ final class BeforeAfterMeasurementModel {
                 measurements,
                 condition: condition,
                 sampleIntervalSeconds:
-                    Self.sampleIntervalSeconds
+                    Self.sampleIntervalSeconds,
+                durationSeconds:
+                    max(
+                        0,
+                        ProcessInfo.processInfo
+                            .systemUptime -
+                        measurementStartedAt
+                    )
             ),
             summary.sampleCount == Self.requiredSamples
         else {
