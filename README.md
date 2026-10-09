@@ -235,3 +235,20 @@ open QuietDriveLab.xcodeproj
 ## Current backlog
 
 See `docs/STATUS.md`.
+
+
+## Third post-roadmap review — Lab build 4.3
+
+This review tightened measurement freshness and numerical correctness:
+
+- manual A/B, coarse phase sweep, fine phase refinement, and amplitude search now require strictly newer FFT transform sequences for every accepted sample
+- each measurement window establishes a pre-settle FFT watermark so a stale pre-change spectrum cannot become the first sample after a phase/output change
+- adaptive control keeps its existing sequence freshness rule and now shares the same sequenced target-energy sample type
+- a shared fresh-sample gate centralizes sequence/target validation
+- target-energy analysis rejects non-finite spectrum, noise-floor, and resolution inputs
+- tone frequency/output sanitizers reject NaN/infinity and invalid sample rates
+- A/B stability standard deviation is now computed around the arithmetic dB mean while the reported average energy remains correctly power-averaged
+- measurement summaries report actual elapsed capture duration when samples are skipped instead of assuming every accepted sample arrived exactly at the nominal polling interval
+- regression tests cover duplicate/stale FFT rejection, non-finite guards, corrected dB standard deviation, and actual-duration metadata
+
+The remaining major architecture item is still the synchronous FFT/spectrum analysis performed inside the microphone tap callback. That should be addressed with a bounded, preallocated handoff and dropped-frame accounting rather than a partial async patch.
