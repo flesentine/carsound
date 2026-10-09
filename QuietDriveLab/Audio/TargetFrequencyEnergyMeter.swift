@@ -9,6 +9,47 @@ struct SequencedTargetEnergyMeasurement:
         TargetFrequencyEnergyMeasurement
 }
 
+struct FreshTargetEnergySampleGate:
+    Equatable,
+    Sendable
+{
+    private(set) var lastSequence: UInt64
+
+    init(
+        watermark: UInt64
+    ) {
+        lastSequence = watermark
+    }
+
+    mutating func accept(
+        _ sample:
+            SequencedTargetEnergyMeasurement,
+        targetFrequencyHz: Double
+    ) -> TargetFrequencyEnergyMeasurement? {
+        guard
+            sample.sequence >
+                lastSequence
+        else {
+            return nil
+        }
+
+        lastSequence = sample.sequence
+
+        guard
+            targetFrequencyHz.isFinite,
+            abs(
+                sample.measurement
+                    .targetFrequencyHz -
+                targetFrequencyHz
+            ) <= 0.5
+        else {
+            return nil
+        }
+
+        return sample.measurement
+    }
+}
+
 struct TargetFrequencyEnergyMeasurement: Equatable, Sendable {
     let targetFrequencyHz: Double
     let nearestBinFrequencyHz: Double
