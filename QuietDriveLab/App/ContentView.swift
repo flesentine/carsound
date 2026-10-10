@@ -587,6 +587,14 @@ struct ContentView: View {
 
             LabeledContent("Buffers received", value: "\(microphoneCapture.snapshot.bufferCount)")
             LabeledContent("Frames received", value: "\(microphoneCapture.snapshot.frameCount)")
+            LabeledContent(
+                "Analysis buffers dropped",
+                value: "\(microphoneCapture.snapshot.analysisDroppedBufferCount)"
+            )
+            LabeledContent(
+                "Analysis frames dropped",
+                value: "\(microphoneCapture.snapshot.analysisDroppedFrameCount)"
+            )
             LabeledContent("Last buffer", value: "\(microphoneCapture.snapshot.lastBufferFrames) frames")
             LabeledContent("Capture rate", value: captureRateText)
             LabeledContent("Channels", value: captureChannelsText)
