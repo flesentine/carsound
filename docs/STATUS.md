@@ -618,4 +618,5 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] Preserve FFT ingestion without per-buffer slice allocation
 - [x] Add regression tests for bounded/reusable handoff, stereo downmix + level math, and FFT slice ingestion
 - [x] Surface dropped analysis evidence in raw capture diagnostics
+- [x] Invalidate cancellation-lab measurement windows after any analysis drop until microphone capture is restarted
 - [x] Bump structured evidence sessions to app_build 4.4
