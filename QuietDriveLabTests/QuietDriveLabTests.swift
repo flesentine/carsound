@@ -238,6 +238,64 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testRealtimeAudioFrameHandoffPreservesFIFOWhenSlotIsReused() throws {
+        let format = try XCTUnwrap(
+            AVAudioFormat(
+                standardFormatWithSampleRate: 48_000,
+                channels: 1
+            )
+        )
+        let buffer = try XCTUnwrap(
+            AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: 1
+            )
+        )
+        buffer.frameLength = 1
+
+        let handoff =
+            RealtimeAudioFrameHandoff(
+                capacity: 2,
+                maxFrameCount: 1
+            )
+
+        let first = try XCTUnwrap(
+            handoff.enqueue(
+                buffer: buffer,
+                callbackStartedNanoseconds: 100
+            )
+        )
+        let second = try XCTUnwrap(
+            handoff.enqueue(
+                buffer: buffer,
+                callbackStartedNanoseconds: 200
+            )
+        )
+
+        handoff.consume(slotAt: first) { _ in }
+
+        let third = try XCTUnwrap(
+            handoff.enqueue(
+                buffer: buffer,
+                callbackStartedNanoseconds: 300
+            )
+        )
+
+        XCTAssertEqual(first, 0)
+        XCTAssertEqual(second, 1)
+        XCTAssertEqual(third, 0)
+        XCTAssertEqual(
+            handoff.nextReadyIndex(),
+            second
+        )
+
+        handoff.consume(slotAt: second) { _ in }
+        XCTAssertEqual(
+            handoff.nextReadyIndex(),
+            third
+        )
+    }
+
     func testRealtimeAudioFrameHandoffDownmixesWithoutChangingLevelMath() throws {
         let format = try XCTUnwrap(
             AVAudioFormat(
