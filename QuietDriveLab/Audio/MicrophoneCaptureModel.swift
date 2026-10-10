@@ -99,6 +99,24 @@ final class MicrophoneCaptureModel {
     @ObservationIgnored
     private var tapInstalled = false
 
+    func beginCapture() -> UInt64 {
+        reset()
+
+        lock.lock()
+        captureGeneration &+= 1
+        captureIsActive = true
+        let generation = captureGeneration
+        lock.unlock()
+
+        return generation
+    }
+
+    func endCapture() {
+        lock.lock()
+        captureIsActive = false
+        lock.unlock()
+    }
+
     func setAnalysisMode(_ mode: AnalysisMode) {
         guard state != .capturing, mode != analysisMode else { return }
 
@@ -112,7 +130,6 @@ final class MicrophoneCaptureModel {
 
         stopCapture()
         stats.setAnalysisMode(analysisMode)
-        stats.reset()
 
         let inputNode = engine.inputNode
         let format = inputNode.outputFormat(forBus: 0)
@@ -122,12 +139,19 @@ final class MicrophoneCaptureModel {
             return
         }
 
+        let captureGeneration =
+            stats.beginCapture()
+
         inputNode.installTap(
             onBus: 0,
             bufferSize: 1_024,
             format: format
-        ) { [stats] buffer, _ in
-            stats.record(buffer: buffer)
+        ) { [stats, captureGeneration] buffer, _ in
+            stats.record(
+                buffer: buffer,
+                captureGeneration:
+                    captureGeneration
+            )
         }
         tapInstalled = true
 
@@ -139,6 +163,7 @@ final class MicrophoneCaptureModel {
             snapshot = stats.snapshot()
             startPolling()
         } catch {
+            stats.endCapture()
             removeTapIfNeeded()
             engine.stop()
             state = .failed(error.localizedDescription)
@@ -149,6 +174,7 @@ final class MicrophoneCaptureModel {
         pollingTask?.cancel()
         pollingTask = nil
 
+        stats.endCapture()
         removeTapIfNeeded()
 
         if engine.isRunning {
@@ -212,6 +238,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
     }()
 
     private var analysisMode: AnalysisMode = .ancFocus
+    private var captureGeneration: UInt64 = 0
+    private var captureIsActive = false
     private var bufferCount: UInt64 = 0
     private var frameCount: UInt64 = 0
     private var analysisDroppedBufferCount: UInt64 = 0
@@ -261,7 +289,21 @@ private final class CaptureStatsStore: @unchecked Sendable {
         }
     }
 
-    func record(buffer: AVAudioPCMBuffer) {
+    func record(
+        buffer: AVAudioPCMBuffer,
+        captureGeneration expectedGeneration: UInt64
+    ) {
+        lock.lock()
+        let acceptsCallback =
+            captureIsActive &&
+            captureGeneration ==
+                expectedGeneration
+        lock.unlock()
+
+        guard acceptsCallback else {
+            return
+        }
+
         let callbackStartedNanoseconds =
             DispatchTime.now().uptimeNanoseconds
         let durationMilliseconds: Double
@@ -279,6 +321,15 @@ private final class CaptureStatsStore: @unchecked Sendable {
         }
 
         lock.lock()
+        guard
+            captureIsActive,
+            captureGeneration ==
+                expectedGeneration
+        else {
+            lock.unlock()
+            return
+        }
+
         bufferCount += 1
         frameCount += UInt64(buffer.frameLength)
         lastBufferFrames = buffer.frameLength
@@ -294,13 +345,21 @@ private final class CaptureStatsStore: @unchecked Sendable {
             frameHandoff.enqueue(
                 buffer: buffer,
                 callbackStartedNanoseconds:
-                    callbackStartedNanoseconds
+                    callbackStartedNanoseconds,
+                captureGeneration:
+                    expectedGeneration
             ) != nil
         else {
             lock.lock()
-            analysisDroppedBufferCount += 1
-            analysisDroppedFrameCount +=
-                UInt64(buffer.frameLength)
+            if
+                captureIsActive,
+                captureGeneration ==
+                    expectedGeneration
+            {
+                analysisDroppedBufferCount += 1
+                analysisDroppedFrameCount +=
+                    UInt64(buffer.frameLength)
+            }
             lock.unlock()
             return
         }
@@ -388,7 +447,6 @@ private final class CaptureStatsStore: @unchecked Sendable {
             noiseFloorEstimator.reset()
             persistentToneTracker.reset()
             musicInterferenceDetector.reset()
-            frameHandoff.reset()
         }
 
         lock.lock()
@@ -433,7 +491,18 @@ private final class CaptureStatsStore: @unchecked Sendable {
         slot: RealtimeAudioFrameHandoff.FrameSlot
     ) {
         lock.lock()
+        guard
+            captureIsActive,
+            slot.captureGeneration ==
+                captureGeneration
+        else {
+            lock.unlock()
+            return
+        }
+
         let currentAnalysisMode = analysisMode
+        let expectedGeneration =
+            captureGeneration
         lock.unlock()
 
         let latestFFT =
@@ -502,6 +571,15 @@ private final class CaptureStatsStore: @unchecked Sendable {
             DispatchTime.now().uptimeNanoseconds
 
         lock.lock()
+        guard
+            captureIsActive,
+            captureGeneration ==
+                expectedGeneration
+        else {
+            lock.unlock()
+            return
+        }
+
         formatDescription =
             Self.describe(
                 commonFormat:
