@@ -207,7 +207,8 @@ final class QuietDriveLabTests: XCTestCase {
         let firstIndex = try XCTUnwrap(
             handoff.enqueue(
                 buffer: first,
-                callbackStartedNanoseconds: 100
+                callbackStartedNanoseconds: 100,
+                captureGeneration: 7
             )
         )
         XCTAssertNil(
@@ -218,14 +219,21 @@ final class QuietDriveLabTests: XCTestCase {
         )
 
         var copied: [Float] = []
+        var capturedGeneration: UInt64 = 0
         handoff.consume(slotAt: firstIndex) {
             copied = Array(
                 $0.monoSamples.prefix(
                     $0.frameCount
                 )
             )
+            capturedGeneration =
+                $0.captureGeneration
         }
 
+        XCTAssertEqual(
+            capturedGeneration,
+            7
+        )
         XCTAssertEqual(
             copied,
             [0.1, 0.2, 0.3, 0.4]
