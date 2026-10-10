@@ -112,7 +112,24 @@ final class FFTAnalyzer {
     }
 
     func ingest(samples: [Float], sampleRate: Double) -> FFTSnapshot? {
-        guard !samples.isEmpty, sampleRate > 0 else { return nil }
+        ingestSamples(samples, sampleRate: sampleRate)
+    }
+
+    func ingest(samples: ArraySlice<Float>, sampleRate: Double) -> FFTSnapshot? {
+        ingestSamples(samples, sampleRate: sampleRate)
+    }
+
+    private func ingestSamples<S: Collection>(
+        _ samples: S,
+        sampleRate: Double
+    ) -> FFTSnapshot? where S.Element == Float {
+        guard
+            !samples.isEmpty,
+            sampleRate.isFinite,
+            sampleRate > 0
+        else {
+            return nil
+        }
 
         for sample in samples {
             ring[writeIndex] = sample
