@@ -20,6 +20,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
         fileprivate(set) var commonFormat: AVAudioCommonFormat = .otherFormat
         fileprivate(set) var isInterleaved = false
         fileprivate(set) var callbackStartedNanoseconds: UInt64 = 0
+        fileprivate(set) var enqueueSequence: UInt64 = 0
         fileprivate(set) var durationMilliseconds = 0.0
         fileprivate(set) var levelMeasurement: AudioLevelMeasurement = .silent
 
@@ -31,6 +32,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
     private let lock = NSLock()
     private let maxFrameCount: Int
     private var slots: [FrameSlot]
+    private var nextEnqueueSequence: UInt64 = 1
 
     init(
         capacity: Int = 4,
@@ -76,11 +78,16 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
         }
 
         let slotIndex: Int
+        let enqueueSequence: UInt64
 
         lock.lock()
         if let availableIndex = slots.firstIndex(where: { $0.state == .empty }) {
             slotIndex = availableIndex
+            enqueueSequence = nextEnqueueSequence
+            nextEnqueueSequence &+= 1
             slots[availableIndex].state = .writing
+            slots[availableIndex].enqueueSequence =
+                enqueueSequence
             lock.unlock()
         } else {
             lock.unlock()
@@ -176,9 +183,14 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
-        return slots.firstIndex {
-            $0.state == .ready
-        }
+        return slots.indices
+            .filter {
+                slots[$0].state == .ready
+            }
+            .min {
+                slots[$0].enqueueSequence <
+                    slots[$1].enqueueSequence
+            }
     }
 
     func consume(
@@ -210,6 +222,8 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
 
+        nextEnqueueSequence = 1
+
         for slot in slots {
             slot.state = .empty
             slot.frameCount = 0
@@ -218,6 +232,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
             slot.commonFormat = .otherFormat
             slot.isInterleaved = false
             slot.callbackStartedNanoseconds = 0
+            slot.enqueueSequence = 0
             slot.durationMilliseconds = 0
             slot.levelMeasurement = .silent
         }
