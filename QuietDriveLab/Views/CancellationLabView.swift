@@ -85,6 +85,17 @@ struct CancellationLabView: View {
                 result
             )
         }
+        .onChange(
+            of:
+                microphoneCapture.snapshot
+                    .analysisDroppedBufferCount
+        ) { previous, current in
+            guard current > previous else {
+                return
+            }
+
+            invalidateCancellationEvidenceAfterAnalysisDrop()
+        }
         .onDisappear {
             stopExperimentWorkForNavigation()
         }
@@ -4387,6 +4398,25 @@ struct CancellationLabView: View {
             )
         }
         .cancellationCard()
+    }
+
+    private func invalidateCancellationEvidenceAfterAnalysisDrop() {
+        beforeAfterMeasurement.reset()
+        phaseSweep.reset()
+        phaseRefinement.reset()
+        amplitudeSearch.reset()
+        adaptiveController.reset()
+
+        baselineHeadPosition = nil
+        baselineRouteSignature = nil
+        baselineRouteRevision = nil
+        lastSavedComparisonKey = nil
+        phaseRefinementProgressText = nil
+        amplitudeSearchProgressText = nil
+
+        if toneGenerator.state == .playing {
+            toneGenerator.muteImmediately()
+        }
     }
 
     private func stopExperimentWorkForNavigation() {
