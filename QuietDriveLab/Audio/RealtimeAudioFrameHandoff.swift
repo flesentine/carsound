@@ -12,8 +12,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
 
         fileprivate var state: State = .empty
 
-        let monoSamples: [Float]
-        fileprivate var writableMonoSamples: [Float]
+        fileprivate(set) var monoSamples: [Float]
 
         fileprivate(set) var frameCount = 0
         fileprivate(set) var sampleRate = 0.0
@@ -25,14 +24,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
         fileprivate(set) var levelMeasurement: AudioLevelMeasurement = .silent
 
         fileprivate init(maxFrameCount: Int) {
-            let samples = Array(repeating: Float.zero, count: maxFrameCount)
-            monoSamples = samples
-            writableMonoSamples = samples
-        }
-
-        fileprivate func synchronizeReadBuffer() {
-            // Array is copy-on-write. This assignment keeps the public read
-            // view aligned with storage without allocating after init.
+            monoSamples = Array(repeating: Float.zero, count: maxFrameCount)
         }
     }
 
@@ -120,7 +112,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
                     }
                 }
 
-                slot.writableMonoSamples[frame] =
+                slot.monoSamples[frame] =
                     monoSum / Float(channelCount)
             }
 
@@ -141,7 +133,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
                     }
                 }
 
-                slot.writableMonoSamples[frame] =
+                slot.monoSamples[frame] =
                     monoSum / Float(channelCount)
             }
 
