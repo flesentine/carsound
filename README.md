@@ -252,3 +252,8 @@ This review tightened measurement freshness and numerical correctness:
 - regression tests cover duplicate/stale FFT rejection, non-finite guards, corrected dB standard deviation, and actual-duration metadata
 
 The remaining major architecture item is still the synchronous FFT/spectrum analysis performed inside the microphone tap callback. That should be addressed with a bounded, preallocated handoff and dropped-frame accounting rather than a partial async patch.
+
+
+## Real-time analysis handoff — Lab build 4.4
+
+The microphone tap no longer performs FFT, smoothing, noise-floor estimation, dominant-frequency detection, persistence tracking, or music-interference analysis synchronously. Incoming Float32 audio is copied/downmixed into a fixed four-slot preallocated handoff and a pre-created serial analysis worker drains those slots. Callback cadence is timestamped before handoff, analysis turnaround is measured through worker completion, and overload is explicit through dropped analysis buffer/frame counters. This prevents the DSP workload from contaminating the callback-jitter measurement it is meant to observe.
