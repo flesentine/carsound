@@ -99,24 +99,6 @@ final class MicrophoneCaptureModel {
     @ObservationIgnored
     private var tapInstalled = false
 
-    func beginCapture() -> UInt64 {
-        reset()
-
-        lock.lock()
-        captureGeneration &+= 1
-        captureIsActive = true
-        let generation = captureGeneration
-        lock.unlock()
-
-        return generation
-    }
-
-    func endCapture() {
-        lock.lock()
-        captureIsActive = false
-        lock.unlock()
-    }
-
     func setAnalysisMode(_ mode: AnalysisMode) {
         guard state != .capturing, mode != analysisMode else { return }
 
@@ -276,6 +258,24 @@ private final class CaptureStatsStore: @unchecked Sendable {
         // Force creation before the first real-time callback so the callback
         // only signals an already-configured source.
         _ = analysisSource
+    }
+
+    func beginCapture() -> UInt64 {
+        reset()
+
+        lock.lock()
+        captureGeneration &+= 1
+        captureIsActive = true
+        let generation = captureGeneration
+        lock.unlock()
+
+        return generation
+    }
+
+    func endCapture() {
+        lock.lock()
+        captureIsActive = false
+        lock.unlock()
     }
 
     func setAnalysisMode(_ mode: AnalysisMode) {
