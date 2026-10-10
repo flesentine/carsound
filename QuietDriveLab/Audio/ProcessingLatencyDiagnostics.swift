@@ -162,9 +162,8 @@ struct ProcessingLatencyTracker: Sendable {
         lastAnalysisCompletedNanoseconds = nil
     }
 
-    mutating func record(
-        callbackStartedNanoseconds: UInt64,
-        analysisCompletedNanoseconds: UInt64
+    mutating func recordCallbackStart(
+        _ callbackStartedNanoseconds: UInt64
     ) {
         if
             let previous =
@@ -185,7 +184,12 @@ struct ProcessingLatencyTracker: Sendable {
 
         previousCallbackStartNanoseconds =
             callbackStartedNanoseconds
+    }
 
+    mutating func recordAnalysisTurnaround(
+        callbackStartedNanoseconds: UInt64,
+        analysisCompletedNanoseconds: UInt64
+    ) {
         if
             analysisCompletedNanoseconds >=
                 callbackStartedNanoseconds
@@ -204,6 +208,19 @@ struct ProcessingLatencyTracker: Sendable {
 
         lastAnalysisCompletedNanoseconds =
             analysisCompletedNanoseconds
+    }
+
+    mutating func record(
+        callbackStartedNanoseconds: UInt64,
+        analysisCompletedNanoseconds: UInt64
+    ) {
+        recordCallbackStart(callbackStartedNanoseconds)
+        recordAnalysisTurnaround(
+            callbackStartedNanoseconds:
+                callbackStartedNanoseconds,
+            analysisCompletedNanoseconds:
+                analysisCompletedNanoseconds
+        )
     }
 
     func snapshot(
