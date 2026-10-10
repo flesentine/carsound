@@ -172,6 +172,10 @@ final class MicrophoneCaptureModel {
     }
 
     func resetCounters() {
+        guard state != .capturing else {
+            return
+        }
+
         stats.reset()
         snapshot = .empty
     }
