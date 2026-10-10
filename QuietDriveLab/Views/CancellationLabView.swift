@@ -130,6 +130,18 @@ struct CancellationLabView: View {
                 detail: inputRouteSummary
             )
 
+            readinessRow(
+                title: "Analysis continuity",
+                isReady:
+                    microphoneCapture.snapshot
+                        .analysisDroppedBufferCount == 0,
+                detail:
+                    microphoneCapture.snapshot
+                        .analysisDroppedBufferCount == 0
+                        ? "No analysis frames dropped"
+                        : "Restart microphone capture before collecting evidence"
+            )
+
             if !isExperimentReady {
                 Text("Activate the audio session and use ANC Focus before running the cancellation experiment.")
                     .font(.footnote)
