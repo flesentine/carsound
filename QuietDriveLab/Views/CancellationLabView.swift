@@ -5706,6 +5706,13 @@ struct CancellationLabView: View {
                         return "Microphone input is clipping."
                     }
 
+                    if
+                        microphoneCapture.snapshot
+                            .analysisDroppedBufferCount > 0
+                    {
+                        return "Audio analysis dropped frames; restart microphone capture before collecting more evidence."
+                    }
+
                     if microphoneCapture.analysisMode != .ancFocus {
                         return "ANC Focus mode is no longer active."
                     }
@@ -6224,6 +6231,7 @@ struct CancellationLabView: View {
             microphoneCapture.state ==
                 .capturing,
             !snapshot.isClipping,
+            snapshot.analysisDroppedBufferCount == 0,
             snapshot.musicInterference
                 .level != .likely,
             ProcessingLatencyMath
@@ -6338,6 +6346,7 @@ struct CancellationLabView: View {
             microphoneCapture.state ==
                 .capturing &&
             !snapshot.isClipping &&
+            snapshot.analysisDroppedBufferCount == 0 &&
             snapshot.musicInterference
                 .level != .likely &&
             ProcessingLatencyMath
