@@ -606,3 +606,16 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] report actual elapsed measurement-window duration when samples are skipped
 - [x] add regression coverage for stale/duplicate sequence rejection, non-finite inputs, dB sigma math, and actual duration metadata
 - [ ] future architecture: move heavy FFT/spectrum analysis off the microphone tap callback via a bounded/preallocated handoff with dropped-frame accounting and reset generations
+
+
+## Fourth post-roadmap hardening pass — Lab build 4.4
+
+- [x] Move FFT and downstream spectrum analysis off the microphone tap callback
+- [x] Add a fixed-capacity, preallocated four-slot Float32 frame handoff
+- [x] Keep callback-time work bounded to timing, counters, copy/downmix, and level/clipping accumulation
+- [x] Add explicit dropped analysis buffer/frame accounting when the worker cannot keep up
+- [x] Separate callback cadence recording from worker analysis turnaround
+- [x] Preserve FFT ingestion without per-buffer slice allocation
+- [x] Add regression tests for bounded/reusable handoff, stereo downmix + level math, and FFT slice ingestion
+- [x] Surface dropped analysis evidence in raw capture diagnostics
+- [x] Bump structured evidence sessions to app_build 4.4
