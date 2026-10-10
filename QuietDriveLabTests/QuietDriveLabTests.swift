@@ -171,6 +171,163 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(AudioLevelAnalyzer.meterPosition(forDBFS: -120), 0, accuracy: 0.0001)
     }
 
+    func testRealtimeAudioFrameHandoffIsBoundedAndReusable() throws {
+        let format = try XCTUnwrap(
+            AVAudioFormat(
+                standardFormatWithSampleRate: 48_000,
+                channels: 1
+            )
+        )
+        let first = try XCTUnwrap(
+            AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: 4
+            )
+        )
+        first.frameLength = 4
+        for index in 0..<4 {
+            first.floatChannelData?[0][index] =
+                Float(index + 1) / 10
+        }
+
+        let second = try XCTUnwrap(
+            AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: 4
+            )
+        )
+        second.frameLength = 4
+
+        let handoff =
+            RealtimeAudioFrameHandoff(
+                capacity: 1,
+                maxFrameCount: 4
+            )
+
+        let firstIndex = try XCTUnwrap(
+            handoff.enqueue(
+                buffer: first,
+                callbackStartedNanoseconds: 100
+            )
+        )
+        XCTAssertNil(
+            handoff.enqueue(
+                buffer: second,
+                callbackStartedNanoseconds: 200
+            )
+        )
+
+        var copied: [Float] = []
+        handoff.consume(slotAt: firstIndex) {
+            copied = Array(
+                $0.monoSamples.prefix(
+                    $0.frameCount
+                )
+            )
+        }
+
+        XCTAssertEqual(
+            copied,
+            [0.1, 0.2, 0.3, 0.4]
+        )
+        XCTAssertNotNil(
+            handoff.enqueue(
+                buffer: second,
+                callbackStartedNanoseconds: 300
+            )
+        )
+    }
+
+    func testRealtimeAudioFrameHandoffDownmixesWithoutChangingLevelMath() throws {
+        let format = try XCTUnwrap(
+            AVAudioFormat(
+                standardFormatWithSampleRate: 48_000,
+                channels: 2
+            )
+        )
+        let buffer = try XCTUnwrap(
+            AVAudioPCMBuffer(
+                pcmFormat: format,
+                frameCapacity: 2
+            )
+        )
+        buffer.frameLength = 2
+        buffer.floatChannelData?[0][0] = 0.5
+        buffer.floatChannelData?[1][0] = -0.5
+        buffer.floatChannelData?[0][1] = 1.0
+        buffer.floatChannelData?[1][1] = 0.0
+
+        let handoff =
+            RealtimeAudioFrameHandoff(
+                capacity: 1,
+                maxFrameCount: 2
+            )
+        let index = try XCTUnwrap(
+            handoff.enqueue(
+                buffer: buffer,
+                callbackStartedNanoseconds: 100
+            )
+        )
+
+        var mono: [Float] = []
+        var measurement =
+            AudioLevelMeasurement.silent
+        handoff.consume(slotAt: index) {
+            mono = Array(
+                $0.monoSamples.prefix(
+                    $0.frameCount
+                )
+            )
+            measurement =
+                $0.levelMeasurement
+        }
+
+        XCTAssertEqual(
+            mono[0],
+            0,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            mono[1],
+            0.5,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            measurement.rmsLinear,
+            Float(sqrt(0.375)),
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            measurement.peakLinear,
+            1,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            measurement.clippedSampleCount,
+            1
+        )
+    }
+
+    func testFFTArraySliceUsesOnlyRequestedFrames() throws {
+        let analyzer = FFTAnalyzer(size: 4)
+        let source: [Float] = [9, 1, 0, -1, 0, 9]
+        let snapshot = try XCTUnwrap(
+            analyzer.ingest(
+                samples: source[1...4],
+                sampleRate: 4
+            )
+        )
+
+        XCTAssertEqual(
+            snapshot.sampleCount,
+            4
+        )
+        XCTAssertEqual(
+            snapshot.transformCount,
+            1
+        )
+    }
+
     func testFFTWaitsForAFullWindow() {
         let analyzer = FFTAnalyzer(size: 1_024)
         let samples = Array(repeating: Float.zero, count: 512)
