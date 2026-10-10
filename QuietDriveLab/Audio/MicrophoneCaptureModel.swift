@@ -22,6 +22,8 @@ final class MicrophoneCaptureModel {
     struct Snapshot: Equatable, Sendable {
         let bufferCount: UInt64
         let frameCount: UInt64
+        let analysisDroppedBufferCount: UInt64
+        let analysisDroppedFrameCount: UInt64
         let lastBufferFrames: AVAudioFrameCount
         let sampleRate: Double
         let channelCount: AVAudioChannelCount
@@ -51,6 +53,8 @@ final class MicrophoneCaptureModel {
         static let empty = Snapshot(
             bufferCount: 0,
             frameCount: 0,
+            analysisDroppedBufferCount: 0,
+            analysisDroppedFrameCount: 0,
             lastBufferFrames: 0,
             sampleRate: 0,
             channelCount: 0,
@@ -155,6 +159,7 @@ final class MicrophoneCaptureModel {
             state = .stopped
         }
 
+        stats.flushPendingAnalysis()
         snapshot = stats.snapshot()
     }
 
@@ -183,11 +188,34 @@ final class MicrophoneCaptureModel {
 
 private final class CaptureStatsStore: @unchecked Sendable {
     private let lock = NSLock()
-    private let analysisLock = NSLock()
+    private let analysisQueue =
+        DispatchQueue(
+            label: "com.quietdrive.lab.audio-analysis",
+            qos: .userInitiated
+        )
+    private let frameHandoff =
+        RealtimeAudioFrameHandoff(
+            capacity: 4,
+            maxFrameCount: 8_192
+        )
+
+    private lazy var analysisSource: DispatchSourceUserDataAdd = {
+        let source =
+            DispatchSource.makeUserDataAddSource(
+                queue: analysisQueue
+            )
+        source.setEventHandler { [weak self] in
+            self?.drainReadyFrames()
+        }
+        source.resume()
+        return source
+    }()
 
     private var analysisMode: AnalysisMode = .ancFocus
     private var bufferCount: UInt64 = 0
     private var frameCount: UInt64 = 0
+    private var analysisDroppedBufferCount: UInt64 = 0
+    private var analysisDroppedFrameCount: UInt64 = 0
     private var lastBufferFrames: AVAudioFrameCount = 0
     private var sampleRate: Double = 0
     private var channelCount: AVAudioChannelCount = 0
@@ -213,9 +241,14 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var persistentTones: PersistentToneSnapshot = .empty
     private var musicInterference:
         MusicInterferenceSnapshot = .empty
-    private var captureTimelineSeconds: Double = 0
     private var processingLatencyTracker =
         ProcessingLatencyTracker()
+
+    init() {
+        // Force creation before the first real-time callback so the callback
+        // only signals an already-configured source.
+        _ = analysisSource
+    }
 
     func setAnalysisMode(_ mode: AnalysisMode) {
         lock.lock()
@@ -229,121 +262,56 @@ private final class CaptureStatsStore: @unchecked Sendable {
     }
 
     func record(buffer: AVAudioPCMBuffer) {
-        analysisLock.lock()
-        defer {
-            analysisLock.unlock()
-        }
-
         let callbackStartedNanoseconds =
             DispatchTime.now().uptimeNanoseconds
-
-        lock.lock()
-        let currentAnalysisMode = analysisMode
-        lock.unlock()
-
-        let format = buffer.format
-        let description = Self.describe(format: format)
-        let measurement = AudioLevelAnalyzer.analyze(buffer: buffer)
-        let latestFFT = fftAnalyzer.ingest(buffer: buffer)
-        let latestMusicInterference = latestFFT.map {
-            musicInterferenceDetector.process(
-                $0.bins
-            )
-        }
-        let latestSmoothedSpectrum = latestFFT.map {
-            smoothingBank.process(
-                $0.bins,
-                analysisMode: currentAnalysisMode
-            )
-        }
-        let latestNoiseFloor = latestSmoothedSpectrum.map {
-            noiseFloorEstimator.process($0.balanced)
-        }
-        let latestDominantFrequencies: DominantFrequencySnapshot?
-
-        if
-            let latestSmoothedSpectrum,
-            let latestNoiseFloor
-        {
-            latestDominantFrequencies = dominantFrequencyDetector.detect(
-                spectrum: latestSmoothedSpectrum.balanced,
-                noiseFloor: latestNoiseFloor.bins,
-                frequencyRange: currentAnalysisMode.dominantFrequencyRange
-            )
-        } else {
-            latestDominantFrequencies = nil
-        }
-
         let durationMilliseconds: Double
 
-        if format.sampleRate > 0 {
+        if
+            buffer.format.sampleRate.isFinite,
+            buffer.format.sampleRate > 0
+        {
             durationMilliseconds =
                 Double(buffer.frameLength) /
-                format.sampleRate *
+                buffer.format.sampleRate *
                 1_000
         } else {
             durationMilliseconds = 0
         }
 
-        captureTimelineSeconds += durationMilliseconds / 1_000
-
-        let latestPersistentTones = latestDominantFrequencies.map {
-            persistentToneTracker.process(
-                $0.frequencies,
-                timestampSeconds: captureTimelineSeconds
-            )
-        }
-
-        let analysisCompletedNanoseconds =
-            DispatchTime.now().uptimeNanoseconds
-
         lock.lock()
         bufferCount += 1
         frameCount += UInt64(buffer.frameLength)
         lastBufferFrames = buffer.frameLength
-        sampleRate = format.sampleRate
-        channelCount = format.channelCount
-        formatDescription = description
-        rmsLinear = measurement.rmsLinear
-        peakLinear = measurement.peakLinear
-        peakHoldLinear = max(peakHoldLinear, measurement.peakLinear)
-        lastBufferClippedSampleCount = measurement.clippedSampleCount
-        totalClippedSampleCount += measurement.clippedSampleCount
+        sampleRate = buffer.format.sampleRate
+        channelCount = buffer.format.channelCount
         bufferDurationMilliseconds = durationMilliseconds
-
-        if let latestFFT {
-            fftSnapshot = latestFFT
-        }
-
-        if let latestSmoothedSpectrum {
-            smoothedSpectrum = latestSmoothedSpectrum
-        }
-
-        if let latestNoiseFloor {
-            noiseFloor = latestNoiseFloor
-        }
-
-        if let latestDominantFrequencies {
-            dominantFrequencies = latestDominantFrequencies
-        }
-
-        if let latestPersistentTones {
-            persistentTones = latestPersistentTones
-        }
-
-        if let latestMusicInterference {
-            musicInterference =
-                latestMusicInterference
-        }
-
-        processingLatencyTracker.record(
-            callbackStartedNanoseconds:
-                callbackStartedNanoseconds,
-            analysisCompletedNanoseconds:
-                analysisCompletedNanoseconds
+        processingLatencyTracker.recordCallbackStart(
+            callbackStartedNanoseconds
         )
-
         lock.unlock()
+
+        guard
+            frameHandoff.enqueue(
+                buffer: buffer,
+                callbackStartedNanoseconds:
+                    callbackStartedNanoseconds
+            ) != nil
+        else {
+            lock.lock()
+            analysisDroppedBufferCount += 1
+            analysisDroppedFrameCount +=
+                UInt64(buffer.frameLength)
+            lock.unlock()
+            return
+        }
+
+        analysisSource.add(data: 1)
+    }
+
+    func flushPendingAnalysis() {
+        analysisQueue.sync {
+            drainReadyFrames()
+        }
     }
 
     func snapshot() -> MicrophoneCaptureModel.Snapshot {
@@ -362,6 +330,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
         return MicrophoneCaptureModel.Snapshot(
             bufferCount: bufferCount,
             frameCount: frameCount,
+            analysisDroppedBufferCount:
+                analysisDroppedBufferCount,
+            analysisDroppedFrameCount:
+                analysisDroppedFrameCount,
             lastBufferFrames: lastBufferFrames,
             sampleRate: sampleRate,
             channelCount: channelCount,
@@ -369,21 +341,38 @@ private final class CaptureStatsStore: @unchecked Sendable {
             rmsLinear: rmsLinear,
             peakLinear: peakLinear,
             peakHoldLinear: peakHoldLinear,
-            rmsDBFS: AudioLevelAnalyzer.decibelsFS(forAmplitude: rmsLinear),
-            peakDBFS: AudioLevelAnalyzer.decibelsFS(forAmplitude: peakLinear),
-            peakHoldDBFS: AudioLevelAnalyzer.decibelsFS(forAmplitude: peakHoldLinear),
-            lastBufferClippedSampleCount: lastBufferClippedSampleCount,
-            totalClippedSampleCount: totalClippedSampleCount,
-            isClipping: lastBufferClippedSampleCount > 0,
-            bufferDurationMilliseconds: bufferDurationMilliseconds,
+            rmsDBFS:
+                AudioLevelAnalyzer.decibelsFS(
+                    forAmplitude: rmsLinear
+                ),
+            peakDBFS:
+                AudioLevelAnalyzer.decibelsFS(
+                    forAmplitude: peakLinear
+                ),
+            peakHoldDBFS:
+                AudioLevelAnalyzer.decibelsFS(
+                    forAmplitude:
+                        peakHoldLinear
+                ),
+            lastBufferClippedSampleCount:
+                lastBufferClippedSampleCount,
+            totalClippedSampleCount:
+                totalClippedSampleCount,
+            isClipping:
+                lastBufferClippedSampleCount > 0,
+            bufferDurationMilliseconds:
+                bufferDurationMilliseconds,
             fftSampleCount: fftSnapshot.sampleCount,
-            fftTransformCount: fftSnapshot.transformCount,
-            fftResolutionHz: fftSnapshot.frequencyResolutionHz,
+            fftTransformCount:
+                fftSnapshot.transformCount,
+            fftResolutionHz:
+                fftSnapshot.frequencyResolutionHz,
             fftWindowName: fftSnapshot.windowName,
             spectrumBins: fftSnapshot.bins,
             smoothedSpectrum: smoothedSpectrum,
             noiseFloor: noiseFloor,
-            dominantFrequencies: dominantFrequencies,
+            dominantFrequencies:
+                dominantFrequencies,
             persistentTones: persistentTones,
             processingLatency: latencySnapshot,
             musicInterference: musicInterference
@@ -391,20 +380,22 @@ private final class CaptureStatsStore: @unchecked Sendable {
     }
 
     func reset() {
-        analysisLock.lock()
-        defer {
-            analysisLock.unlock()
-        }
+        flushPendingAnalysis()
 
-        fftAnalyzer.reset()
-        smoothingBank.reset()
-        noiseFloorEstimator.reset()
-        persistentToneTracker.reset()
-        musicInterferenceDetector.reset()
+        analysisQueue.sync {
+            fftAnalyzer.reset()
+            smoothingBank.reset()
+            noiseFloorEstimator.reset()
+            persistentToneTracker.reset()
+            musicInterferenceDetector.reset()
+            frameHandoff.reset()
+        }
 
         lock.lock()
         bufferCount = 0
         frameCount = 0
+        analysisDroppedBufferCount = 0
+        analysisDroppedFrameCount = 0
         lastBufferFrames = 0
         sampleRate = 0
         channelCount = 0
@@ -421,15 +412,165 @@ private final class CaptureStatsStore: @unchecked Sendable {
         dominantFrequencies = .empty
         persistentTones = .empty
         musicInterference = .empty
-        captureTimelineSeconds = 0
         processingLatencyTracker.reset()
         lock.unlock()
     }
 
-    private static func describe(format: AVAudioFormat) -> String {
+    private func drainReadyFrames() {
+        while
+            let index =
+                frameHandoff.nextReadyIndex()
+        {
+            frameHandoff.consume(
+                slotAt: index
+            ) { [weak self] slot in
+                self?.process(slot: slot)
+            }
+        }
+    }
+
+    private func process(
+        slot: RealtimeAudioFrameHandoff.FrameSlot
+    ) {
+        lock.lock()
+        let currentAnalysisMode = analysisMode
+        lock.unlock()
+
+        let latestFFT =
+            fftAnalyzer.ingest(
+                samples:
+                    slot.monoSamples[
+                        0..<slot.frameCount
+                    ],
+                sampleRate: slot.sampleRate
+            )
+        let latestMusicInterference =
+            latestFFT.map {
+                musicInterferenceDetector.process(
+                    $0.bins
+                )
+            }
+        let latestSmoothedSpectrum =
+            latestFFT.map {
+                smoothingBank.process(
+                    $0.bins,
+                    analysisMode:
+                        currentAnalysisMode
+                )
+            }
+        let latestNoiseFloor =
+            latestSmoothedSpectrum.map {
+                noiseFloorEstimator.process(
+                    $0.balanced
+                )
+            }
+        let latestDominantFrequencies:
+            DominantFrequencySnapshot?
+
+        if
+            let latestSmoothedSpectrum,
+            let latestNoiseFloor
+        {
+            latestDominantFrequencies =
+                dominantFrequencyDetector.detect(
+                    spectrum:
+                        latestSmoothedSpectrum
+                            .balanced,
+                    noiseFloor:
+                        latestNoiseFloor.bins,
+                    frequencyRange:
+                        currentAnalysisMode
+                            .dominantFrequencyRange
+                )
+        } else {
+            latestDominantFrequencies = nil
+        }
+
+        let timestampSeconds =
+            Double(
+                slot.callbackStartedNanoseconds
+            ) / 1_000_000_000.0
+        let latestPersistentTones =
+            latestDominantFrequencies.map {
+                persistentToneTracker.process(
+                    $0.frequencies,
+                    timestampSeconds:
+                        timestampSeconds
+                )
+            }
+        let analysisCompletedNanoseconds =
+            DispatchTime.now().uptimeNanoseconds
+
+        lock.lock()
+        formatDescription =
+            Self.describe(
+                commonFormat:
+                    slot.commonFormat,
+                isInterleaved:
+                    slot.isInterleaved
+            )
+        rmsLinear =
+            slot.levelMeasurement.rmsLinear
+        peakLinear =
+            slot.levelMeasurement.peakLinear
+        peakHoldLinear =
+            max(
+                peakHoldLinear,
+                slot.levelMeasurement
+                    .peakLinear
+            )
+        lastBufferClippedSampleCount =
+            slot.levelMeasurement
+                .clippedSampleCount
+        totalClippedSampleCount +=
+            slot.levelMeasurement
+                .clippedSampleCount
+
+        if let latestFFT {
+            fftSnapshot = latestFFT
+        }
+
+        if let latestSmoothedSpectrum {
+            smoothedSpectrum =
+                latestSmoothedSpectrum
+        }
+
+        if let latestNoiseFloor {
+            noiseFloor = latestNoiseFloor
+        }
+
+        if let latestDominantFrequencies {
+            dominantFrequencies =
+                latestDominantFrequencies
+        }
+
+        if let latestPersistentTones {
+            persistentTones =
+                latestPersistentTones
+        }
+
+        if let latestMusicInterference {
+            musicInterference =
+                latestMusicInterference
+        }
+
+        processingLatencyTracker
+            .recordAnalysisTurnaround(
+                callbackStartedNanoseconds:
+                    slot.callbackStartedNanoseconds,
+                analysisCompletedNanoseconds:
+                    analysisCompletedNanoseconds
+            )
+        lock.unlock()
+    }
+
+    private static func describe(
+        commonFormat: AVAudioCommonFormat,
+        isInterleaved: Bool
+    ) -> String {
         let sampleType: String
 
-        switch format.commonFormat {
+        switch commonFormat {
         case .pcmFormatFloat32:
             sampleType = "Float32"
         case .pcmFormatFloat64:
@@ -444,6 +585,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
             sampleType = "Unknown"
         }
 
-        return "\(sampleType) • \(format.isInterleaved ? "interleaved" : "non-interleaved")"
+        return
+            "\(sampleType) • " +
+            "\(isInterleaved ? "interleaved" : "non-interleaved")"
     }
 }
