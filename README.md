@@ -262,3 +262,8 @@ The microphone tap no longer performs FFT, smoothing, noise-floor estimation, do
 ## Non-blocking tap handoff — Lab build 4.5
 
 The microphone tap no longer takes the shared capture-stats lock. Frame acquisition now uses per-slot try-locks only: the callback either claims an empty preallocated slot immediately or drops the analysis frame rather than waiting. The worker also uses non-blocking slot discovery, while all mutable counters, callback-interval statistics, and drop accounting are updated on the analysis queue. This removes UI snapshot polling and worker bookkeeping as possible blocking points on the real-time tap. Any handoff miss is still treated as an analysis drop, so cancellation evidence remains invalid until capture is restarted.
+
+
+## Callback timing sequence hardening — Lab build 4.6
+
+Callback-jitter statistics now include every microphone tap invocation, including buffers that could not enter the analysis handoff. Each callback receives a monotonic sequence number before queue admission. Successful-frame processing and dropped-frame bookkeeping may arrive on the analysis queue in a different scheduling order, so the latency tracker buffers callback timestamps by sequence and advances statistics only when the next expected callback arrives. This prevents analysis drops or queue scheduling from creating false long callback intervals and artificial jitter spikes. DSP turnaround remains measured only for frames that were actually analyzed.
