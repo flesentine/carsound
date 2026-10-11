@@ -10,6 +10,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
             case processing
         }
 
+        fileprivate let stateLock = NSLock()
         fileprivate var state: State = .empty
 
         fileprivate(set) var monoSamples: [Float]
@@ -30,9 +31,12 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
         }
     }
 
-    private let lock = NSLock()
     private let maxFrameCount: Int
     private var slots: [FrameSlot]
+
+    // The AVAudioEngine tap invokes this handoff serially. Only the callback
+    // mutates this sequence while capture is active; reset is allowed only
+    // after capture has stopped and the analysis queue has drained.
     private var nextEnqueueSequence: UInt64 = 1
 
     init(
@@ -79,24 +83,39 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
             return nil
         }
 
-        let slotIndex: Int
-        let enqueueSequence: UInt64
+        var claimedIndex: Int?
 
-        lock.lock()
-        if let availableIndex = slots.firstIndex(where: { $0.state == .empty }) {
-            slotIndex = availableIndex
-            enqueueSequence = nextEnqueueSequence
-            nextEnqueueSequence &+= 1
-            slots[availableIndex].state = .writing
-            slots[availableIndex].enqueueSequence =
-                enqueueSequence
-            lock.unlock()
-        } else {
-            lock.unlock()
+        for index in slots.indices {
+            let slot = slots[index]
+
+            guard slot.stateLock.try() else {
+                continue
+            }
+
+            if slot.state == .empty {
+                slot.state = .writing
+                slot.enqueueSequence =
+                    nextEnqueueSequence
+                nextEnqueueSequence &+= 1
+                claimedIndex = index
+                // Keep this slot lock held for the copy below. The analysis
+                // worker only uses try-locks, so it can never block the tap.
+                break
+            }
+
+            slot.stateLock.unlock()
+        }
+
+        guard let slotIndex = claimedIndex else {
             return nil
         }
 
         let slot = slots[slotIndex]
+        defer {
+            slot.state = .ready
+            slot.stateLock.unlock()
+        }
+
         var sumSquares = 0.0
         var peak: Float = 0
         var clippedSamples: UInt64 = 0
@@ -150,6 +169,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
         }
 
         let rms: Float
+
         if totalSamples > 0 {
             rms = Float(
                 sqrt(sumSquares / Double(totalSamples))
@@ -176,59 +196,73 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
                 clippedSampleCount: clippedSamples
             )
 
-        lock.lock()
-        slot.state = .ready
-        lock.unlock()
-
         return slotIndex
     }
 
     func nextReadyIndex() -> Int? {
-        lock.lock()
-        defer { lock.unlock() }
+        var candidate:
+            (index: Int, sequence: UInt64)?
 
-        return slots.indices
-            .filter {
-                slots[$0].state == .ready
+        for index in slots.indices {
+            let slot = slots[index]
+
+            guard slot.stateLock.try() else {
+                continue
             }
-            .min {
-                slots[$0].enqueueSequence <
-                    slots[$1].enqueueSequence
+
+            if slot.state == .ready {
+                let sequence = slot.enqueueSequence
+
+                if
+                    candidate == nil ||
+                    sequence <
+                        candidate!.sequence
+                {
+                    candidate =
+                        (index, sequence)
+                }
             }
+
+            slot.stateLock.unlock()
+        }
+
+        return candidate?.index
     }
 
     func consume(
         slotAt index: Int,
         _ body: (FrameSlot) -> Void
     ) {
-        lock.lock()
-
-        guard
-            slots.indices.contains(index),
-            slots[index].state == .ready
-        else {
-            lock.unlock()
+        guard slots.indices.contains(index) else {
             return
         }
 
         let slot = slots[index]
+
+        guard slot.stateLock.try() else {
+            return
+        }
+
+        guard slot.state == .ready else {
+            slot.stateLock.unlock()
+            return
+        }
+
         slot.state = .processing
-        lock.unlock()
+        slot.stateLock.unlock()
 
         body(slot)
 
-        lock.lock()
+        slot.stateLock.lock()
         slot.state = .empty
-        lock.unlock()
+        slot.stateLock.unlock()
     }
 
     func reset() {
-        lock.lock()
-        defer { lock.unlock() }
-
         nextEnqueueSequence = 1
 
         for slot in slots {
+            slot.stateLock.lock()
             slot.state = .empty
             slot.frameCount = 0
             slot.sampleRate = 0
@@ -240,6 +274,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
             slot.captureGeneration = 0
             slot.durationMilliseconds = 0
             slot.levelMeasurement = .silent
+            slot.stateLock.unlock()
         }
     }
 }
