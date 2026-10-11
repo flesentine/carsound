@@ -620,3 +620,14 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] Surface dropped analysis evidence in raw capture diagnostics
 - [x] Invalidate cancellation-lab measurement windows after any analysis drop until microphone capture is restarted
 - [x] Bump structured evidence sessions to app_build 4.4
+
+
+## Fifth post-roadmap hardening pass — Lab build 4.5
+
+- [x] Remove shared capture-stats locking from the AVAudioEngine microphone tap
+- [x] Replace the handoff's central blocking lock with per-slot non-blocking try-lock acquisition
+- [x] Keep callback work bounded to timestamping, slot claim, copy/downmix, level/clipping math, and worker signaling
+- [x] Move received-buffer counters and callback-interval statistics onto the analysis worker
+- [x] Move overload/drop bookkeeping onto the analysis queue so the tap never blocks to record a failure
+- [x] Preserve FIFO sequencing, bounded capacity, capture-generation isolation, and evidence invalidation on any drop
+- [x] Bump structured evidence sessions to app_build 4.5
