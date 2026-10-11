@@ -643,3 +643,17 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] Keep DSP turnaround statistics successful-frame-only
 - [x] Add regression coverage for out-of-order timing delivery and callback-sequence tagging
 - [x] Bump structured evidence sessions to app_build 4.6
+
+
+## Seventh post-roadmap hardening pass — Lab build 4.7
+
+- [x] Detect analysis continuity gaps from microphone callback sequence numbers
+- [x] Reset the FFT ring before ingesting the first successful frame after a missing callback
+- [x] Reset smoothing, noise-floor, persistent-tone, and music-interference temporal state on the same gap
+- [x] Preserve monotonic FFT transform sequencing across a continuity reset
+- [x] Require a full fresh FFT window before emitting post-gap spectrum evidence
+- [x] Publish an analysis continuity revision independently from deferred drop counters
+- [x] Block cancellation measurements, readiness, and adaptive control on any continuity revision
+- [x] Invalidate existing cancellation evidence when the continuity revision changes
+- [x] Add regression coverage for gap detection, stale sequence handling, full-window rebuild, and monotonic transform count
+- [x] Bump structured evidence sessions to app_build 4.7
