@@ -11,6 +11,7 @@ concurrency:
 jobs:
   build:
     runs-on: macos-15
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - name: Install XcodeGen
@@ -27,6 +28,7 @@ jobs:
           CODE_SIGNING_ALLOWED=NO
           build-for-testing
       - name: Run unit tests
+        timeout-minutes: 15
         shell: bash
         run: |
           set -euo pipefail
@@ -71,12 +73,24 @@ jobs:
             python3 /tmp/select_quietdrive_simulator.py
           )"
 
+          echo "Preparing simulator $DEVICE_ID"
+
+          xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
+          xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+
           echo "Running tests on simulator $DEVICE_ID"
 
-          xcodebuild \
+          if ! xcodebuild \
             -project QuietDriveLab.xcodeproj \
             -scheme QuietDriveLab \
             -sdk iphonesimulator \
             -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -destination-timeout 60 \
             CODE_SIGNING_ALLOWED=NO \
             test
+          then
+            echo "Unit tests failed; simulator state follows:"
+            xcrun simctl list devices
+            exit 1
+          fi
