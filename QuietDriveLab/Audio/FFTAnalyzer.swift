@@ -57,10 +57,18 @@ final class FFTAnalyzer {
     }
 
     func reset() {
+        clearBufferedSamples()
+        transformCount = 0
+    }
+
+    func resetForDiscontinuity() {
+        clearBufferedSamples()
+    }
+
+    private func clearBufferedSamples() {
         ring = Array(repeating: 0, count: size)
         writeIndex = 0
         samplesWritten = 0
-        transformCount = 0
         real = Array(repeating: 0, count: size)
         imag = Array(repeating: 0, count: size)
     }
