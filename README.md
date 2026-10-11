@@ -267,3 +267,8 @@ The microphone tap no longer takes the shared capture-stats lock. Frame acquisit
 ## Callback timing sequence hardening — Lab build 4.6
 
 Callback-jitter statistics now include every microphone tap invocation, including buffers that could not enter the analysis handoff. Each callback receives a monotonic sequence number before queue admission. Successful-frame processing and dropped-frame bookkeeping may arrive on the analysis queue in a different scheduling order, so the latency tracker buffers callback timestamps by sequence and advances statistics only when the next expected callback arrives. This prevents analysis drops or queue scheduling from creating false long callback intervals and artificial jitter spikes. DSP turnaround remains measured only for frames that were actually analyzed.
+
+
+## Analysis continuity rebuild — Lab build 4.7
+
+A missing microphone callback can no longer be bridged inside the rolling FFT window. The analysis worker tracks callback-sequence continuity independently from deferred drop bookkeeping. When a successful frame arrives after a sequence gap, the FFT sample ring and all downstream temporal analyzers are reset before that frame is ingested. The FFT transform counter remains monotonic, but no new spectrum can be emitted until a full fresh contiguous window has been collected. A worker-owned continuity revision is published with capture snapshots and blocks cancellation measurements, readiness, and adaptive control immediately after a detected gap, closing the race where drop counters could lag behind worker processing.
