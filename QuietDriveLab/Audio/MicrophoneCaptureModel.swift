@@ -226,6 +226,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var analysisMode: AnalysisMode = .ancFocus
     private var captureGeneration: UInt64 = 0
     private var captureIsActive = false
+    private var nextCallbackSequence: UInt64 = 1
     private var bufferCount: UInt64 = 0
     private var frameCount: UInt64 = 0
     private var analysisDroppedBufferCount: UInt64 = 0
@@ -270,6 +271,11 @@ private final class CaptureStatsStore: @unchecked Sendable {
         lock.lock()
         captureGeneration &+= 1
         captureIsActive = true
+        processingLatencyTracker
+            .prepareCallbackSequence(
+                startingAt:
+                    nextCallbackSequence
+            )
         let generation = captureGeneration
         lock.unlock()
 
@@ -299,12 +305,17 @@ private final class CaptureStatsStore: @unchecked Sendable {
     ) {
         let callbackStartedNanoseconds =
             DispatchTime.now().uptimeNanoseconds
+        let callbackSequence =
+            nextCallbackSequence
+        nextCallbackSequence &+= 1
 
         guard
             frameHandoff.enqueue(
                 buffer: buffer,
                 callbackStartedNanoseconds:
                     callbackStartedNanoseconds,
+                callbackSequence:
+                    callbackSequence,
                 captureGeneration:
                     expectedGeneration
             ) != nil
@@ -318,6 +329,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
                         droppedFrames,
                     callbackStartedNanoseconds:
                         callbackStartedNanoseconds,
+                    callbackSequence:
+                        callbackSequence,
                     captureGeneration:
                         expectedGeneration
                 )
@@ -331,6 +344,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private func recordAnalysisDrop(
         frameCount: UInt64,
         callbackStartedNanoseconds: UInt64,
+        callbackSequence: UInt64,
         captureGeneration expectedGeneration: UInt64
     ) {
         lock.lock()
@@ -348,7 +362,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
         self.frameCount += frameCount
         processingLatencyTracker
             .recordCallbackStart(
-                callbackStartedNanoseconds
+                sequence:
+                    callbackSequence,
+                callbackStartedNanoseconds:
+                    callbackStartedNanoseconds
             )
         analysisDroppedBufferCount += 1
         analysisDroppedFrameCount +=
@@ -502,7 +519,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
             slot.durationMilliseconds
         processingLatencyTracker
             .recordCallbackStart(
-                slot.callbackStartedNanoseconds
+                sequence:
+                    slot.callbackSequence,
+                callbackStartedNanoseconds:
+                    slot.callbackStartedNanoseconds
             )
         lock.unlock()
 
