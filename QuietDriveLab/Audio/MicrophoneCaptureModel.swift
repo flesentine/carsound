@@ -316,6 +316,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
                 self?.recordAnalysisDrop(
                     frameCount:
                         droppedFrames,
+                    callbackStartedNanoseconds:
+                        callbackStartedNanoseconds,
                     captureGeneration:
                         expectedGeneration
                 )
@@ -328,6 +330,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
 
     private func recordAnalysisDrop(
         frameCount: UInt64,
+        callbackStartedNanoseconds: UInt64,
         captureGeneration expectedGeneration: UInt64
     ) {
         lock.lock()
@@ -343,6 +346,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
 
         bufferCount += 1
         self.frameCount += frameCount
+        processingLatencyTracker
+            .recordCallbackStart(
+                callbackStartedNanoseconds
+            )
         analysisDroppedBufferCount += 1
         analysisDroppedFrameCount +=
             frameCount
