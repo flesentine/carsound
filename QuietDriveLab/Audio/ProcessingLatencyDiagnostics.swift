@@ -141,6 +141,8 @@ enum ProcessingLatencyMath {
 
 struct ProcessingLatencyTracker: Sendable {
     private var previousCallbackStartNanoseconds: UInt64?
+    private var nextExpectedCallbackSequence: UInt64?
+    private var pendingCallbackStarts: [UInt64: UInt64] = [:]
     private var latestCallbackIntervalMilliseconds = 0.0
     private var callbackStatistics =
         LatencyRunningStatistics()
@@ -153,6 +155,8 @@ struct ProcessingLatencyTracker: Sendable {
 
     mutating func reset() {
         previousCallbackStartNanoseconds = nil
+        nextExpectedCallbackSequence = nil
+        pendingCallbackStarts.removeAll(keepingCapacity: true)
         latestCallbackIntervalMilliseconds = 0
         callbackStatistics =
             LatencyRunningStatistics()
@@ -160,6 +164,19 @@ struct ProcessingLatencyTracker: Sendable {
         analysisStatistics =
             LatencyRunningStatistics()
         lastAnalysisCompletedNanoseconds = nil
+    }
+
+    mutating func prepareCallbackSequence(
+        startingAt sequence: UInt64
+    ) {
+        nextExpectedCallbackSequence = sequence
+        pendingCallbackStarts.removeAll(
+            keepingCapacity: true
+        )
+        previousCallbackStartNanoseconds = nil
+        latestCallbackIntervalMilliseconds = 0
+        callbackStatistics =
+            LatencyRunningStatistics()
     }
 
     mutating func recordCallbackStart(
@@ -184,6 +201,36 @@ struct ProcessingLatencyTracker: Sendable {
 
         previousCallbackStartNanoseconds =
             callbackStartedNanoseconds
+    }
+
+    mutating func recordCallbackStart(
+        sequence: UInt64,
+        callbackStartedNanoseconds: UInt64
+    ) {
+        guard
+            let expected =
+                nextExpectedCallbackSequence,
+            sequence >= expected
+        else {
+            return
+        }
+
+        pendingCallbackStarts[sequence] =
+            callbackStartedNanoseconds
+
+        while
+            let next =
+                nextExpectedCallbackSequence,
+            let timestamp =
+                pendingCallbackStarts
+                    .removeValue(
+                        forKey: next
+                    )
+        {
+            recordCallbackStart(timestamp)
+            nextExpectedCallbackSequence =
+                next &+ 1
+        }
     }
 
     mutating func recordAnalysisTurnaround(
