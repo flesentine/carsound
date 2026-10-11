@@ -631,3 +631,15 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] Move overload/drop bookkeeping onto the analysis queue so the tap never blocks to record a failure
 - [x] Preserve FIFO sequencing, bounded capacity, capture-generation isolation, and evidence invalidation on any drop
 - [x] Bump structured evidence sessions to app_build 4.5
+
+
+## Sixth post-roadmap hardening pass — Lab build 4.6
+
+- [x] Include dropped analysis buffers in callback-cadence timing
+- [x] Assign a monotonic sequence to every microphone tap invocation before handoff admission
+- [x] Preserve callback sequence through preallocated frame slots
+- [x] Reorder worker/drop bookkeeping by callback sequence before updating jitter statistics
+- [x] Ignore stale already-consumed callback timing events
+- [x] Keep DSP turnaround statistics successful-frame-only
+- [x] Add regression coverage for out-of-order timing delivery and callback-sequence tagging
+- [x] Bump structured evidence sessions to app_build 4.6
