@@ -61,7 +61,7 @@ struct QuietDriveLabApp: App {
                             ),
                         text: [
                             "app_build":
-                                "4.5"
+                                "4.6"
                         ]
                     )
                 }
