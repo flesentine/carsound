@@ -227,6 +227,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var captureGeneration: UInt64 = 0
     private var captureIsActive = false
     private var nextCallbackSequence: UInt64 = 1
+    private var nextExpectedAnalysisCallbackSequence: UInt64 = 1
+    private var analysisContinuityRevision: UInt64 = 0
     private var bufferCount: UInt64 = 0
     private var frameCount: UInt64 = 0
     private var analysisDroppedBufferCount: UInt64 = 0
@@ -276,6 +278,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
                 startingAt:
                     nextCallbackSequence
             )
+        nextExpectedAnalysisCallbackSequence =
+            nextCallbackSequence
         let generation = captureGeneration
         lock.unlock()
 
@@ -447,11 +451,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
         flushPendingAnalysis()
 
         analysisQueue.sync {
-            fftAnalyzer.reset()
-            smoothingBank.reset()
-            noiseFloorEstimator.reset()
-            persistentToneTracker.reset()
-            musicInterferenceDetector.reset()
+            resetTemporalAnalysisPipeline()
         }
 
         lock.lock()
@@ -508,6 +508,16 @@ private final class CaptureStatsStore: @unchecked Sendable {
         let currentAnalysisMode = analysisMode
         let expectedGeneration =
             captureGeneration
+        let continuityWasBroken =
+            slot.callbackSequence >
+                nextExpectedAnalysisCallbackSequence
+
+        if continuityWasBroken {
+            analysisContinuityRevision &+= 1
+        }
+
+        nextExpectedAnalysisCallbackSequence =
+            slot.callbackSequence &+ 1
 
         bufferCount += 1
         frameCount += UInt64(slot.frameCount)
@@ -525,6 +535,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
                     slot.callbackStartedNanoseconds
             )
         lock.unlock()
+
+        if continuityWasBroken {
+            resetTemporalAnalysisPipeline()
+        }
 
         let latestFFT =
             fftAnalyzer.ingest(
@@ -661,6 +675,14 @@ private final class CaptureStatsStore: @unchecked Sendable {
                     analysisCompletedNanoseconds
             )
         lock.unlock()
+    }
+
+    private func resetTemporalAnalysisPipeline() {
+        fftAnalyzer.reset()
+        smoothingBank.reset()
+        noiseFloorEstimator.reset()
+        persistentToneTracker.reset()
+        musicInterferenceDetector.reset()
     }
 
     private static func describe(
