@@ -297,53 +297,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
         buffer: AVAudioPCMBuffer,
         captureGeneration expectedGeneration: UInt64
     ) {
-        lock.lock()
-        let acceptsCallback =
-            captureIsActive &&
-            captureGeneration ==
-                expectedGeneration
-        lock.unlock()
-
-        guard acceptsCallback else {
-            return
-        }
-
         let callbackStartedNanoseconds =
             DispatchTime.now().uptimeNanoseconds
-        let durationMilliseconds: Double
-
-        if
-            buffer.format.sampleRate.isFinite,
-            buffer.format.sampleRate > 0
-        {
-            durationMilliseconds =
-                Double(buffer.frameLength) /
-                buffer.format.sampleRate *
-                1_000
-        } else {
-            durationMilliseconds = 0
-        }
-
-        lock.lock()
-        guard
-            captureIsActive,
-            captureGeneration ==
-                expectedGeneration
-        else {
-            lock.unlock()
-            return
-        }
-
-        bufferCount += 1
-        frameCount += UInt64(buffer.frameLength)
-        lastBufferFrames = buffer.frameLength
-        sampleRate = buffer.format.sampleRate
-        channelCount = buffer.format.channelCount
-        bufferDurationMilliseconds = durationMilliseconds
-        processingLatencyTracker.recordCallbackStart(
-            callbackStartedNanoseconds
-        )
-        lock.unlock()
 
         guard
             frameHandoff.enqueue(
@@ -354,21 +309,43 @@ private final class CaptureStatsStore: @unchecked Sendable {
                     expectedGeneration
             ) != nil
         else {
-            lock.lock()
-            if
-                captureIsActive,
-                captureGeneration ==
-                    expectedGeneration
-            {
-                analysisDroppedBufferCount += 1
-                analysisDroppedFrameCount +=
-                    UInt64(buffer.frameLength)
+            let droppedFrames =
+                UInt64(buffer.frameLength)
+
+            analysisQueue.async { [weak self] in
+                self?.recordAnalysisDrop(
+                    frameCount:
+                        droppedFrames,
+                    captureGeneration:
+                        expectedGeneration
+                )
             }
-            lock.unlock()
             return
         }
 
         analysisSource.add(data: 1)
+    }
+
+    private func recordAnalysisDrop(
+        frameCount: UInt64,
+        captureGeneration expectedGeneration: UInt64
+    ) {
+        lock.lock()
+        defer { lock.unlock() }
+
+        guard
+            captureIsActive,
+            captureGeneration ==
+                expectedGeneration
+        else {
+            return
+        }
+
+        bufferCount += 1
+        self.frameCount += frameCount
+        analysisDroppedBufferCount += 1
+        analysisDroppedFrameCount +=
+            frameCount
     }
 
     func flushPendingAnalysis() {
@@ -507,6 +484,19 @@ private final class CaptureStatsStore: @unchecked Sendable {
         let currentAnalysisMode = analysisMode
         let expectedGeneration =
             captureGeneration
+
+        bufferCount += 1
+        frameCount += UInt64(slot.frameCount)
+        lastBufferFrames =
+            AVAudioFrameCount(slot.frameCount)
+        sampleRate = slot.sampleRate
+        channelCount = slot.channelCount
+        bufferDurationMilliseconds =
+            slot.durationMilliseconds
+        processingLatencyTracker
+            .recordCallbackStart(
+                slot.callbackStartedNanoseconds
+            )
         lock.unlock()
 
         let latestFFT =
