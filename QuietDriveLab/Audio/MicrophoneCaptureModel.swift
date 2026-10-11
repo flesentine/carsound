@@ -526,6 +526,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
 
         if continuityWasBroken {
             analysisContinuityRevision &+= 1
+            clearPublishedAnalysisForContinuityBreak()
         }
 
         bufferCount += 1
@@ -686,6 +687,24 @@ private final class CaptureStatsStore: @unchecked Sendable {
                     analysisCompletedNanoseconds
             )
         lock.unlock()
+    }
+
+    private func clearPublishedAnalysisForContinuityBreak() {
+        fftSnapshot =
+            FFTSnapshot(
+                sampleCount: 0,
+                sampleRate: 0,
+                frequencyResolutionHz: 0,
+                windowName: FFTAnalyzer.windowName,
+                transformCount:
+                    fftAnalyzer.transformCount,
+                bins: []
+            )
+        smoothedSpectrum = .empty
+        noiseFloor = .empty
+        dominantFrequencies = .empty
+        persistentTones = .empty
+        musicInterference = .empty
     }
 
     private func resetTemporalAnalysisPipeline(
