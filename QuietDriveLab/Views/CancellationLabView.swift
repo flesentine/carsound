@@ -96,6 +96,17 @@ struct CancellationLabView: View {
 
             invalidateCancellationEvidenceAfterAnalysisDrop()
         }
+        .onChange(
+            of:
+                microphoneCapture.snapshot
+                    .analysisContinuityRevision
+        ) { previous, current in
+            guard current > previous else {
+                return
+            }
+
+            invalidateCancellationEvidenceAfterAnalysisDrop()
+        }
         .onDisappear {
             stopExperimentWorkForNavigation()
         }
@@ -134,10 +145,14 @@ struct CancellationLabView: View {
                 title: "Analysis continuity",
                 isReady:
                     microphoneCapture.snapshot
-                        .analysisDroppedBufferCount == 0,
+                        .analysisDroppedBufferCount == 0 &&
+                    microphoneCapture.snapshot
+                        .analysisContinuityRevision == 0,
                 detail:
                     microphoneCapture.snapshot
-                        .analysisDroppedBufferCount == 0
+                        .analysisDroppedBufferCount == 0 &&
+                    microphoneCapture.snapshot
+                        .analysisContinuityRevision == 0
                         ? "No analysis frames dropped"
                         : "Restart microphone capture before collecting evidence"
             )
@@ -5750,7 +5765,9 @@ struct CancellationLabView: View {
 
                     if
                         microphoneCapture.snapshot
-                            .analysisDroppedBufferCount > 0
+                            .analysisDroppedBufferCount > 0 ||
+                        microphoneCapture.snapshot
+                            .analysisContinuityRevision > 0
                     {
                         return "Audio analysis dropped frames; restart microphone capture before collecting more evidence."
                     }
@@ -6274,6 +6291,7 @@ struct CancellationLabView: View {
                 .capturing,
             !snapshot.isClipping,
             snapshot.analysisDroppedBufferCount == 0,
+            snapshot.analysisContinuityRevision == 0,
             snapshot.musicInterference
                 .level != .likely,
             ProcessingLatencyMath
@@ -6389,6 +6407,7 @@ struct CancellationLabView: View {
                 .capturing &&
             !snapshot.isClipping &&
             snapshot.analysisDroppedBufferCount == 0 &&
+            snapshot.analysisContinuityRevision == 0 &&
             snapshot.musicInterference
                 .level != .likely &&
             ProcessingLatencyMath
