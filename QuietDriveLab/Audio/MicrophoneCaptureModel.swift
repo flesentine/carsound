@@ -24,6 +24,7 @@ final class MicrophoneCaptureModel {
         let frameCount: UInt64
         let analysisDroppedBufferCount: UInt64
         let analysisDroppedFrameCount: UInt64
+        let analysisContinuityRevision: UInt64
         let lastBufferFrames: AVAudioFrameCount
         let sampleRate: Double
         let channelCount: AVAudioChannelCount
@@ -55,6 +56,7 @@ final class MicrophoneCaptureModel {
             frameCount: 0,
             analysisDroppedBufferCount: 0,
             analysisDroppedFrameCount: 0,
+            analysisContinuityRevision: 0,
             lastBufferFrames: 0,
             sampleRate: 0,
             channelCount: 0,
@@ -405,6 +407,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
                 analysisDroppedBufferCount,
             analysisDroppedFrameCount:
                 analysisDroppedFrameCount,
+            analysisContinuityRevision:
+                analysisContinuityRevision,
             lastBufferFrames: lastBufferFrames,
             sampleRate: sampleRate,
             channelCount: channelCount,
@@ -464,6 +468,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
         frameCount = 0
         analysisDroppedBufferCount = 0
         analysisDroppedFrameCount = 0
+        analysisContinuityRevision = 0
         lastBufferFrames = 0
         sampleRate = 0
         channelCount = 0
