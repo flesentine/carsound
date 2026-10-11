@@ -257,3 +257,8 @@ The remaining major architecture item is still the synchronous FFT/spectrum anal
 ## Real-time analysis handoff — Lab build 4.4
 
 The microphone tap no longer performs FFT, smoothing, noise-floor estimation, dominant-frequency detection, persistence tracking, or music-interference analysis synchronously. Incoming Float32 audio is copied/downmixed into a fixed four-slot preallocated handoff and a pre-created serial analysis worker drains those slots. Callback cadence is timestamped before handoff, analysis turnaround is measured through worker completion, and overload is explicit through dropped analysis buffer/frame counters. This prevents the DSP workload from contaminating the callback-jitter measurement it is meant to observe. Any dropped analysis buffer invalidates cancellation-lab measurement windows for that capture session; restart microphone capture before collecting more evidence so FFT discontinuities cannot be treated as contiguous audio.
+
+
+## Non-blocking tap handoff — Lab build 4.5
+
+The microphone tap no longer takes the shared capture-stats lock. Frame acquisition now uses per-slot try-locks only: the callback either claims an empty preallocated slot immediately or drops the analysis frame rather than waiting. The worker also uses non-blocking slot discovery, while all mutable counters, callback-interval statistics, and drop accounting are updated on the analysis queue. This removes UI snapshot polling and worker bookkeeping as possible blocking points on the real-time tap. Any handoff miss is still treated as an analysis drop, so cancellation evidence remains invalid until capture is restarted.
