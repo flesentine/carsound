@@ -208,6 +208,7 @@ final class QuietDriveLabTests: XCTestCase {
             handoff.enqueue(
                 buffer: first,
                 callbackStartedNanoseconds: 100,
+                callbackSequence: 42,
                 captureGeneration: 7
             )
         )
@@ -219,6 +220,7 @@ final class QuietDriveLabTests: XCTestCase {
         )
 
         var copied: [Float] = []
+        var capturedSequence: UInt64 = 0
         var capturedGeneration: UInt64 = 0
         handoff.consume(slotAt: firstIndex) {
             copied = Array(
@@ -226,10 +228,16 @@ final class QuietDriveLabTests: XCTestCase {
                     $0.frameCount
                 )
             )
+            capturedSequence =
+                $0.callbackSequence
             capturedGeneration =
                 $0.captureGeneration
         }
 
+        XCTAssertEqual(
+            capturedSequence,
+            42
+        )
         XCTAssertEqual(
             capturedGeneration,
             7
@@ -2908,6 +2916,119 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(
             statistics.standardDeviationMilliseconds,
             2,
+            accuracy: 0.001
+        )
+    }
+
+    func testProcessingLatencyTrackerOrdersOutOfOrderCallbackBookkeeping() {
+        var tracker = ProcessingLatencyTracker()
+        tracker.prepareCallbackSequence(
+            startingAt: 10
+        )
+
+        tracker.recordCallbackStart(
+            sequence: 11,
+            callbackStartedNanoseconds:
+                1_020_000_000
+        )
+
+        var snapshot = tracker.snapshot(
+            nowNanoseconds: 1_025_000_000,
+            fftSampleCount: 0,
+            sampleRate: 48_000
+        )
+
+        XCTAssertEqual(
+            snapshot.averageCallbackIntervalMilliseconds,
+            0,
+            accuracy: 0.001
+        )
+
+        tracker.recordCallbackStart(
+            sequence: 10,
+            callbackStartedNanoseconds:
+                1_000_000_000
+        )
+        tracker.recordCallbackStart(
+            sequence: 13,
+            callbackStartedNanoseconds:
+                1_060_000_000
+        )
+        tracker.recordCallbackStart(
+            sequence: 12,
+            callbackStartedNanoseconds:
+                1_040_000_000
+        )
+
+        snapshot = tracker.snapshot(
+            nowNanoseconds: 1_065_000_000,
+            fftSampleCount: 0,
+            sampleRate: 48_000
+        )
+
+        XCTAssertEqual(
+            snapshot.latestCallbackIntervalMilliseconds,
+            20,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.averageCallbackIntervalMilliseconds,
+            20,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.callbackJitterMilliseconds,
+            0,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.minimumCallbackIntervalMilliseconds,
+            20,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.maximumCallbackIntervalMilliseconds,
+            20,
+            accuracy: 0.001
+        )
+    }
+
+    func testProcessingLatencyTrackerIgnoresAlreadyConsumedCallbackSequence() {
+        var tracker = ProcessingLatencyTracker()
+        tracker.prepareCallbackSequence(
+            startingAt: 20
+        )
+
+        tracker.recordCallbackStart(
+            sequence: 20,
+            callbackStartedNanoseconds:
+                2_000_000_000
+        )
+        tracker.recordCallbackStart(
+            sequence: 21,
+            callbackStartedNanoseconds:
+                2_020_000_000
+        )
+        tracker.recordCallbackStart(
+            sequence: 20,
+            callbackStartedNanoseconds:
+                9_000_000_000
+        )
+
+        let snapshot = tracker.snapshot(
+            nowNanoseconds: 2_025_000_000,
+            fftSampleCount: 0,
+            sampleRate: 48_000
+        )
+
+        XCTAssertEqual(
+            snapshot.latestCallbackIntervalMilliseconds,
+            20,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.averageCallbackIntervalMilliseconds,
+            20,
             accuracy: 0.001
         )
     }
