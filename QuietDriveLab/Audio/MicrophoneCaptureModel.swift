@@ -227,7 +227,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
     private var captureGeneration: UInt64 = 0
     private var captureIsActive = false
     private var nextCallbackSequence: UInt64 = 1
-    private var nextExpectedAnalysisCallbackSequence: UInt64 = 1
+    private var analysisContinuityTracker =
+        AnalysisContinuityTracker()
     private var analysisContinuityRevision: UInt64 = 0
     private var bufferCount: UInt64 = 0
     private var frameCount: UInt64 = 0
@@ -278,8 +279,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
                 startingAt:
                     nextCallbackSequence
             )
-        nextExpectedAnalysisCallbackSequence =
-            nextCallbackSequence
+        analysisContinuityTracker.reset(
+            startingAt:
+                nextCallbackSequence
+        )
         let generation = captureGeneration
         lock.unlock()
 
@@ -511,15 +514,14 @@ private final class CaptureStatsStore: @unchecked Sendable {
         let expectedGeneration =
             captureGeneration
         let continuityWasBroken =
-            slot.callbackSequence >
-                nextExpectedAnalysisCallbackSequence
+            analysisContinuityTracker.record(
+                sequence:
+                    slot.callbackSequence
+            )
 
         if continuityWasBroken {
             analysisContinuityRevision &+= 1
         }
-
-        nextExpectedAnalysisCallbackSequence =
-            slot.callbackSequence &+ 1
 
         bufferCount += 1
         frameCount += UInt64(slot.frameCount)
