@@ -451,7 +451,9 @@ private final class CaptureStatsStore: @unchecked Sendable {
         flushPendingAnalysis()
 
         analysisQueue.sync {
-            resetTemporalAnalysisPipeline()
+            resetTemporalAnalysisPipeline(
+                preserveFFTTransformCount: false
+            )
         }
 
         lock.lock()
@@ -537,7 +539,9 @@ private final class CaptureStatsStore: @unchecked Sendable {
         lock.unlock()
 
         if continuityWasBroken {
-            resetTemporalAnalysisPipeline()
+            resetTemporalAnalysisPipeline(
+                preserveFFTTransformCount: true
+            )
         }
 
         let latestFFT =
@@ -677,8 +681,15 @@ private final class CaptureStatsStore: @unchecked Sendable {
         lock.unlock()
     }
 
-    private func resetTemporalAnalysisPipeline() {
-        fftAnalyzer.reset()
+    private func resetTemporalAnalysisPipeline(
+        preserveFFTTransformCount: Bool
+    ) {
+        if preserveFFTTransformCount {
+            fftAnalyzer.resetForDiscontinuity()
+        } else {
+            fftAnalyzer.reset()
+        }
+
         smoothingBank.reset()
         noiseFloorEstimator.reset()
         persistentToneTracker.reset()
