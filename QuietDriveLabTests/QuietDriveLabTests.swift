@@ -402,6 +402,69 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testAnalysisContinuityTrackerDetectsSequenceGapOnce() {
+        var tracker = AnalysisContinuityTracker()
+        tracker.reset(startingAt: 10)
+
+        XCTAssertFalse(
+            tracker.record(sequence: 10)
+        )
+        XCTAssertFalse(
+            tracker.record(sequence: 11)
+        )
+        XCTAssertTrue(
+            tracker.record(sequence: 14)
+        )
+        XCTAssertFalse(
+            tracker.record(sequence: 15)
+        )
+        XCTAssertFalse(
+            tracker.record(sequence: 13)
+        )
+    }
+
+    func testFFTDiscontinuityResetRequiresFreshWindowWithoutRewindingSequence() throws {
+        let analyzer = FFTAnalyzer(size: 4)
+        let initial: [Float] = [1, 0, -1, 0]
+
+        let first = try XCTUnwrap(
+            analyzer.ingest(
+                samples: initial,
+                sampleRate: 4
+            )
+        )
+        XCTAssertEqual(
+            first.transformCount,
+            1
+        )
+
+        analyzer.resetForDiscontinuity()
+
+        XCTAssertNil(
+            analyzer.ingest(
+                samples: [1, 0],
+                sampleRate: 4
+            )
+        )
+        XCTAssertNil(
+            analyzer.ingest(
+                samples: [-1],
+                sampleRate: 4
+            )
+        )
+
+        let second = try XCTUnwrap(
+            analyzer.ingest(
+                samples: [0],
+                sampleRate: 4
+            )
+        )
+        XCTAssertEqual(
+            second.transformCount,
+            2
+        )
+    }
+
     func testFFTWaitsForAFullWindow() {
         let analyzer = FFTAnalyzer(size: 1_024)
         let samples = Array(repeating: Float.zero, count: 512)
