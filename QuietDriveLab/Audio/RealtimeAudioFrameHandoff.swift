@@ -21,6 +21,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
         fileprivate(set) var commonFormat: AVAudioCommonFormat = .otherFormat
         fileprivate(set) var isInterleaved = false
         fileprivate(set) var callbackStartedNanoseconds: UInt64 = 0
+        fileprivate(set) var callbackSequence: UInt64 = 0
         fileprivate(set) var enqueueSequence: UInt64 = 0
         fileprivate(set) var captureGeneration: UInt64 = 0
         fileprivate(set) var durationMilliseconds = 0.0
@@ -59,6 +60,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
     func enqueue(
         buffer: AVAudioPCMBuffer,
         callbackStartedNanoseconds: UInt64,
+        callbackSequence: UInt64 = 0,
         captureGeneration: UInt64 = 0
     ) -> Int? {
         guard
@@ -185,6 +187,8 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
         slot.isInterleaved = buffer.format.isInterleaved
         slot.callbackStartedNanoseconds =
             callbackStartedNanoseconds
+        slot.callbackSequence =
+            callbackSequence
         slot.captureGeneration =
             captureGeneration
         slot.durationMilliseconds =
@@ -270,6 +274,7 @@ final class RealtimeAudioFrameHandoff: @unchecked Sendable {
             slot.commonFormat = .otherFormat
             slot.isInterleaved = false
             slot.callbackStartedNanoseconds = 0
+            slot.callbackSequence = 0
             slot.enqueueSequence = 0
             slot.captureGeneration = 0
             slot.durationMilliseconds = 0
