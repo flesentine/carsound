@@ -657,3 +657,13 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] Invalidate existing cancellation evidence when the continuity revision changes
 - [x] Add regression coverage for gap detection, stale sequence handling, full-window rebuild, and monotonic transform count
 - [x] Bump structured evidence sessions to app_build 4.7
+
+
+## Eighth post-roadmap hardening pass — Lab build 4.8
+
+- [x] Clear published FFT-derived snapshots immediately when callback continuity breaks
+- [x] Make continuity revision and published-state invalidation atomic under the capture stats lock
+- [x] Preserve the monotonic FFT transform counter while clearing stale bins and resolution
+- [x] Clear smoothed spectrum, noise floor, dominant frequencies, persistent tones, and music-interference snapshots
+- [x] Prevent UI and non-measurement diagnostics from showing pre-gap evidence during the fresh-window rebuild
+- [x] Bump structured evidence sessions to app_build 4.8
