@@ -552,6 +552,9 @@ private final class CaptureStatsStore: @unchecked Sendable {
             )
         }
 
+        let analysisStartedNanoseconds =
+            DispatchTime.now().uptimeNanoseconds
+
         let latestFFT =
             fftAnalyzer.ingest(
                 samples:
@@ -680,9 +683,11 @@ private final class CaptureStatsStore: @unchecked Sendable {
         }
 
         processingLatencyTracker
-            .recordAnalysisTurnaround(
+            .recordAnalysisTiming(
                 callbackStartedNanoseconds:
                     slot.callbackStartedNanoseconds,
+                analysisStartedNanoseconds:
+                    analysisStartedNanoseconds,
                 analysisCompletedNanoseconds:
                     analysisCompletedNanoseconds
             )
