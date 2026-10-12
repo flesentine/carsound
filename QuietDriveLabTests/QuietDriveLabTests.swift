@@ -2941,12 +2941,12 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
-    func testProcessingLatencySpectrumCenterAgeAddsHalfWindowProcessingAndPublishAge() {
+    func testProcessingLatencySpectrumCenterAgeAddsHalfWindowTurnaroundAndPublishAge() {
         XCTAssertEqual(
             ProcessingLatencyMath
                 .estimatedSpectrumCenterAgeMilliseconds(
                     fftWindowMilliseconds: 80,
-                    analysisProcessingMilliseconds: 3,
+                    analysisTurnaroundMilliseconds: 3,
                     snapshotAgeMilliseconds: 7
                 ),
             50,
