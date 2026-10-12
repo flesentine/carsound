@@ -63,6 +63,10 @@ struct ProcessingLatencySnapshot: Equatable, Sendable {
     let minimumCallbackIntervalMilliseconds: Double
     let maximumCallbackIntervalMilliseconds: Double
 
+    let latestAnalysisTurnaroundMilliseconds: Double
+    let averageAnalysisTurnaroundMilliseconds: Double
+    let maximumAnalysisTurnaroundMilliseconds: Double
+
     let latestAnalysisProcessingMilliseconds: Double
     let averageAnalysisProcessingMilliseconds: Double
     let maximumAnalysisProcessingMilliseconds: Double
@@ -77,6 +81,9 @@ struct ProcessingLatencySnapshot: Equatable, Sendable {
         callbackJitterMilliseconds: 0,
         minimumCallbackIntervalMilliseconds: 0,
         maximumCallbackIntervalMilliseconds: 0,
+        latestAnalysisTurnaroundMilliseconds: 0,
+        averageAnalysisTurnaroundMilliseconds: 0,
+        maximumAnalysisTurnaroundMilliseconds: 0,
         latestAnalysisProcessingMilliseconds: 0,
         averageAnalysisProcessingMilliseconds: 0,
         maximumAnalysisProcessingMilliseconds: 0,
@@ -147,8 +154,12 @@ struct ProcessingLatencyTracker: Sendable {
     private var callbackStatistics =
         LatencyRunningStatistics()
 
+    private var latestAnalysisTurnaroundMilliseconds = 0.0
+    private var analysisTurnaroundStatistics =
+        LatencyRunningStatistics()
+
     private var latestAnalysisProcessingMilliseconds = 0.0
-    private var analysisStatistics =
+    private var analysisProcessingStatistics =
         LatencyRunningStatistics()
 
     private var lastAnalysisCompletedNanoseconds: UInt64?
@@ -160,8 +171,11 @@ struct ProcessingLatencyTracker: Sendable {
         latestCallbackIntervalMilliseconds = 0
         callbackStatistics =
             LatencyRunningStatistics()
+        latestAnalysisTurnaroundMilliseconds = 0
+        analysisTurnaroundStatistics =
+            LatencyRunningStatistics()
         latestAnalysisProcessingMilliseconds = 0
-        analysisStatistics =
+        analysisProcessingStatistics =
             LatencyRunningStatistics()
         lastAnalysisCompletedNanoseconds = nil
     }
@@ -233,24 +247,45 @@ struct ProcessingLatencyTracker: Sendable {
         }
     }
 
-    mutating func recordAnalysisTurnaround(
+    mutating func recordAnalysisTiming(
         callbackStartedNanoseconds: UInt64,
+        analysisStartedNanoseconds: UInt64,
         analysisCompletedNanoseconds: UInt64
     ) {
         if
             analysisCompletedNanoseconds >=
                 callbackStartedNanoseconds
         {
-            let processing =
+            let turnaround =
                 ProcessingLatencyMath.milliseconds(
                     nanoseconds:
                         analysisCompletedNanoseconds -
                         callbackStartedNanoseconds
                 )
 
+            latestAnalysisTurnaroundMilliseconds =
+                turnaround
+            analysisTurnaroundStatistics.record(
+                turnaround
+            )
+        }
+
+        if
+            analysisCompletedNanoseconds >=
+                analysisStartedNanoseconds
+        {
+            let processing =
+                ProcessingLatencyMath.milliseconds(
+                    nanoseconds:
+                        analysisCompletedNanoseconds -
+                        analysisStartedNanoseconds
+                )
+
             latestAnalysisProcessingMilliseconds =
                 processing
-            analysisStatistics.record(processing)
+            analysisProcessingStatistics.record(
+                processing
+            )
         }
 
         lastAnalysisCompletedNanoseconds =
@@ -259,12 +294,15 @@ struct ProcessingLatencyTracker: Sendable {
 
     mutating func record(
         callbackStartedNanoseconds: UInt64,
+        analysisStartedNanoseconds: UInt64,
         analysisCompletedNanoseconds: UInt64
     ) {
         recordCallbackStart(callbackStartedNanoseconds)
-        recordAnalysisTurnaround(
+        recordAnalysisTiming(
             callbackStartedNanoseconds:
                 callbackStartedNanoseconds,
+            analysisStartedNanoseconds:
+                analysisStartedNanoseconds,
             analysisCompletedNanoseconds:
                 analysisCompletedNanoseconds
         )
@@ -313,13 +351,21 @@ struct ProcessingLatencyTracker: Sendable {
             maximumCallbackIntervalMilliseconds:
                 callbackStatistics
                     .maximumMilliseconds,
+            latestAnalysisTurnaroundMilliseconds:
+                latestAnalysisTurnaroundMilliseconds,
+            averageAnalysisTurnaroundMilliseconds:
+                analysisTurnaroundStatistics
+                    .meanMilliseconds,
+            maximumAnalysisTurnaroundMilliseconds:
+                analysisTurnaroundStatistics
+                    .maximumMilliseconds,
             latestAnalysisProcessingMilliseconds:
                 latestAnalysisProcessingMilliseconds,
             averageAnalysisProcessingMilliseconds:
-                analysisStatistics
+                analysisProcessingStatistics
                     .meanMilliseconds,
             maximumAnalysisProcessingMilliseconds:
-                analysisStatistics
+                analysisProcessingStatistics
                     .maximumMilliseconds,
             fftWindowMilliseconds: fftWindow,
             snapshotAgeMilliseconds: snapshotAge,
@@ -329,7 +375,7 @@ struct ProcessingLatencyTracker: Sendable {
                         fftWindowMilliseconds:
                             fftWindow,
                         analysisProcessingMilliseconds:
-                            latestAnalysisProcessingMilliseconds,
+                            latestAnalysisTurnaroundMilliseconds,
                         snapshotAgeMilliseconds:
                             snapshotAge
                     )
