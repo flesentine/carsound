@@ -137,11 +137,11 @@ enum ProcessingLatencyMath {
 
     static func estimatedSpectrumCenterAgeMilliseconds(
         fftWindowMilliseconds: Double,
-        analysisProcessingMilliseconds: Double,
+        analysisTurnaroundMilliseconds: Double,
         snapshotAgeMilliseconds: Double
     ) -> Double {
         max(0, fftWindowMilliseconds) / 2.0 +
-        max(0, analysisProcessingMilliseconds) +
+        max(0, analysisTurnaroundMilliseconds) +
         max(0, snapshotAgeMilliseconds)
     }
 }
@@ -374,7 +374,7 @@ struct ProcessingLatencyTracker: Sendable {
                     .estimatedSpectrumCenterAgeMilliseconds(
                         fftWindowMilliseconds:
                             fftWindow,
-                        analysisProcessingMilliseconds:
+                        analysisTurnaroundMilliseconds:
                             latestAnalysisTurnaroundMilliseconds,
                         snapshotAgeMilliseconds:
                             snapshotAge
