@@ -277,3 +277,8 @@ A missing microphone callback can no longer be bridged inside the rolling FFT wi
 ## Published analysis invalidation — Lab build 4.8
 
 When callback continuity breaks, published FFT-derived state is now cleared atomically with the continuity revision instead of remaining visible while the new 4096-sample window rebuilds. The cleared FFT snapshot preserves the monotonic transform counter but exposes no bins, resolution, or sample window until a fresh contiguous transform is available. Smoothed spectrum, noise floor, dominant frequencies, persistent tones, and music-interference snapshots are cleared at the same boundary. This prevents UI and non-measurement diagnostics from displaying pre-gap evidence as though it were current.
+
+
+## Processing latency semantics — Lab build 4.9
+
+Analysis timing is now split into two independent measurements. Analysis turnaround measures microphone callback start through worker completion and therefore includes handoff/queue delay plus DSP work; it is used when estimating spectrum freshness and age. DSP execution measures worker analysis start through completion and excludes queue wait; it is used for microphone-buffer budget checks and processing confidence. The latency UI now displays both sets of latest, average, and maximum measurements instead of labeling callback-to-completion turnaround as DSP processing.
