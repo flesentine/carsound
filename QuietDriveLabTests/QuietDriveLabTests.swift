@@ -3178,14 +3178,17 @@ final class QuietDriveLabTests: XCTestCase {
 
         tracker.record(
             callbackStartedNanoseconds: 1_000_000_000,
+            analysisStartedNanoseconds: 1_000_000_000,
             analysisCompletedNanoseconds: 1_001_000_000
         )
         tracker.record(
             callbackStartedNanoseconds: 1_020_000_000,
+            analysisStartedNanoseconds: 1_020_000_000,
             analysisCompletedNanoseconds: 1_021_000_000
         )
         tracker.record(
             callbackStartedNanoseconds: 1_042_000_000,
+            analysisStartedNanoseconds: 1_042_000_000,
             analysisCompletedNanoseconds: 1_043_000_000
         )
 
