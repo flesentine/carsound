@@ -883,7 +883,34 @@ struct CancellationLabView: View {
                 Divider()
 
                 LabeledContent(
-                    "DSP processing latest",
+                    "Analysis turnaround latest",
+                    value: String(
+                        format: "%.2f ms",
+                        latency
+                            .latestAnalysisTurnaroundMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Analysis turnaround average",
+                    value: String(
+                        format: "%.2f ms",
+                        latency
+                            .averageAnalysisTurnaroundMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "Analysis turnaround max",
+                    value: String(
+                        format: "%.2f ms",
+                        latency
+                            .maximumAnalysisTurnaroundMilliseconds
+                    )
+                )
+
+                LabeledContent(
+                    "DSP execution latest",
                     value: String(
                         format: "%.2f ms",
                         latency
@@ -892,7 +919,7 @@ struct CancellationLabView: View {
                 )
 
                 LabeledContent(
-                    "DSP processing average",
+                    "DSP execution average",
                     value: String(
                         format: "%.2f ms",
                         latency
@@ -901,7 +928,7 @@ struct CancellationLabView: View {
                 )
 
                 LabeledContent(
-                    "DSP processing max",
+                    "DSP execution max",
                     value: String(
                         format: "%.2f ms",
                         latency
