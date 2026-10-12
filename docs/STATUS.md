@@ -667,3 +667,15 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] Clear smoothed spectrum, noise floor, dominant frequencies, persistent tones, and music-interference snapshots
 - [x] Prevent UI and non-measurement diagnostics from showing pre-gap evidence during the fresh-window rebuild
 - [x] Bump structured evidence sessions to app_build 4.8
+
+
+## Ninth post-roadmap hardening pass — Lab build 4.9
+
+- [x] Separate callback-to-worker analysis turnaround from worker DSP execution time
+- [x] Measure DSP execution only across the analysis pipeline, excluding handoff and queue wait
+- [x] Preserve callback-to-completion turnaround for spectrum freshness/age estimation
+- [x] Use DSP execution time for microphone-buffer budget checks and processing confidence
+- [x] Show turnaround and DSP execution separately in the live latency diagnostics
+- [x] Add regression coverage proving queue wait and DSP execution can differ
+- [x] Rename spectrum-age inputs to reflect turnaround semantics
+- [x] Bump structured evidence sessions to app_build 4.9
