@@ -3096,15 +3096,17 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
-    func testProcessingLatencyTrackerMeasuresCallbackDSPAndSnapshotAge() {
+    func testProcessingLatencyTrackerSeparatesTurnaroundDSPAndSnapshotAge() {
         var tracker = ProcessingLatencyTracker()
 
         tracker.record(
             callbackStartedNanoseconds: 1_000_000_000,
+            analysisStartedNanoseconds: 1_001_000_000,
             analysisCompletedNanoseconds: 1_002_000_000
         )
         tracker.record(
             callbackStartedNanoseconds: 1_021_000_000,
+            analysisStartedNanoseconds: 1_023_000_000,
             analysisCompletedNanoseconds: 1_024_000_000
         )
 
@@ -3125,18 +3127,33 @@ final class QuietDriveLabTests: XCTestCase {
             accuracy: 0.001
         )
         XCTAssertEqual(
-            snapshot.latestAnalysisProcessingMilliseconds,
+            snapshot.latestAnalysisTurnaroundMilliseconds,
             3,
             accuracy: 0.001
         )
         XCTAssertEqual(
-            snapshot.averageAnalysisProcessingMilliseconds,
+            snapshot.averageAnalysisTurnaroundMilliseconds,
             2.5,
             accuracy: 0.001
         )
         XCTAssertEqual(
-            snapshot.maximumAnalysisProcessingMilliseconds,
+            snapshot.maximumAnalysisTurnaroundMilliseconds,
             3,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.latestAnalysisProcessingMilliseconds,
+            1,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.averageAnalysisProcessingMilliseconds,
+            1,
+            accuracy: 0.001
+        )
+        XCTAssertEqual(
+            snapshot.maximumAnalysisProcessingMilliseconds,
+            1,
             accuracy: 0.001
         )
         XCTAssertEqual(
