@@ -79,18 +79,78 @@ jobs:
           xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
           xcrun simctl bootstatus "$DEVICE_ID" -b
 
+          cat > /tmp/run_quietdrive_tests.py <<'PY'
+          import os
+          import signal
+          import subprocess
+          import sys
+
+          command = sys.argv[1:]
+          process = subprocess.Popen(
+              command,
+              start_new_session=True,
+          )
+
+          try:
+              return_code = process.wait(timeout=360)
+          except subprocess.TimeoutExpired:
+              print(
+                  "xcodebuild test timed out after 360 seconds.",
+                  flush=True,
+              )
+              os.killpg(
+                  process.pid,
+                  signal.SIGTERM,
+              )
+              try:
+                  process.wait(timeout=10)
+              except subprocess.TimeoutExpired:
+                  os.killpg(
+                      process.pid,
+                      signal.SIGKILL,
+                  )
+                  process.wait()
+              raise SystemExit(124)
+
+          raise SystemExit(return_code)
+          PY
+
+          run_tests() {
+            python3 /tmp/run_quietdrive_tests.py \
+              xcodebuild \
+              -project QuietDriveLab.xcodeproj \
+              -scheme QuietDriveLab \
+              -sdk iphonesimulator \
+              -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+              -destination-timeout 60 \
+              -parallel-testing-enabled NO \
+              CODE_SIGNING_ALLOWED=NO \
+              test-without-building
+          }
+
           echo "Running tests on simulator $DEVICE_ID"
 
-          if ! xcodebuild \
-            -project QuietDriveLab.xcodeproj \
-            -scheme QuietDriveLab \
-            -sdk iphonesimulator \
-            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
-            -destination-timeout 60 \
-            CODE_SIGNING_ALLOWED=NO \
-            test
-          then
-            echo "Unit tests failed; simulator state follows:"
+          set +e
+          run_tests
+          TEST_EXIT=$?
+          set -e
+
+          if [ "$TEST_EXIT" -eq 124 ]; then
+            echo "Simulator test process wedged; resetting simulator and retrying once."
+
+            xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
+            xcrun simctl erase "$DEVICE_ID"
+            xcrun simctl boot "$DEVICE_ID"
+            xcrun simctl bootstatus "$DEVICE_ID" -b
+
+            set +e
+            run_tests
+            TEST_EXIT=$?
+            set -e
+          fi
+
+          if [ "$TEST_EXIT" -ne 0 ]; then
+            echo "Unit tests failed with exit code $TEST_EXIT; simulator state follows:"
             xcrun simctl list devices
-            exit 1
+            exit "$TEST_EXIT"
           fi
