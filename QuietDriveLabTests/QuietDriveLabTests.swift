@@ -1883,6 +1883,12 @@ final class QuietDriveLabTests: XCTestCase {
             comparison: comparison,
             inputRoute: "Built-in microphone",
             outputRoute: "Bluetooth A2DP",
+            routeSignature: "route-abc",
+            routeRevision: 12,
+            audioConfiguration:
+                "route-abc|sr=48000|buf10ms=100",
+            headPosition: "reference",
+            evidenceBuild: "4.11",
             recordedAt: Date(timeIntervalSince1970: 2_000)
         )
 
@@ -1905,6 +1911,119 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(
             reloaded.records.first?.outputRoute,
             "Bluetooth A2DP"
+        )
+        XCTAssertEqual(
+            reloaded.records.first?.routeSignature,
+            "route-abc"
+        )
+        XCTAssertEqual(
+            reloaded.records.first?.routeRevision,
+            12
+        )
+        XCTAssertEqual(
+            reloaded.records.first?.audioConfiguration,
+            "route-abc|sr=48000|buf10ms=100"
+        )
+        XCTAssertEqual(
+            reloaded.records.first?.headPosition,
+            "reference"
+        )
+        XCTAssertEqual(
+            reloaded.records.first?.evidenceBuild,
+            "4.11"
+        )
+    }
+
+    func testExperimentRecordDecodesLegacyRecordWithoutProvenance() throws {
+        let comparison = try XCTUnwrap(
+            BeforeAfterMeasurementMath.compare(
+                baseline: TargetEnergyWindowSummary(
+                    condition: MeasurementCondition(
+                        targetFrequencyHz: 80,
+                        phaseDegrees: 0,
+                        outputPercent: 50,
+                        toneAudible: false
+                    ),
+                    sampleCount: 20,
+                    durationSeconds: 1.9,
+                    averageBandEnergyDBFS: -25,
+                    minimumBandEnergyDBFS: -26,
+                    maximumBandEnergyDBFS: -24,
+                    averageCenterLevelDBFS: -28,
+                    standardDeviationDB: 0.5
+                ),
+                treatment: TargetEnergyWindowSummary(
+                    condition: MeasurementCondition(
+                        targetFrequencyHz: 80,
+                        phaseDegrees: 180,
+                        outputPercent: 40,
+                        toneAudible: true
+                    ),
+                    sampleCount: 20,
+                    durationSeconds: 1.9,
+                    averageBandEnergyDBFS: -29,
+                    minimumBandEnergyDBFS: -30,
+                    maximumBandEnergyDBFS: -28,
+                    averageCenterLevelDBFS: -32,
+                    standardDeviationDB: 0.4
+                )
+            )
+        )
+
+        let current = ExperimentRecord(
+            id: UUID(
+                uuidString:
+                    "00000000-0000-0000-0000-000000000099"
+            )!,
+            recordedAt:
+                Date(timeIntervalSince1970: 3_000),
+            comparison: comparison,
+            inputRoute: "Mic",
+            outputRoute: "Car"
+        )
+
+        let encoded = try JSONEncoder().encode(current)
+        var object = try XCTUnwrap(
+            JSONSerialization.jsonObject(
+                with: encoded
+            ) as? [String: Any]
+        )
+
+        object.removeValue(
+            forKey: "routeSignature"
+        )
+        object.removeValue(
+            forKey: "routeRevision"
+        )
+        object.removeValue(
+            forKey: "audioConfiguration"
+        )
+        object.removeValue(
+            forKey: "headPosition"
+        )
+        object.removeValue(
+            forKey: "evidenceBuild"
+        )
+
+        let legacyData =
+            try JSONSerialization.data(
+                withJSONObject: object
+            )
+        let decoded =
+            try JSONDecoder().decode(
+                ExperimentRecord.self,
+                from: legacyData
+            )
+
+        XCTAssertNil(decoded.routeSignature)
+        XCTAssertNil(decoded.routeRevision)
+        XCTAssertNil(decoded.audioConfiguration)
+        XCTAssertNil(decoded.headPosition)
+        XCTAssertNil(decoded.evidenceBuild)
+        XCTAssertEqual(
+            decoded.measuredReductionDB,
+            4,
+            accuracy: 0.001
         )
     }
 
