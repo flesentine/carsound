@@ -3267,7 +3267,7 @@ struct CancellationLabView: View {
                         ? "Run Saved"
                         : "Save Run"
                 ) {
-                    let record = experimentRecorder.record(
+                    let record = recordExperiment(
                         comparison: comparison,
                         inputRoute: inputRouteSummary,
                         outputRoute: outputRouteSummary
@@ -4682,6 +4682,34 @@ struct CancellationLabView: View {
         )
     }
 
+    private func recordExperiment(
+        comparison: BeforeAfterComparison,
+        inputRoute: String,
+        outputRoute: String
+    ) -> ExperimentRecord {
+        experimentRecorder.record(
+            comparison: comparison,
+            inputRoute: inputRoute,
+            outputRoute: outputRoute,
+            routeSignature:
+                baselineRouteSignature ??
+                audioSession.routeSignature,
+            routeRevision:
+                baselineRouteRevision ??
+                audioSession.routeRevision,
+            audioConfiguration:
+                baselineAudioConfigurationSignature ??
+                audioConfigurationSignature,
+            headPosition:
+                (
+                    baselineHeadPosition ??
+                    selectedHeadPosition
+                ).rawValue,
+            evidenceBuild:
+                LabBuildInfo.evidenceBuild
+        )
+    }
+
     private func logExperimentRecord(
         _ record: ExperimentRecord,
         kind: StructuredLogEventKind
@@ -4689,9 +4717,11 @@ struct CancellationLabView: View {
         let confidence =
             overallConfidenceSnapshot
         let routeSignature =
+            record.routeSignature ??
             baselineRouteSignature ??
             audioSession.routeSignature
         let routeRevision =
+            record.routeRevision ??
             baselineRouteRevision ??
             audioSession.routeRevision
         let matchingCalibration =
@@ -4726,6 +4756,7 @@ struct CancellationLabView: View {
                     confidence.level.rawValue
             )
         let measuredAudioConfiguration =
+            record.audioConfiguration ??
             baselineAudioConfigurationSignature ??
             ExperimentEvidenceQuality
                 .audioConfigurationID(
@@ -4776,11 +4807,16 @@ struct CancellationLabView: View {
                 "output_route":
                     record.outputRoute,
                 "head_position":
+                    record.headPosition ??
                     (
                         baselineHeadPosition ??
                         selectedHeadPosition
                     ).rawValue,
                 "head_position_title":
+                    HeadPositionPreset(
+                        rawValue:
+                            record.headPosition ?? ""
+                    )?.title ??
                     (
                         baselineHeadPosition ??
                         selectedHeadPosition
@@ -5884,7 +5920,7 @@ struct CancellationLabView: View {
                     return nil
                 },
                 onAcceptedComparison: { comparison in
-                    let record = experimentRecorder.record(
+                    let record = recordExperiment(
                         comparison: comparison,
                         inputRoute: inputRoute,
                         outputRoute: outputRoute
@@ -5962,7 +5998,7 @@ struct CancellationLabView: View {
                     )
                 },
                 onComparison: { comparison in
-                    let record = experimentRecorder.record(
+                    let record = recordExperiment(
                         comparison: comparison,
                         inputRoute: inputRoute,
                         outputRoute: outputRoute
@@ -6072,7 +6108,7 @@ struct CancellationLabView: View {
                     )
                 },
                 onComparison: { comparison in
-                    let record = experimentRecorder.record(
+                    let record = recordExperiment(
                         comparison: comparison,
                         inputRoute: inputRoute,
                         outputRoute: outputRoute
@@ -6213,7 +6249,7 @@ struct CancellationLabView: View {
                     )
                 },
                 onComparison: { comparison in
-                    let record = experimentRecorder.record(
+                    let record = recordExperiment(
                         comparison: comparison,
                         inputRoute: inputRoute,
                         outputRoute: outputRoute
