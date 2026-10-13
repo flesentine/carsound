@@ -36,6 +36,8 @@ struct CancellationLabView: View {
         String?
     @State private var baselineRouteRevision:
         UInt64?
+    @State private var baselineAudioConfigurationSignature:
+        String?
 
     var body: some View {
         ScrollView {
@@ -643,7 +645,7 @@ struct CancellationLabView: View {
                                 structuredLogContext,
                             text: [
                                 "app_build":
-                                    "4.3"
+                                    LabBuildInfo.evidenceBuild
                             ]
                         )
 
@@ -3298,6 +3300,7 @@ struct CancellationLabView: View {
                     baselineHeadPosition = nil
                     baselineRouteSignature = nil
                     baselineRouteRevision = nil
+                    baselineAudioConfigurationSignature = nil
                 }
                 .buttonStyle(.bordered)
                 .disabled(
@@ -4464,6 +4467,7 @@ struct CancellationLabView: View {
         baselineHeadPosition = nil
         baselineRouteSignature = nil
         baselineRouteRevision = nil
+        baselineAudioConfigurationSignature = nil
         lastSavedComparisonKey = nil
         phaseRefinementProgressText = nil
         amplitudeSearchProgressText = nil
@@ -4662,7 +4666,7 @@ struct CancellationLabView: View {
                         .title,
                 ExperimentEvidenceQuality
                     .audioConfigurationTextKey:
-                    audioConfigurationSignature
+                    measuredAudioConfiguration
             ],
             flags: [
                 "microphone_clipping":
@@ -4682,10 +4686,61 @@ struct CancellationLabView: View {
         _ record: ExperimentRecord,
         kind: StructuredLogEventKind
     ) {
+        let confidence =
+            overallConfidenceSnapshot
+        let routeSignature =
+            baselineRouteSignature ??
+            audioSession.routeSignature
+        let routeRevision =
+            baselineRouteRevision ??
+            audioSession.routeRevision
+        let matchingCalibration =
+            calibration.latestMatchingProfile(
+                routeSignature:
+                    routeSignature,
+                sampleRate:
+                    audioSession.sampleRate,
+                ioBufferDuration:
+                    audioSession.ioBufferDuration
+            )
+        let measuredContext =
+            StructuredLogContext(
+                routeSignature:
+                    routeSignature,
+                routeRevision:
+                    routeRevision,
+                calibrationProfileID:
+                    matchingCalibration?.id,
+                targetFrequencyHz:
+                    record.targetFrequencyHz,
+                phaseDegrees:
+                    record.phaseDegrees,
+                outputPercent:
+                    record.outputPercent,
+                confidenceScorePercent:
+                    confidence.scorePercent,
+                evidenceCoveragePercent:
+                    confidence
+                        .evidenceCoveragePercent,
+                confidenceLevel:
+                    confidence.level.rawValue
+            )
+        let measuredAudioConfiguration =
+            baselineAudioConfigurationSignature ??
+            ExperimentEvidenceQuality
+                .audioConfigurationID(
+                    routeSignature:
+                        routeSignature,
+                    sampleRate:
+                        audioSession.sampleRate,
+                    ioBufferDuration:
+                        audioSession.ioBufferDuration
+                )
+
         _ = structuredLog.record(
             kind: kind,
             context:
-                structuredLogContext,
+                measuredContext,
             metrics: [
                 "baseline_band_energy_dbfs":
                     record
@@ -6226,7 +6281,9 @@ struct CancellationLabView: View {
             baselineRouteSignature ==
                 audioSession.routeSignature &&
             baselineRouteRevision ==
-                audioSession.routeRevision
+                audioSession.routeRevision &&
+            baselineAudioConfigurationSignature ==
+                audioConfigurationSignature
     }
 
     private func captureBaseline() {
@@ -6237,6 +6294,8 @@ struct CancellationLabView: View {
             audioSession.routeSignature
         baselineRouteRevision =
             audioSession.routeRevision
+        baselineAudioConfigurationSignature =
+            audioConfigurationSignature
 
         if
             toneGenerator.state == .playing,
