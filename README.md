@@ -287,3 +287,16 @@ Analysis timing is now split into two independent measurements. Analysis turnaro
 ## Allocation-free analysis-drop signaling — Lab build 4.10
 
 The microphone tap no longer schedules an `analysisQueue.async` closure when the bounded audio-frame handoff is full. Drop metadata now travels through a preallocated `RealtimeAudioDropHandoff` containing fixed reusable slots for frame count, callback timestamp, callback sequence, and capture generation. The callback only performs nonblocking `try()` slot claims and signals the already-created analysis dispatch source. Drop bookkeeping remains on the analysis queue, preserving ordered callback timing without allocating work items on the real-time tap thread.
+
+
+## End-to-end evidence provenance audit — Lab build 4.11
+
+The complete evidence path from microphone FFT snapshot through target-energy sampling, before/after comparison, experiment history, structured logging, and export was audited for provenance consistency.
+
+The audit fixed four integrity issues:
+- sequenced target-energy samples now derive the FFT sequence and spectrum measurement from the same microphone snapshot, preventing a transform from arriving between two reads and mislabeling the measurement;
+- baseline validity now includes the full audio configuration identity (route signature/revision, sample rate, and I/O buffer), and sequenced evidence collection stops accepting samples if that identity changes;
+- saved comparison events now derive target frequency, treatment phase, and output level from the measured comparison record rather than mutable live UI state at Save time;
+- experiment-history records now persist optional route signature/revision, audio configuration, head position, and evidence-build provenance while remaining backward-compatible with older saved records.
+
+The structured-log build identifier is now centralized through `LabBuildInfo.evidenceBuild`, removing the stale hard-coded build marker that remained in the Clear Logs session restart path.
