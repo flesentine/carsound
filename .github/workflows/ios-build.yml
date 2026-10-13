@@ -27,6 +27,39 @@ jobs:
           -destination 'generic/platform=iOS Simulator'
           CODE_SIGNING_ALLOWED=NO
           build-for-testing
+
+      - name: Package simulator app
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          APP_PATH="$(
+            find "$HOME/Library/Developer/Xcode/DerivedData" \
+              -path '*/Build/Products/Debug-iphonesimulator/QuietDriveLab.app' \
+              -type d \
+              -print \
+              -quit
+          )"
+
+          if [ -z "$APP_PATH" ]; then
+            echo "QuietDriveLab.app was not found."
+            exit 1
+          fi
+
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$APP_PATH" \
+            "$RUNNER_TEMP/QuietDriveLab-4.11-simulator.zip"
+
+      - name: Upload simulator app
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuietDriveLab-4.11-simulator
+          path: ${{ runner.temp }}/QuietDriveLab-4.11-simulator.zip
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Run unit tests
         timeout-minutes: 15
         shell: bash
