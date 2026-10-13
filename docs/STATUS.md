@@ -691,3 +691,17 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] Preserve ordered callback timing bookkeeping after dropped audio frames
 - [x] Add boundedness, metadata-preservation, FIFO, and slot-reuse regression coverage
 - [x] Bump structured evidence sessions to app_build 4.10
+
+
+## Eleventh post-roadmap hardening pass — Lab build 4.11
+
+- [x] Audit callback → FFT → target-energy → comparison → persisted/exported evidence path
+- [x] Bind FFT transform sequence and target-band measurement to one microphone snapshot
+- [x] Extend baseline identity to include route revision plus sample-rate/I/O-buffer configuration
+- [x] Reject sequenced evidence when baseline audio configuration no longer matches
+- [x] Build comparison log context from measured record values instead of mutable live tone settings
+- [x] Persist route signature/revision, audio configuration, head position, and build in experiment history
+- [x] Keep legacy experiment-history decoding compatible when new provenance fields are absent
+- [x] Route manual and automatic comparison saves through one provenance-aware helper
+- [x] Centralize the structured-log app build identifier and remove the stale Clear Logs build tag
+- [x] Bump structured evidence sessions to app_build 4.11
