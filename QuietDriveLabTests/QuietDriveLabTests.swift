@@ -171,6 +171,110 @@ final class QuietDriveLabTests: XCTestCase {
         XCTAssertEqual(AudioLevelAnalyzer.meterPosition(forDBFS: -120), 0, accuracy: 0.0001)
     }
 
+    func testRealtimeAudioDropHandoffIsBoundedAndReusable() throws {
+        let handoff =
+            RealtimeAudioDropHandoff(
+                capacity: 1
+            )
+
+        let first = try XCTUnwrap(
+            handoff.enqueue(
+                frameCount: 480,
+                callbackStartedNanoseconds: 100,
+                callbackSequence: 42,
+                captureGeneration: 7
+            )
+        )
+
+        XCTAssertNil(
+            handoff.enqueue(
+                frameCount: 240,
+                callbackStartedNanoseconds: 200,
+                callbackSequence: 43,
+                captureGeneration: 7
+            )
+        )
+
+        var capturedFrames: UInt64 = 0
+        var capturedTimestamp: UInt64 = 0
+        var capturedSequence: UInt64 = 0
+        var capturedGeneration: UInt64 = 0
+
+        handoff.consume(slotAt: first) {
+            capturedFrames = $0.frameCount
+            capturedTimestamp =
+                $0.callbackStartedNanoseconds
+            capturedSequence =
+                $0.callbackSequence
+            capturedGeneration =
+                $0.captureGeneration
+        }
+
+        XCTAssertEqual(capturedFrames, 480)
+        XCTAssertEqual(capturedTimestamp, 100)
+        XCTAssertEqual(capturedSequence, 42)
+        XCTAssertEqual(capturedGeneration, 7)
+
+        XCTAssertNotNil(
+            handoff.enqueue(
+                frameCount: 240,
+                callbackStartedNanoseconds: 300,
+                callbackSequence: 44,
+                captureGeneration: 8
+            )
+        )
+    }
+
+    func testRealtimeAudioDropHandoffPreservesFIFOWhenSlotIsReused() throws {
+        let handoff =
+            RealtimeAudioDropHandoff(
+                capacity: 2
+            )
+
+        let first = try XCTUnwrap(
+            handoff.enqueue(
+                frameCount: 1,
+                callbackStartedNanoseconds: 100,
+                callbackSequence: 10,
+                captureGeneration: 1
+            )
+        )
+        let second = try XCTUnwrap(
+            handoff.enqueue(
+                frameCount: 1,
+                callbackStartedNanoseconds: 200,
+                callbackSequence: 11,
+                captureGeneration: 1
+            )
+        )
+
+        handoff.consume(slotAt: first) { _ in }
+
+        let third = try XCTUnwrap(
+            handoff.enqueue(
+                frameCount: 1,
+                callbackStartedNanoseconds: 300,
+                callbackSequence: 12,
+                captureGeneration: 1
+            )
+        )
+
+        XCTAssertEqual(first, 0)
+        XCTAssertEqual(second, 1)
+        XCTAssertEqual(third, 0)
+        XCTAssertEqual(
+            handoff.nextReadyIndex(),
+            second
+        )
+
+        handoff.consume(slotAt: second) { _ in }
+
+        XCTAssertEqual(
+            handoff.nextReadyIndex(),
+            third
+        )
+    }
+
     func testRealtimeAudioFrameHandoffIsBoundedAndReusable() throws {
         let format = try XCTUnwrap(
             AVAudioFormat(
