@@ -282,3 +282,8 @@ When callback continuity breaks, published FFT-derived state is now cleared atom
 ## Processing latency semantics — Lab build 4.9
 
 Analysis timing is now split into two independent measurements. Analysis turnaround measures microphone callback start through worker completion and therefore includes handoff/queue delay plus DSP work; it is used when estimating spectrum freshness and age. DSP execution measures worker analysis start through completion and excludes queue wait; it is used for microphone-buffer budget checks and processing confidence. The latency UI now displays both sets of latest, average, and maximum measurements instead of labeling callback-to-completion turnaround as DSP processing.
+
+
+## Allocation-free analysis-drop signaling — Lab build 4.10
+
+The microphone tap no longer schedules an `analysisQueue.async` closure when the bounded audio-frame handoff is full. Drop metadata now travels through a preallocated `RealtimeAudioDropHandoff` containing fixed reusable slots for frame count, callback timestamp, callback sequence, and capture generation. The callback only performs nonblocking `try()` slot claims and signals the already-created analysis dispatch source. Drop bookkeeping remains on the analysis queue, preserving ordered callback timing without allocating work items on the real-time tap thread.
