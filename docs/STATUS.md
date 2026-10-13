@@ -679,3 +679,15 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] Add regression coverage proving queue wait and DSP execution can differ
 - [x] Rename spectrum-age inputs to reflect turnaround semantics
 - [x] Bump structured evidence sessions to app_build 4.9
+
+
+## Tenth post-roadmap hardening pass — Lab build 4.10
+
+- [x] Remove `analysisQueue.async` closure allocation from the real-time microphone drop path
+- [x] Add a preallocated metadata-only `RealtimeAudioDropHandoff`
+- [x] Keep callback drop signaling nonblocking with `NSLock.try()`
+- [x] Preserve dropped-frame count, callback timestamp, callback sequence, and capture generation
+- [x] Drain drop metadata on the existing analysis dispatch source
+- [x] Preserve ordered callback timing bookkeeping after dropped audio frames
+- [x] Add boundedness, metadata-preservation, FIFO, and slot-reuse regression coverage
+- [x] Bump structured evidence sessions to app_build 4.10
