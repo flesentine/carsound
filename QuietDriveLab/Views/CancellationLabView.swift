@@ -6352,6 +6352,7 @@ struct CancellationLabView: View {
             microphoneCapture.snapshot
 
         guard
+            baselineMatchesCurrentRoute,
             let measurement =
                 measurementForTarget(
                     targetFrequencyHz,
