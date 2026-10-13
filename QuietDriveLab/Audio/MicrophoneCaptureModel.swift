@@ -212,6 +212,10 @@ private final class CaptureStatsStore: @unchecked Sendable {
             capacity: 4,
             maxFrameCount: 8_192
         )
+    private let dropHandoff =
+        RealtimeAudioDropHandoff(
+            capacity: 256
+        )
 
     private lazy var analysisSource: DispatchSourceUserDataAdd = {
         let source =
@@ -332,8 +336,8 @@ private final class CaptureStatsStore: @unchecked Sendable {
             let droppedFrames =
                 UInt64(buffer.frameLength)
 
-            analysisQueue.async { [weak self] in
-                self?.recordAnalysisDrop(
+            guard
+                dropHandoff.enqueue(
                     frameCount:
                         droppedFrames,
                     callbackStartedNanoseconds:
@@ -342,8 +346,12 @@ private final class CaptureStatsStore: @unchecked Sendable {
                         callbackSequence,
                     captureGeneration:
                         expectedGeneration
-                )
+                ) != nil
+            else {
+                return
             }
+
+            analysisSource.add(data: 1)
             return
         }
 
@@ -351,10 +359,7 @@ private final class CaptureStatsStore: @unchecked Sendable {
     }
 
     private func recordAnalysisDrop(
-        frameCount: UInt64,
-        callbackStartedNanoseconds: UInt64,
-        callbackSequence: UInt64,
-        captureGeneration expectedGeneration: UInt64
+        slot: RealtimeAudioDropHandoff.DropSlot
     ) {
         lock.lock()
         defer { lock.unlock() }
@@ -362,23 +367,23 @@ private final class CaptureStatsStore: @unchecked Sendable {
         guard
             captureIsActive,
             captureGeneration ==
-                expectedGeneration
+                slot.captureGeneration
         else {
             return
         }
 
         bufferCount += 1
-        self.frameCount += frameCount
+        self.frameCount += slot.frameCount
         processingLatencyTracker
             .recordCallbackStart(
                 sequence:
-                    callbackSequence,
+                    slot.callbackSequence,
                 callbackStartedNanoseconds:
-                    callbackStartedNanoseconds
+                    slot.callbackStartedNanoseconds
             )
         analysisDroppedBufferCount += 1
         analysisDroppedFrameCount +=
-            frameCount
+            slot.frameCount
     }
 
     func flushPendingAnalysis() {
@@ -487,9 +492,24 @@ private final class CaptureStatsStore: @unchecked Sendable {
         musicInterference = .empty
         processingLatencyTracker.reset()
         lock.unlock()
+
+        dropHandoff.reset()
     }
 
     private func drainReadyFrames() {
+        while
+            let index =
+                dropHandoff.nextReadyIndex()
+        {
+            dropHandoff.consume(
+                slotAt: index
+            ) { [weak self] slot in
+                self?.recordAnalysisDrop(
+                    slot: slot
+                )
+            }
+        }
+
         while
             let index =
                 frameHandoff.nextReadyIndex()
