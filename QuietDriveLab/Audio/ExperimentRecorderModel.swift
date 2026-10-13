@@ -27,12 +27,23 @@ struct ExperimentRecord: Codable, Equatable, Identifiable, Sendable {
     let inputRoute: String
     let outputRoute: String
 
+    let routeSignature: String?
+    let routeRevision: UInt64?
+    let audioConfiguration: String?
+    let headPosition: String?
+    let evidenceBuild: String?
+
     init(
         id: UUID = UUID(),
         recordedAt: Date = Date(),
         comparison: BeforeAfterComparison,
         inputRoute: String,
-        outputRoute: String
+        outputRoute: String,
+        routeSignature: String? = nil,
+        routeRevision: UInt64? = nil,
+        audioConfiguration: String? = nil,
+        headPosition: String? = nil,
+        evidenceBuild: String? = nil
     ) {
         self.id = id
         self.recordedAt = recordedAt
@@ -73,6 +84,11 @@ struct ExperimentRecord: Codable, Equatable, Identifiable, Sendable {
 
         self.inputRoute = inputRoute
         self.outputRoute = outputRoute
+        self.routeSignature = routeSignature
+        self.routeRevision = routeRevision
+        self.audioConfiguration = audioConfiguration
+        self.headPosition = headPosition
+        self.evidenceBuild = evidenceBuild
     }
 }
 
@@ -115,13 +131,23 @@ final class ExperimentRecorderModel {
         comparison: BeforeAfterComparison,
         inputRoute: String,
         outputRoute: String,
+        routeSignature: String? = nil,
+        routeRevision: UInt64? = nil,
+        audioConfiguration: String? = nil,
+        headPosition: String? = nil,
+        evidenceBuild: String? = nil,
         recordedAt: Date = Date()
     ) -> ExperimentRecord {
         let record = ExperimentRecord(
             recordedAt: recordedAt,
             comparison: comparison,
             inputRoute: inputRoute,
-            outputRoute: outputRoute
+            outputRoute: outputRoute,
+            routeSignature: routeSignature,
+            routeRevision: routeRevision,
+            audioConfiguration: audioConfiguration,
+            headPosition: headPosition,
+            evidenceBuild: evidenceBuild
         )
 
         records.insert(record, at: 0)
