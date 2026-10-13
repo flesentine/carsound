@@ -4666,7 +4666,7 @@ struct CancellationLabView: View {
                         .title,
                 ExperimentEvidenceQuality
                     .audioConfigurationTextKey:
-                    measuredAudioConfiguration
+                    audioConfigurationSignature
             ],
             flags: [
                 "microphone_clipping":
@@ -4787,7 +4787,7 @@ struct CancellationLabView: View {
                     ).title,
                 ExperimentEvidenceQuality
                     .audioConfigurationTextKey:
-                    audioConfigurationSignature
+                    measuredAudioConfiguration
             ],
             flags: [
                 "quality_filtered_samples_only":
@@ -6354,7 +6354,8 @@ struct CancellationLabView: View {
         guard
             let measurement =
                 measurementForTarget(
-                    targetFrequencyHz
+                    targetFrequencyHz,
+                    snapshot: snapshot
                 )
         else {
             return nil
@@ -6370,8 +6371,18 @@ struct CancellationLabView: View {
     private func measurementForTarget(
         _ targetFrequencyHz: Double
     ) -> TargetFrequencyEnergyMeasurement? {
-        let snapshot = microphoneCapture.snapshot
+        measurementForTarget(
+            targetFrequencyHz,
+            snapshot:
+                microphoneCapture.snapshot
+        )
+    }
 
+    private func measurementForTarget(
+        _ targetFrequencyHz: Double,
+        snapshot:
+            MicrophoneCaptureModel.Snapshot
+    ) -> TargetFrequencyEnergyMeasurement? {
         guard
             microphoneCapture.state ==
                 .capturing,
@@ -6395,10 +6406,19 @@ struct CancellationLabView: View {
         }
 
         return TargetFrequencyEnergyMeter.measure(
-            spectrum: snapshot.smoothedSpectrum.balanced,
-            noiseFloor: snapshot.noiseFloor.bins,
-            targetFrequencyHz: targetFrequencyHz,
-            frequencyResolutionHz: snapshot.fftResolutionHz
+            spectrum:
+                snapshot
+                    .smoothedSpectrum
+                    .balanced,
+            noiseFloor:
+                snapshot
+                    .noiseFloor
+                    .bins,
+            targetFrequencyHz:
+                targetFrequencyHz,
+            frequencyResolutionHz:
+                snapshot
+                    .fftResolutionHz
         )
     }
 
