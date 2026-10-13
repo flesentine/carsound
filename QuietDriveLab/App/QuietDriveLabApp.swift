@@ -1,5 +1,9 @@
 import SwiftUI
 
+enum LabBuildInfo {
+    static let evidenceBuild = "4.10"
+}
+
 @main
 struct QuietDriveLabApp: App {
     @Environment(\.scenePhase)
@@ -61,7 +65,7 @@ struct QuietDriveLabApp: App {
                             ),
                         text: [
                             "app_build":
-                                "4.10"
+                                LabBuildInfo.evidenceBuild
                         ]
                     )
                 }
