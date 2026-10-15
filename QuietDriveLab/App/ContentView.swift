@@ -4,6 +4,7 @@ struct ContentView: View {
     @State private var spectrumDisplayRange: SpectrumDisplayRange = .ancFocus
     @State private var spectrumRenderMode: SpectrumRenderMode = .smoothed
     @State private var smoothingPreset: SpectrumSmoothingPreset = .balanced
+    @State private var showAdvancedSetup = false
 
     @Environment(MicrophonePermissionModel.self) private var microphonePermission
     @Environment(AudioSessionModel.self) private var audioSession
@@ -18,25 +19,38 @@ struct ContentView: View {
                     permissionCard
 
                     if microphonePermission.status == .granted {
-                        audioSessionCard
-                        routeCard
-                        analysisModeCard
-                        cancellationLabLaunchCard
-                        toneGeneratorCard
-                        captureCard
-                        diagnosticsCard
-                        fftCard
-                        spectrumCard
-                        noiseFloorCard
-                        dominantFrequencyCard
-                        persistentToneCard
+                        quickStartCard
+
+                        DisclosureGroup(
+                            "Advanced Setup & Diagnostics",
+                            isExpanded:
+                                $showAdvancedSetup
+                        ) {
+                            VStack(spacing: 16) {
+                                audioSessionCard
+                                routeCard
+                                analysisModeCard
+                                toneGeneratorCard
+                                captureCard
+                                diagnosticsCard
+                                fftCard
+                                spectrumCard
+                                noiseFloorCard
+                                dominantFrequencyCard
+                                persistentToneCard
+                            }
+                            .padding(.top, 12)
+                        }
+                        .cardStyle()
                     }
 
-                    Text("Lab build 4.3 • Fresh-sample evidence hardening")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                        .multilineTextAlignment(.center)
-                        .padding(.top, 6)
+                    Text(
+                        "Lab build \(LabBuildInfo.evidenceBuild)"
+                    )
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .padding(.top, 6)
                 }
                 .padding(24)
             }
@@ -86,6 +100,121 @@ struct ContentView: View {
                     .foregroundStyle(.green)
                     .font(.subheadline.weight(.semibold))
             }
+        }
+        .cardStyle()
+    }
+
+    private var quickStartCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                Label(
+                    "Quick Start",
+                    systemImage:
+                        "play.circle.fill"
+                )
+                .font(.title3.weight(.semibold))
+
+                Spacer()
+
+                Text(
+                    cancellationLabReady
+                        ? "Ready"
+                        : "Setup needed"
+                )
+                .font(.caption.weight(.bold))
+                .foregroundStyle(
+                    cancellationLabReady
+                        ? Color.green
+                        : Color.secondary
+                )
+            }
+
+            Text(
+                "Prepare the audio system, then use the guided four-step test. The detailed engineering controls are still available below."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                Label(
+                    audioSession.state == .active
+                        ? "Audio session ready"
+                        : "Audio session not active",
+                    systemImage:
+                        audioSession.state == .active
+                        ? "checkmark.circle.fill"
+                        : "circle"
+                )
+                .foregroundStyle(
+                    audioSession.state == .active
+                        ? Color.green
+                        : Color.secondary
+                )
+
+                Label(
+                    microphoneCapture.analysisMode ==
+                        .ancFocus
+                        ? "ANC Focus selected"
+                        : "ANC Focus not selected",
+                    systemImage:
+                        microphoneCapture.analysisMode ==
+                            .ancFocus
+                        ? "checkmark.circle.fill"
+                        : "circle"
+                )
+                .foregroundStyle(
+                    microphoneCapture.analysisMode ==
+                        .ancFocus
+                        ? Color.green
+                        : Color.secondary
+                )
+
+                Label(
+                    !audioSession.inputs.isEmpty &&
+                        !audioSession.outputs.isEmpty
+                        ? "Audio route detected"
+                        : "Audio route missing",
+                    systemImage:
+                        !audioSession.inputs.isEmpty &&
+                            !audioSession.outputs.isEmpty
+                        ? "checkmark.circle.fill"
+                        : "circle"
+                )
+                .foregroundStyle(
+                    !audioSession.inputs.isEmpty &&
+                        !audioSession.outputs.isEmpty
+                        ? Color.green
+                        : Color.secondary
+                )
+            }
+            .font(.subheadline)
+
+            if !cancellationLabReady {
+                Button("Prepare for Testing") {
+                    toneGenerator.stopImmediately()
+                    microphoneCapture.stopCapture()
+                    microphoneCapture
+                        .setAnalysisMode(.ancFocus)
+                    audioSession
+                        .configureAndActivate()
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+            }
+
+            NavigationLink {
+                CancellationLabView()
+            } label: {
+                Label(
+                    cancellationLabReady
+                        ? "Open Guided Test"
+                        : "Open Test",
+                    systemImage:
+                        "arrow.right.circle.fill"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
         }
         .cardStyle()
     }
