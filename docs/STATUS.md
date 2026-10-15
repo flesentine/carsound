@@ -705,3 +705,17 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] Route manual and automatic comparison saves through one provenance-aware helper
 - [x] Centralize the structured-log app build identifier and remove the stale Clear Logs build tag
 - [x] Bump structured evidence sessions to app_build 4.11
+
+
+## Guided testing UX pass — Lab build 4.12
+
+- [x] Replace the default home-screen wall of diagnostics with Quick Start
+- [x] Add one-tap audio preparation for ANC Focus testing
+- [x] Add a four-step guided cancellation workflow
+- [x] Keep baseline and treatment collection on the existing hardened measurement engine
+- [x] Show the measured reduction/increase as the primary result
+- [x] Keep Save Run in the guided result flow
+- [x] Keep Emergency Mute visible outside advanced controls
+- [x] Move engineering diagnostics and automation tools under Advanced Lab Details
+- [x] Preserve all 4.11 evidence, safety, logging, and provenance behavior
+- [x] Bump structured evidence sessions to app_build 4.12
