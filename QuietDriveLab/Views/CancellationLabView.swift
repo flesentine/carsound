@@ -364,10 +364,8 @@ struct CancellationLabView: View {
                         }
                     ),
                     in:
-                        ToneGeneratorMath
-                            .minimumFrequencyHz...
-                        ToneGeneratorMath
-                            .maximumFrequencyHz,
+                        ToneGeneratorMath.minimumFrequencyHz...
+                        ToneGeneratorMath.maximumFrequencyHz,
                     step: 1
                 )
                 .disabled(
