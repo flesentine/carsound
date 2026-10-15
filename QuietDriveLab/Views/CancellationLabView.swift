@@ -363,9 +363,11 @@ struct CancellationLabView: View {
                                 .setFrequency($0)
                         }
                     ),
-                    in:
-                        ToneGeneratorMath.minimumFrequencyHz...
-                        ToneGeneratorMath.maximumFrequencyHz,
+                    in: (
+                        ToneGeneratorMath.minimumFrequencyHz
+                    )...(
+                        ToneGeneratorMath.maximumFrequencyHz
+                    ),
                     step: 1
                 )
                 .disabled(
