@@ -86,7 +86,7 @@ jobs:
           retention-days: 30
 
       - name: Run unit tests
-        timeout-minutes: 15
+        timeout-minutes: 20
         shell: bash
         run: |
           set -euo pipefail
@@ -131,29 +131,27 @@ jobs:
             python3 /tmp/select_quietdrive_simulator.py
           )"
 
-          echo "Preparing simulator $DEVICE_ID"
-
-          xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
-          xcrun simctl boot "$DEVICE_ID" 2>/dev/null || true
-          xcrun simctl bootstatus "$DEVICE_ID" -b
-
-          cat > /tmp/run_quietdrive_tests.py <<'PY'
+          cat > /tmp/run_quietdrive_command.py <<'PY'
           import os
           import signal
           import subprocess
           import sys
 
-          command = sys.argv[1:]
+          timeout_seconds = int(sys.argv[1])
+          command = sys.argv[2:]
           process = subprocess.Popen(
               command,
               start_new_session=True,
           )
 
           try:
-              return_code = process.wait(timeout=360)
+              return_code = process.wait(
+                  timeout=timeout_seconds
+              )
           except subprocess.TimeoutExpired:
               print(
-                  "xcodebuild test timed out after 360 seconds.",
+                  f"Command timed out after {timeout_seconds} seconds: "
+                  + " ".join(command),
                   flush=True,
               )
               os.killpg(
@@ -173,8 +171,41 @@ jobs:
           raise SystemExit(return_code)
           PY
 
+          prepare_simulator() {
+            echo "Preparing simulator $DEVICE_ID"
+
+            xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
+            xcrun simctl erase "$DEVICE_ID"
+            xcrun simctl boot "$DEVICE_ID"
+
+            python3 /tmp/run_quietdrive_command.py \
+              120 \
+              xcrun simctl bootstatus "$DEVICE_ID" -b
+          }
+
+          set +e
+          prepare_simulator
+          BOOT_EXIT=$?
+          set -e
+
+          if [ "$BOOT_EXIT" -eq 124 ]; then
+            echo "Simulator boot wedged; resetting and retrying once."
+
+            set +e
+            prepare_simulator
+            BOOT_EXIT=$?
+            set -e
+          fi
+
+          if [ "$BOOT_EXIT" -ne 0 ]; then
+            echo "Simulator failed to become ready with exit code $BOOT_EXIT."
+            xcrun simctl list devices
+            exit "$BOOT_EXIT"
+          fi
+
           run_tests() {
-            python3 /tmp/run_quietdrive_tests.py \
+            python3 /tmp/run_quietdrive_command.py \
+              360 \
               xcodebuild \
               -project QuietDriveLab.xcodeproj \
               -scheme QuietDriveLab \
