@@ -38,35 +38,52 @@ struct CancellationLabView: View {
         UInt64?
     @State private var baselineAudioConfigurationSignature:
         String?
+    @State private var showAdvancedLabDetails = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                readinessCard
-                calibrationCard
-                structuredLogCard
-                testDashboardCard
-                processingLatencyCard
-                audioRouteTestingCard
-                bluetoothBehaviorCard
-                bluetoothJitterCard
-                accelerometerCard
-                vibrationSpectrumCard
-                soundVibrationCorrelationCard
-                musicInterferenceCard
-                overallConfidenceCard
-                targetCard
-                targetEnergyCard
-                headPositionCard
-                beforeAfterCard
-                phaseSweepCard
-                phaseRefinementCard
-                amplitudeSearchCard
-                adaptiveControllerCard
-                experimentHistoryCard
-                controlsCard
-                liveStateCard
-                safetyCard
+                guidedStatusCard
+                guidedBaselineCard
+                guidedTreatmentCard
+                guidedResultCard
+                guidedSafetyCard
+
+                DisclosureGroup(
+                    "Advanced Lab Details",
+                    isExpanded:
+                        $showAdvancedLabDetails
+                ) {
+                    VStack(spacing: 16) {
+                        readinessCard
+                        calibrationCard
+                        structuredLogCard
+                        testDashboardCard
+                        processingLatencyCard
+                        audioRouteTestingCard
+                        bluetoothBehaviorCard
+                        bluetoothJitterCard
+                        accelerometerCard
+                        vibrationSpectrumCard
+                        soundVibrationCorrelationCard
+                        musicInterferenceCard
+                        overallConfidenceCard
+                        targetCard
+                        targetEnergyCard
+                        headPositionCard
+                        beforeAfterCard
+                        phaseSweepCard
+                        phaseRefinementCard
+                        amplitudeSearchCard
+                        adaptiveControllerCard
+                        experimentHistoryCard
+                        controlsCard
+                        liveStateCard
+                        safetyCard
+                    }
+                    .padding(.top, 12)
+                }
+                .cancellationCard()
             }
             .padding(20)
         }
@@ -112,6 +129,567 @@ struct CancellationLabView: View {
         .onDisappear {
             stopExperimentWorkForNavigation()
         }
+    }
+
+    private var guidedStatusCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("1")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+
+                    Text("Get Ready")
+                        .font(.title2.weight(.bold))
+                }
+
+                Spacer()
+
+                if
+                    isExperimentReady &&
+                    microphoneCapture.state ==
+                        .capturing
+                {
+                    Label(
+                        "Ready",
+                        systemImage:
+                            "checkmark.circle.fill"
+                    )
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.green)
+                }
+            }
+
+            Text(
+                "Keep the phone in one place and use the same seat, route, speed, HVAC, and stereo volume for both measurements."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                guidedCheckRow(
+                    "Audio",
+                    ready:
+                        audioSession.state ==
+                        .active
+                )
+                guidedCheckRow(
+                    "ANC Focus",
+                    ready:
+                        microphoneCapture.analysisMode ==
+                        .ancFocus
+                )
+                guidedCheckRow(
+                    "Input + output route",
+                    ready:
+                        !audioSession.inputs.isEmpty &&
+                        !audioSession.outputs.isEmpty
+                )
+                guidedCheckRow(
+                    "Microphone capture",
+                    ready:
+                        microphoneCapture.state ==
+                        .capturing
+                )
+            }
+
+            if !isExperimentReady {
+                Button("Prepare Audio") {
+                    toneGenerator.stopImmediately()
+                    microphoneCapture.stopCapture()
+                    microphoneCapture
+                        .setAnalysisMode(.ancFocus)
+                    audioSession
+                        .configureAndActivate()
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+            } else if
+                microphoneCapture.state !=
+                    .capturing
+            {
+                Button("Start Microphone") {
+                    microphoneCapture.startCapture()
+                    _ = structuredLog.record(
+                        kind: .captureStarted,
+                        context:
+                            structuredLogContext
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+            } else {
+                Text(
+                    "Setup complete. Capture a baseline next."
+                )
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.green)
+            }
+        }
+        .cancellationCard()
+    }
+
+    private var guidedBaselineCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("2")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+
+                    Text("Capture Baseline")
+                        .font(.title2.weight(.bold))
+                }
+
+                Spacer()
+
+                if
+                    beforeAfterMeasurement
+                        .baseline != nil
+                {
+                    Image(
+                        systemName:
+                            "checkmark.circle.fill"
+                    )
+                    .foregroundStyle(.green)
+                }
+            }
+
+            Text(
+                "QuietDrive measures the cabin noise with its generated tone muted. Keep still while it collects 20 fresh readings."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+
+            if
+                let baseline =
+                    beforeAfterMeasurement
+                        .baseline
+            {
+                LabeledContent(
+                    "Baseline",
+                    value: String(
+                        format:
+                            "%.2f dBFS",
+                        baseline
+                            .averageBandEnergyDBFS
+                    )
+                )
+                .font(.headline)
+
+                Button("Retake Baseline") {
+                    captureBaseline()
+                }
+                .buttonStyle(.bordered)
+                .disabled(
+                    beforeAfterMeasurement
+                        .state.isBusy ||
+                    !measurementWindowIsUsable ||
+                    targetEnergyMeasurement ==
+                        nil
+                )
+            } else {
+                Button("Capture Baseline") {
+                    captureBaseline()
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+                .disabled(
+                    microphoneCapture.state !=
+                        .capturing ||
+                    !measurementWindowIsUsable ||
+                    targetEnergyMeasurement ==
+                        nil ||
+                    beforeAfterMeasurement
+                        .state.isBusy
+                )
+            }
+
+            if
+                let progress =
+                    comparisonProgressText,
+                beforeAfterMeasurement
+                    .baseline == nil
+            {
+                ProgressView()
+                Text(progress)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .cancellationCard()
+    }
+
+    private var guidedTreatmentCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("3")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(.secondary)
+
+                Text("Try Cancellation")
+                    .font(.title2.weight(.bold))
+            }
+
+            Text(
+                "Choose the tone setting, start the tone, then capture the treatment measurement."
+            )
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Frequency")
+                        .font(.headline)
+                    Spacer()
+                    Text(
+                        String(
+                            format:
+                                "%.0f Hz",
+                            toneGenerator
+                                .frequencyHz
+                        )
+                    )
+                    .font(.headline.monospacedDigit())
+                }
+
+                Slider(
+                    value: Binding(
+                        get: {
+                            toneGenerator.frequencyHz
+                        },
+                        set: {
+                            toneGenerator
+                                .setFrequency($0)
+                        }
+                    ),
+                    in:
+                        ToneGeneratorMath
+                            .minimumFrequencyHz...
+                        ToneGeneratorMath
+                            .maximumFrequencyHz,
+                    step: 1
+                )
+                .disabled(
+                    toneGenerator.state ==
+                        .playing ||
+                    beforeAfterMeasurement
+                        .baseline != nil
+                )
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Phase")
+                        .font(.headline)
+                    Spacer()
+                    Text(
+                        String(
+                            format:
+                                "%.0f°",
+                            toneGenerator
+                                .phaseDegrees
+                        )
+                    )
+                    .font(.headline.monospacedDigit())
+                }
+
+                Slider(
+                    value: Binding(
+                        get: {
+                            toneGenerator
+                                .phaseDegrees
+                        },
+                        set: {
+                            toneGenerator
+                                .setPhaseDegrees($0)
+                        }
+                    ),
+                    in: 0...360,
+                    step: 1
+                )
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text("Output")
+                        .font(.headline)
+                    Spacer()
+                    Text(
+                        String(
+                            format:
+                                "%.0f%%",
+                            toneGenerator
+                                .outputPercent
+                        )
+                    )
+                    .font(.headline.monospacedDigit())
+                }
+
+                Slider(
+                    value: Binding(
+                        get: {
+                            toneGenerator
+                                .outputPercent
+                        },
+                        set: {
+                            toneGenerator
+                                .setOutputPercent($0)
+                        }
+                    ),
+                    in: 0...100,
+                    step: 1
+                )
+            }
+
+            if
+                toneGenerator.state !=
+                    .playing
+            {
+                Button("Start Treatment Tone") {
+                    toneGenerator.start()
+                    _ = structuredLog.record(
+                        kind: .toneStarted,
+                        context:
+                            structuredLogContext
+                    )
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+                .disabled(
+                    beforeAfterMeasurement
+                        .baseline == nil ||
+                    audioSession.state !=
+                        .active
+                )
+            } else if toneGenerator.isMuted {
+                Button("Resume Treatment Tone") {
+                    toneGenerator.unmute()
+                }
+                .buttonStyle(.borderedProminent)
+                .frame(maxWidth: .infinity)
+            }
+
+            Button("Capture Treatment") {
+                captureTreatment()
+            }
+            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
+            .disabled(
+                beforeAfterMeasurement
+                    .baseline == nil ||
+                toneGenerator.state !=
+                    .playing ||
+                toneGenerator.isMuted ||
+                !measurementWindowIsUsable ||
+                !baselineMatchesCurrentTarget ||
+                !baselineMatchesCurrentHeadPosition ||
+                !baselineMatchesCurrentRoute ||
+                beforeAfterMeasurement
+                    .state.isBusy
+            )
+
+            if
+                let progress =
+                    comparisonProgressText,
+                beforeAfterMeasurement
+                    .baseline != nil,
+                beforeAfterMeasurement
+                    .treatment == nil
+            {
+                ProgressView()
+                Text(progress)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .cancellationCard()
+    }
+
+    @ViewBuilder
+    private var guidedResultCard: some View {
+        if
+            let comparison =
+                beforeAfterMeasurement
+                    .comparison
+        {
+            VStack(alignment: .leading, spacing: 14) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("4")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.secondary)
+
+                    Text("Result")
+                        .font(.title2.weight(.bold))
+                }
+
+                Text(
+                    comparisonResultText(
+                        comparison
+                    )
+                )
+                .font(.system(
+                    size: 32,
+                    weight: .bold,
+                    design: .rounded
+                ))
+
+                Text(
+                    comparison.measuredReductionDB > 0
+                        ? "Lower target-band energy is better."
+                        : "This setting did not reduce the target-band energy."
+                )
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+
+                LabeledContent(
+                    "Baseline",
+                    value: String(
+                        format:
+                            "%.2f dBFS",
+                        comparison
+                            .baseline
+                            .averageBandEnergyDBFS
+                    )
+                )
+
+                LabeledContent(
+                    "Treatment",
+                    value: String(
+                        format:
+                            "%.2f dBFS",
+                        comparison
+                            .treatment
+                            .averageBandEnergyDBFS
+                    )
+                )
+
+                HStack {
+                    Button(
+                        comparisonKey(
+                            comparison
+                        ) ==
+                            lastSavedComparisonKey
+                            ? "Saved"
+                            : "Save Run"
+                    ) {
+                        let record =
+                            recordExperiment(
+                                comparison:
+                                    comparison,
+                                inputRoute:
+                                    inputRouteSummary,
+                                outputRoute:
+                                    outputRouteSummary
+                            )
+                        lastSavedComparisonKey =
+                            comparisonKey(
+                                comparison
+                            )
+                        logExperimentRecord(
+                            record,
+                            kind:
+                                .comparisonSaved
+                        )
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(
+                        comparisonKey(
+                            comparison
+                        ) ==
+                            lastSavedComparisonKey ||
+                        !baselineMatchesCurrentRoute
+                    )
+
+                    Button("Try Another Setting") {
+                        beforeAfterMeasurement
+                            .reset()
+                        lastSavedComparisonKey = nil
+                        baselineHeadPosition = nil
+                        baselineRouteSignature = nil
+                        baselineRouteRevision = nil
+                        baselineAudioConfigurationSignature =
+                            nil
+                        toneGenerator
+                            .muteImmediately()
+                    }
+                    .buttonStyle(.bordered)
+                }
+            }
+            .cancellationCard()
+        }
+    }
+
+    private var guidedSafetyCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Label(
+                    "Safety",
+                    systemImage:
+                        "exclamationmark.triangle.fill"
+                )
+                .font(.headline)
+
+                Spacer()
+
+                if
+                    toneGenerator.state ==
+                        .playing &&
+                    !toneGenerator.isMuted
+                {
+                    Text("Tone active")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.orange)
+                }
+            }
+
+            Text(
+                "Keep the vehicle volume low. Use MUTE NOW immediately if the sound is uncomfortable."
+            )
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+            Button("MUTE NOW") {
+                toneGenerator.muteImmediately()
+                _ = structuredLog.record(
+                    kind: .safetyMute,
+                    context:
+                        structuredLogContext,
+                    text: [
+                        "reason":
+                            "Guided test emergency mute"
+                    ]
+                )
+            }
+            .buttonStyle(.borderedProminent)
+            .frame(maxWidth: .infinity)
+            .disabled(
+                toneGenerator.state !=
+                    .playing ||
+                toneGenerator.isMuted
+            )
+        }
+        .cancellationCard()
+    }
+
+    @ViewBuilder
+    private func guidedCheckRow(
+        _ title: String,
+        ready: Bool
+    ) -> some View {
+        Label(
+            title,
+            systemImage:
+                ready
+                ? "checkmark.circle.fill"
+                : "circle"
+        )
+        .foregroundStyle(
+            ready
+                ? Color.green
+                : Color.secondary
+        )
+        .font(.subheadline)
     }
 
     private var readinessCard: some View {
