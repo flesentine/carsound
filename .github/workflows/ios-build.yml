@@ -227,10 +227,16 @@ jobs:
           if [ "$TEST_EXIT" -eq 124 ]; then
             echo "Simulator test process wedged; resetting simulator and retrying once."
 
-            xcrun simctl shutdown "$DEVICE_ID" 2>/dev/null || true
-            xcrun simctl erase "$DEVICE_ID"
-            xcrun simctl boot "$DEVICE_ID"
-            xcrun simctl bootstatus "$DEVICE_ID" -b
+            set +e
+            prepare_simulator
+            BOOT_EXIT=$?
+            set -e
+
+            if [ "$BOOT_EXIT" -ne 0 ]; then
+              echo "Simulator could not recover for the test retry."
+              xcrun simctl list devices
+              exit "$BOOT_EXIT"
+            fi
 
             set +e
             run_tests
