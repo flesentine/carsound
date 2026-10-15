@@ -18,6 +18,31 @@ jobs:
         run: brew install xcodegen
       - name: Generate Xcode project
         run: xcodegen generate
+      - name: Package Xcode source project
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          rm -rf "$RUNNER_TEMP/QuietDriveLab-4.11-source"
+          mkdir -p "$RUNNER_TEMP/QuietDriveLab-4.11-source"
+
+          rsync -a \
+            --exclude '.git' \
+            --exclude '.github' \
+            ./ "$RUNNER_TEMP/QuietDriveLab-4.11-source/"
+
+          ditto -c -k --sequesterRsrc --keepParent \
+            "$RUNNER_TEMP/QuietDriveLab-4.11-source" \
+            "$RUNNER_TEMP/QuietDriveLab-4.11-xcode-project.zip"
+
+      - name: Upload Xcode source project
+        uses: actions/upload-artifact@v4
+        with:
+          name: QuietDriveLab-4.11-xcode-project
+          path: ${{ runner.temp }}/QuietDriveLab-4.11-xcode-project.zip
+          if-no-files-found: error
+          retention-days: 30
+
       - name: Build app and tests for simulator
         run: >-
           xcodebuild
