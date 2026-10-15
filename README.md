@@ -300,3 +300,10 @@ The audit fixed four integrity issues:
 - experiment-history records now persist optional route signature/revision, audio configuration, head position, and evidence-build provenance while remaining backward-compatible with older saved records.
 
 The structured-log build identifier is now centralized through `LabBuildInfo.evidenceBuild`, removing the stale hard-coded build marker that remained in the Clear Logs session restart path.
+
+
+## Guided testing UX — Lab build 4.12
+
+The default app experience is now simplified for in-car use without removing the underlying lab instrumentation. The home screen presents a Quick Start flow for audio preparation and entry into the guided test. The cancellation screen now presents four primary steps: Get Ready, Capture Baseline, Try Cancellation, and Result. Emergency Mute remains visible during the guided flow. Detailed calibration, diagnostics, route testing, FFT analysis, automation workflows, history, structured logs, and manual controls remain available under Advanced Lab Details.
+
+The measurement, safety, provenance, logging, and evidence-quality pipelines from build 4.11 are unchanged; this pass changes presentation and control organization only.
