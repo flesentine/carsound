@@ -307,3 +307,10 @@ The structured-log build identifier is now centralized through `LabBuildInfo.evi
 The default app experience is now simplified for in-car use without removing the underlying lab instrumentation. The home screen presents a Quick Start flow for audio preparation and entry into the guided test. The cancellation screen now presents four primary steps: Get Ready, Capture Baseline, Try Cancellation, and Result. Emergency Mute remains visible during the guided flow. Detailed calibration, diagnostics, route testing, FFT analysis, automation workflows, history, structured logs, and manual controls remain available under Advanced Lab Details.
 
 The measurement, safety, provenance, logging, and evidence-quality pipelines from build 4.11 are unchanged; this pass changes presentation and control organization only.
+
+
+## Guided beginner test — Lab build 4.13
+
+The default experience is now a short, parked-car workflow: Start a Test, acknowledge the low-volume/parked safety condition, Start Listening, Measure This Noise when a stable persistent 20–200 Hz tone is detected, Find Best Setting, and Save Result. A clearly labeled optional 80 Hz fallback is available if no steady tone can be identified. The app uses existing coarse phase, fine phase, and amplitude-search engines automatically with a conservative 20% digital output ceiling. Test sound is muted on completion, cancellation, emergency mute, and navigation away.
+
+The guided screen shows ordinary-language readiness and measurement blockers (clipping, music interference, analysis dropout, insufficient data). Results are described narrowly as target-frequency energy changes, not a promise of whole-cabin ANC. Technical instrumentation remains available in Advanced Lab Details. Guidance requires the user to be parked and keep the speaker volume low. A deterministic target selector prevents unstable, low-confidence, or out-of-range tones from being selected automatically.
