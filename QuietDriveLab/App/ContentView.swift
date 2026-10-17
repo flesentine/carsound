@@ -16,7 +16,6 @@ struct ContentView: View {
             ScrollView {
                 VStack(spacing: 18) {
                     header
-                    permissionCard
 
                     if microphonePermission.status == .granted {
                         quickStartCard
@@ -42,6 +41,8 @@ struct ContentView: View {
                             .padding(.top, 12)
                         }
                         .cardStyle()
+                    } else {
+                        permissionCard
                     }
 
                     Text(
@@ -105,116 +106,33 @@ struct ContentView: View {
     }
 
     private var quickStartCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                Label(
-                    "Quick Start",
-                    systemImage:
-                        "play.circle.fill"
-                )
-                .font(.title3.weight(.semibold))
+        VStack(alignment: .leading, spacing: 18) {
+            Label("Let's test your car's noise", systemImage: "car.side")
+                .font(.title2.bold())
 
-                Spacer()
+            Text("No sound-engineering experience needed. The app listens, measures the noise, and searches for a better setting automatically.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
 
-                Text(
-                    cancellationLabReady
-                        ? "Ready"
-                        : "Setup needed"
-                )
-                .font(.caption.weight(.bold))
-                .foregroundStyle(
-                    cancellationLabReady
-                        ? Color.green
-                        : Color.secondary
-                )
-            }
-
-            Text(
-                "Prepare the audio system, then use the guided four-step test. The detailed engineering controls are still available below."
+            Label(
+                "Park the car before starting. Keep the stereo volume low.",
+                systemImage: "parkingsign.circle"
             )
-            .font(.subheadline)
-            .foregroundStyle(.secondary)
-
-            VStack(alignment: .leading, spacing: 8) {
-                Label(
-                    audioSession.state == .active
-                        ? "Audio session ready"
-                        : "Audio session not active",
-                    systemImage:
-                        audioSession.state == .active
-                        ? "checkmark.circle.fill"
-                        : "circle"
-                )
-                .foregroundStyle(
-                    audioSession.state == .active
-                        ? Color.green
-                        : Color.secondary
-                )
-
-                Label(
-                    microphoneCapture.analysisMode ==
-                        .ancFocus
-                        ? "ANC Focus selected"
-                        : "ANC Focus not selected",
-                    systemImage:
-                        microphoneCapture.analysisMode ==
-                            .ancFocus
-                        ? "checkmark.circle.fill"
-                        : "circle"
-                )
-                .foregroundStyle(
-                    microphoneCapture.analysisMode ==
-                        .ancFocus
-                        ? Color.green
-                        : Color.secondary
-                )
-
-                Label(
-                    !audioSession.inputs.isEmpty &&
-                        !audioSession.outputs.isEmpty
-                        ? "Audio route detected"
-                        : "Audio route missing",
-                    systemImage:
-                        !audioSession.inputs.isEmpty &&
-                            !audioSession.outputs.isEmpty
-                        ? "checkmark.circle.fill"
-                        : "circle"
-                )
-                .foregroundStyle(
-                    !audioSession.inputs.isEmpty &&
-                        !audioSession.outputs.isEmpty
-                        ? Color.green
-                        : Color.secondary
-                )
-            }
-            .font(.subheadline)
-
-            if !cancellationLabReady {
-                Button("Prepare for Testing") {
-                    toneGenerator.stopImmediately()
-                    microphoneCapture.stopCapture()
-                    microphoneCapture
-                        .setAnalysisMode(.ancFocus)
-                    audioSession
-                        .configureAndActivate()
-                }
-                .buttonStyle(.borderedProminent)
-                .frame(maxWidth: .infinity)
-            }
+            .font(.subheadline.weight(.semibold))
 
             NavigationLink {
                 CancellationLabView()
             } label: {
-                Label(
-                    cancellationLabReady
-                        ? "Open Guided Test"
-                        : "Open Test",
-                    systemImage:
-                        "arrow.right.circle.fill"
-                )
-                .frame(maxWidth: .infinity)
+                Label("Start a Test", systemImage: "arrow.right.circle.fill")
+                    .font(.headline)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
             }
             .buttonStyle(.borderedProminent)
+
+            Text("Have experience? Expand Advanced Setup & Diagnostics below.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
         }
         .cardStyle()
     }
