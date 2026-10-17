@@ -485,6 +485,257 @@ struct CancellationLabView: View {
         .font(.subheadline)
     }
 
+    private var guidedDetectedFrequencyHz: Double? {
+        guard
+            microphoneCapture.state == .capturing,
+            measurementWindowIsUsable,
+            let tone = bestPersistentTone,
+            tone.isPersistent,
+            tone.confidenceLevel != .low,
+            (ToneGeneratorMath.minimumFrequencyHz...
+             ToneGeneratorMath.maximumFrequencyHz)
+                .contains(tone.frequencyHz)
+        else {
+            return nil
+        }
+
+        return tone.frequencyHz.rounded()
+    }
+
+    private var guidedMeasurementBlocker: String {
+        let snapshot = microphoneCapture.snapshot
+
+        if snapshot.isClipping {
+            return "Microphone level is too high. Turn the speaker volume down."
+        }
+        if snapshot.analysisDroppedBufferCount > 0 ||
+            snapshot.analysisContinuityRevision > 0
+        {
+            return "Audio was interrupted. Restart listening before measuring."
+        }
+        if snapshot.musicInterference.level == .likely {
+            return "Music is interfering. Pause music and try again."
+        }
+        if snapshot.fftTransformCount == 0 {
+            return "Waiting for the microphone to collect enough sound."
+        }
+        return "Waiting for stable, usable sound. Try keeping the phone still."
+    }
+
+    private var canStartGuidedOptimization: Bool {
+        beforeAfterMeasurement.baseline != nil &&
+        microphoneCapture.state == .capturing &&
+        !beforeAfterMeasurement.state.isBusy &&
+        !phaseSweep.state.isRunning &&
+        !phaseRefinement.state.isRunning &&
+        !amplitudeSearch.state.isRunning &&
+        !adaptiveController.state.isRunning &&
+        !calibration.state.isRunning
+    }
+
+    private func startGuidedListening() {
+        guard guidedSafetyAcknowledged else { return }
+
+        toneGenerator.stopImmediately()
+        microphoneCapture.stopCapture()
+        microphoneCapture.setAnalysisMode(.ancFocus)
+
+        if audioSession.state != .active {
+            audioSession.configureAndActivate()
+        }
+        if audioSession.state == .active {
+            microphoneCapture.startCapture()
+            if microphoneCapture.state == .capturing {
+                _ = structuredLog.record(
+                    kind: .captureStarted,
+                    context: structuredLogContext
+                )
+            }
+        }
+        guidedError = nil
+    }
+
+    private func startGuidedOptimization() {
+        guard
+            guidedSafetyAcknowledged,
+            canStartGuidedOptimization,
+            !guidedIsOptimizing,
+            baselineMatchesCurrentRoute,
+            baselineMatchesCurrentTarget,
+            baselineMatchesCurrentHeadPosition,
+            measurementWindowIsUsable,
+            let baseline = beforeAfterMeasurement.baseline
+        else {
+            guidedError = "Audio is not ready. Measure the noise again before searching."
+            return
+        }
+
+        guidedRunGeneration &+= 1
+        let runID = guidedRunGeneration
+        let target = baseline.condition.targetFrequencyHz
+
+        guidedIsOptimizing = true
+        guidedBestResult = nil
+        guidedError = nil
+        guidedProgress = "Starting the safe low-level tone…"
+        lastSavedComparisonKey = nil
+
+        adaptiveController.reset()
+        phaseSweep.reset()
+        phaseRefinement.reset()
+        amplitudeSearch.reset()
+        toneGenerator.stopImmediately()
+        toneGenerator.setPhaseDegrees(0)
+        toneGenerator.setOutputPercent(20)
+        toneGenerator.start()
+
+        guard toneGenerator.state == .playing else {
+            guidedIsOptimizing = false
+            guidedError = "Could not start the test sound. Check the audio route in Advanced Lab Details."
+            return
+        }
+
+        guidedTask = Task { @MainActor in
+            guidedProgress = "Checking 8 possible phase settings…"
+            await phaseSweep.run(
+                baseline: baseline,
+                outputPercent: 20,
+                applyPhase: { phase in
+                    toneGenerator.setPhaseDegrees(phase)
+                },
+                measurementProvider: {
+                    sequencedMeasurementForTarget(target)
+                },
+                onComparison: { _ in }
+            )
+
+            guard runID == guidedRunGeneration, !Task.isCancelled else {
+                return
+            }
+            logPhaseSweepOutcome()
+
+            guard phaseSweep.state == .completed,
+                  let coarseBest = phaseSweep.bestResult else {
+                guidedSearchFailed(
+                    "The first sound search couldn't collect stable samples. Try again with music off."
+                )
+                return
+            }
+
+            guidedProgress = "Fine-tuning the best phase…"
+            await phaseRefinement.run(
+                coarseBestPhaseDegrees: coarseBest.phaseDegrees,
+                baseline: baseline,
+                outputPercent: 20,
+                applyPhase: { phase in
+                    toneGenerator.setPhaseDegrees(phase)
+                },
+                measurementProvider: {
+                    sequencedMeasurementForTarget(target)
+                },
+                onComparison: { _ in },
+                onProgress: { stage, _, index, total, _, _ in
+                    guard runID == guidedRunGeneration else { return }
+                    guidedProgress = "Fine tuning · stage \(stage) · \(index)/\(total)"
+                }
+            )
+
+            guard runID == guidedRunGeneration, !Task.isCancelled else {
+                return
+            }
+            logPhaseRefinementOutcome()
+
+            guard phaseRefinement.state == .completed,
+                  let fineBest = phaseRefinement.bestResult else {
+                guidedSearchFailed(
+                    "Fine-tuning couldn't finish. The cabin sound may be changing too much."
+                )
+                return
+            }
+
+            toneGenerator.setPhaseDegrees(fineBest.phaseDegrees)
+            guidedProgress = "Finding a gentle output level…"
+            await amplitudeSearch.run(
+                refinedPhaseDegrees: fineBest.phaseDegrees,
+                ceilingPercent: 20,
+                baseline: baseline,
+                applyOutputPercent: { percent in
+                    toneGenerator.setOutputPercent(percent)
+                },
+                measurementProvider: {
+                    sequencedMeasurementForTarget(target)
+                },
+                onComparison: { _ in },
+                onProgress: { stage, _, index, total, _, _ in
+                    guard runID == guidedRunGeneration else { return }
+                    guidedProgress = "Sound level · stage \(stage) · \(index)/\(total)"
+                }
+            )
+
+            guard runID == guidedRunGeneration, !Task.isCancelled else {
+                return
+            }
+            logAmplitudeSearchOutcome()
+
+            guard amplitudeSearch.state == .completed,
+                  let best = amplitudeSearch.bestResult,
+                  baselineMatchesCurrentRoute,
+                  baselineMatchesCurrentTarget,
+                  baselineMatchesCurrentHeadPosition
+            else {
+                guidedSearchFailed(
+                    "The sound changed or the search couldn't finish. Try again from a fresh baseline."
+                )
+                return
+            }
+
+            toneGenerator.muteImmediately()
+            guidedBestResult = best
+            guidedProgress = "Test complete"
+            guidedIsOptimizing = false
+            guidedTask = nil
+        }
+    }
+
+    private func guidedSearchFailed(_ message: String) {
+        toneGenerator.muteImmediately()
+        guidedIsOptimizing = false
+        guidedTask = nil
+        guidedError = message
+    }
+
+    private func cancelGuidedSearch() {
+        guard guidedIsOptimizing else { return }
+
+        guidedRunGeneration &+= 1
+        guidedTask?.cancel()
+        guidedTask = nil
+        phaseSweep.cancel()
+        phaseRefinement.cancel()
+        amplitudeSearch.cancel()
+        toneGenerator.muteImmediately()
+        guidedIsOptimizing = false
+        guidedProgress = "Test stopped. Sound muted."
+    }
+
+    private func resetGuidedTest() {
+        cancelGuidedSearch()
+        toneGenerator.stopImmediately()
+        beforeAfterMeasurement.cancelCapture()
+        beforeAfterMeasurement.reset()
+        phaseSweep.reset()
+        phaseRefinement.reset()
+        amplitudeSearch.reset()
+        guidedBestResult = nil
+        guidedError = nil
+        guidedProgress = ""
+        lastSavedComparisonKey = nil
+        baselineHeadPosition = nil
+        baselineRouteSignature = nil
+        baselineRouteRevision = nil
+        baselineAudioConfigurationSignature = nil
+    }
+
     private var readinessCard: some View {
         VStack(alignment: .leading, spacing: 12) {
             Label("Experiment Readiness", systemImage: "checklist")
