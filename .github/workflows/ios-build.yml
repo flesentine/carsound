@@ -23,23 +23,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          rm -rf "$RUNNER_TEMP/QuietDriveLab-4.12-source"
-          mkdir -p "$RUNNER_TEMP/QuietDriveLab-4.12-source"
+          rm -rf "$RUNNER_TEMP/QuietDriveLab-4.13-source"
+          mkdir -p "$RUNNER_TEMP/QuietDriveLab-4.13-source"
 
           rsync -a \
             --exclude '.git' \
             --exclude '.github' \
-            ./ "$RUNNER_TEMP/QuietDriveLab-4.12-source/"
+            ./ "$RUNNER_TEMP/QuietDriveLab-4.13-source/"
 
           ditto -c -k --sequesterRsrc --keepParent \
-            "$RUNNER_TEMP/QuietDriveLab-4.12-source" \
-            "$RUNNER_TEMP/QuietDriveLab-4.12-xcode-project.zip"
+            "$RUNNER_TEMP/QuietDriveLab-4.13-source" \
+            "$RUNNER_TEMP/QuietDriveLab-4.13-xcode-project.zip"
 
       - name: Upload Xcode source project
         uses: actions/upload-artifact@v4
         with:
-          name: QuietDriveLab-4.12-xcode-project
-          path: ${{ runner.temp }}/QuietDriveLab-4.12-xcode-project.zip
+          name: QuietDriveLab-4.13-xcode-project
+          path: ${{ runner.temp }}/QuietDriveLab-4.13-xcode-project.zip
           if-no-files-found: error
           retention-days: 30
 
@@ -74,14 +74,14 @@ jobs:
 
           ditto -c -k --sequesterRsrc --keepParent \
             "$APP_PATH" \
-            "$RUNNER_TEMP/QuietDriveLab-4.12-simulator.zip"
+            "$RUNNER_TEMP/QuietDriveLab-4.13-simulator.zip"
 
       - name: Upload simulator app
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: QuietDriveLab-4.12-simulator
-          path: ${{ runner.temp }}/QuietDriveLab-4.12-simulator.zip
+          name: QuietDriveLab-4.13-simulator
+          path: ${{ runner.temp }}/QuietDriveLab-4.13-simulator.zip
           if-no-files-found: error
           retention-days: 30
 
