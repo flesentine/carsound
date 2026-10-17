@@ -1,7 +1,7 @@
 import SwiftUI
 
 enum LabBuildInfo {
-    static let evidenceBuild = "4.12"
+    static let evidenceBuild = "4.13"
 }
 
 @main
