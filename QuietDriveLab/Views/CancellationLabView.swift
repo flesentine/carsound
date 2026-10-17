@@ -488,18 +488,15 @@ struct CancellationLabView: View {
     private var guidedDetectedFrequencyHz: Double? {
         guard
             microphoneCapture.state == .capturing,
-            measurementWindowIsUsable,
-            let tone = bestPersistentTone,
-            tone.isPersistent,
-            tone.confidenceLevel != .low,
-            (ToneGeneratorMath.minimumFrequencyHz...
-             ToneGeneratorMath.maximumFrequencyHz)
-                .contains(tone.frequencyHz)
+            measurementWindowIsUsable
         else {
             return nil
         }
 
-        return tone.frequencyHz.rounded()
+        return GuidedNoiseTargetSelector.selectFrequency(
+            from: microphoneCapture.snapshot
+                .persistentTones.tones
+        )
     }
 
     private var guidedMeasurementBlocker: String {
