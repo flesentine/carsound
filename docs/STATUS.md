@@ -719,3 +719,18 @@ Milestone 3 is complete. QuietDrive now has a bounded adaptive controller plus s
 - [x] Move engineering diagnostics and automation tools under Advanced Lab Details
 - [x] Preserve all 4.11 evidence, safety, logging, and provenance behavior
 - [x] Bump structured evidence sessions to app_build 4.12
+
+
+## Beginner-first guided UX — Lab build 4.13
+
+- [x] One obvious Start a Test button on home
+- [x] Parked-car and low-volume acknowledgement
+- [x] Guided listening and persistent low-frequency target detection
+- [x] Safe optional 80 Hz fallback when no steady tone is found
+- [x] Automatic coarse phase → fine phase → low-level amplitude search
+- [x] Automatic mute on completion, cancellation, safety mute, and navigation
+- [x] Plain-English measurement blockers and visible progress
+- [x] Results with target-frequency-only caveat, save, retry, and recent history
+- [x] Advanced engineering tooling retained in a disclosure section
+- [x] Unit test coverage for guided stable-tone selection
+- [x] Structured evidence build 4.13
