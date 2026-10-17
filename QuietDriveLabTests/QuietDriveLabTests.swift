@@ -851,6 +851,72 @@ final class QuietDriveLabTests: XCTestCase {
         )
     }
 
+    func testGuidedTargetSelectionUsesStableInRangeTone() {
+        func makeTone(
+            frequency: Double,
+            confidence: Double,
+            level: ToneConfidence,
+            persistent: Bool
+        ) -> PersistentTone {
+            PersistentTone(
+                trackID: UInt64(frequency.rounded()),
+                frequencyHz: frequency,
+                durationSeconds: 3,
+                observationCount: 20,
+                presenceRatio: 0.95,
+                frequencyStdDevHz: 0.6,
+                averageLocalProminenceDB: 9,
+                averageTemporalExcessDB: 6,
+                confidence: confidence,
+                confidenceLevel: level,
+                isPersistent: persistent
+            )
+        }
+
+        let candidates = [
+            makeTone(
+                frequency: 290,
+                confidence: 0.99,
+                level: .high,
+                persistent: true
+            ),
+            makeTone(
+                frequency: 62,
+                confidence: 0.98,
+                level: .high,
+                persistent: false
+            ),
+            makeTone(
+                frequency: 78.6,
+                confidence: 0.88,
+                level: .high,
+                persistent: true
+            ),
+            makeTone(
+                frequency: 95,
+                confidence: 0.90,
+                level: .low,
+                persistent: true
+            )
+        ]
+
+        XCTAssertEqual(
+            GuidedNoiseTargetSelector.selectFrequency(
+                from: candidates
+            ),
+            79
+        )
+
+        XCTAssertNil(
+            GuidedNoiseTargetSelector.selectFrequency(
+                from: [candidates[0], candidates[1], candidates[3]]
+            )
+        )
+        XCTAssertNil(
+            GuidedNoiseTargetSelector.selectFrequency(from: [])
+        )
+    }
+
     func testPersistentToneBecomesPersistentAfterTwoSeconds() throws {
         let tracker = PersistentToneTracker()
         var snapshot = PersistentToneSnapshot.empty
